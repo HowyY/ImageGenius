@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
-import { generateRequestSchema, type StylePreset } from "@shared/schema";
+import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
 
 // Define style presets with detailed visual descriptions
 const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
@@ -87,9 +87,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // In a real implementation, this would call an AI image generation API
       const dummyImageUrl = "https://placehold.co/768x432/png?text=Demo+Image";
 
-      res.json({
+      // Validate the response against the schema before returning
+      const responseValidation = generateResponseSchema.safeParse({
         imageUrl: dummyImageUrl,
       });
+
+      if (!responseValidation.success) {
+        console.error("Response validation failed:", responseValidation.error);
+        return res.status(500).json({
+          error: "Internal server error",
+          message: "Failed to generate valid response",
+        });
+      }
+
+      res.json(responseValidation.data);
     } catch (error) {
       console.error("Error generating image:", error);
       res.status(500).json({
