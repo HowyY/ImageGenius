@@ -21,6 +21,54 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
   },
+  {
+    id: "photorealistic",
+    label: "Photorealistic",
+    description: "Hyper-realistic photography style with natural lighting and fine details",
+    engines: ["nanobanana", "seeddream"],
+    basePrompt:
+      "photorealistic, highly detailed, natural lighting, professional photography, sharp focus, high resolution, 8k quality, realistic textures",
+  },
+  {
+    id: "watercolor_painting",
+    label: "Watercolor Painting",
+    description: "Soft watercolor art with flowing colors and artistic brush strokes",
+    engines: ["nanobanana", "seeddream"],
+    basePrompt:
+      "watercolor painting style, soft edges, flowing colors, artistic brush strokes, paper texture, delicate washes, traditional art medium",
+  },
+  {
+    id: "pixel_art",
+    label: "Pixel Art",
+    description: "Retro 8-bit or 16-bit pixel art style with vibrant colors",
+    engines: ["nanobanana", "seeddream"],
+    basePrompt:
+      "pixel art style, 16-bit graphics, retro gaming aesthetic, vibrant colors, sharp pixels, nostalgic feel, limited color palette",
+  },
+  {
+    id: "anime_style",
+    label: "Anime Style",
+    description: "Japanese anime art with bold lines, expressive characters, and vibrant colors",
+    engines: ["nanobanana", "seeddream"],
+    basePrompt:
+      "anime art style, manga inspired, bold clean lines, expressive eyes, vibrant colors, cel shading, Japanese animation aesthetic",
+  },
+  {
+    id: "oil_painting",
+    label: "Oil Painting",
+    description: "Classic oil painting with rich textures and brushwork like the old masters",
+    engines: ["nanobanana", "seeddream"],
+    basePrompt:
+      "oil painting style, thick brush strokes, rich textures, canvas texture visible, classical art, impressionist techniques, museum quality",
+  },
+  {
+    id: "minimalist_abstract",
+    label: "Minimalist Abstract",
+    description: "Simple geometric shapes with minimal colors and clean composition",
+    engines: ["nanobanana", "seeddream"],
+    basePrompt:
+      "minimalist abstract art, geometric shapes, limited color palette, clean composition, negative space, modern art, simple forms",
+  },
 ];
 
 export async function registerRoutes(app: Express): Promise<Server> {
