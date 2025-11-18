@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, Image as ImageIcon, AlertCircle } from "lucide-react";
+import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
@@ -68,6 +68,25 @@ export default function Home() {
 
   const isGenerating = generateMutation.isPending;
   const error = generateMutation.error;
+
+  const handleDownload = async () => {
+    if (!generatedImage) return;
+
+    try {
+      const response = await fetch(generatedImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ai-generated-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download failed:", error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -208,7 +227,21 @@ export default function Home() {
 
           <div className="space-y-4">
             <Card className="p-6" data-testid="card-result">
-              <div className="aspect-video bg-muted rounded-lg overflow-hidden relative" data-testid="container-image">
+              <div className="space-y-4">
+                {generatedImage && (
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={handleDownload}
+                      variant="outline"
+                      size="sm"
+                      data-testid="button-download"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Image
+                    </Button>
+                  </div>
+                )}
+                <div className="aspect-video bg-muted rounded-lg overflow-hidden relative" data-testid="container-image">
                 {!generatedImage && !isGenerating && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
                     <ImageIcon className="w-16 h-16 mb-4 opacity-40" data-testid="icon-empty-state" />
@@ -247,6 +280,7 @@ export default function Home() {
                     data-testid="img-result"
                   />
                 )}
+                </div>
               </div>
             </Card>
 
