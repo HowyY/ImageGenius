@@ -4,7 +4,11 @@ import { z } from "zod";
 import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
 
 // Define style presets with detailed visual descriptions
-const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
+const DEFAULT_REFERENCE_IMAGE = "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png";
+
+const STYLE_PRESETS: Array<
+  StylePreset & { basePrompt: string; referenceImageUrl: string }
+> = [
   {
     id: "cool_cyan_lineart",
     label: "Cool Cyan Vector Line Art",
@@ -12,6 +16,7 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "in the style of clean vector line art, cyan-blue gradient color palette, minimal white background, crisp lines, modern illustration style, geometric shapes",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "warm_orange_flat",
@@ -20,6 +25,7 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "photorealistic",
@@ -28,6 +34,7 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "photorealistic, highly detailed, natural lighting, professional photography, sharp focus, high resolution, 8k quality, realistic textures",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "watercolor_painting",
@@ -36,6 +43,7 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "watercolor painting style, soft edges, flowing colors, artistic brush strokes, paper texture, delicate washes, traditional art medium",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "pixel_art",
@@ -44,6 +52,7 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "pixel art style, 16-bit graphics, retro gaming aesthetic, vibrant colors, sharp pixels, nostalgic feel, limited color palette",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "anime_style",
@@ -52,6 +61,7 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "anime art style, manga inspired, bold clean lines, expressive eyes, vibrant colors, cel shading, Japanese animation aesthetic",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "oil_painting",
@@ -60,6 +70,7 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "oil painting style, thick brush strokes, rich textures, canvas texture visible, classical art, impressionist techniques, museum quality",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "minimalist_abstract",
@@ -68,18 +79,23 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
     engines: ["nanobanana", "seeddream"],
     basePrompt:
       "minimalist abstract art, geometric shapes, limited color palette, clean composition, negative space, modern art, simple forms",
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
 ];
 
-const NANO_API_URL = "https://kie.ai/api/v1/image/edit";
+const KIE_BASE_URL = "https://api.kie.ai/api/v1";
 const KIE_API_KEY = process.env.KIE_API_KEY;
 
-async function callNanoBananaEdit(prompt: string) {
+if (!KIE_API_KEY) {
+  console.warn("Warning: KIE_API_KEY is not set. NanoBanana requests will fail.");
+}
+
+async function callNanoBananaEdit(prompt: string, referenceImageUrl: string) {
   if (!KIE_API_KEY) {
     throw new Error("KIE_API_KEY is not set in the environment");
   }
 
-  const response = await fetch(NANO_API_URL, {
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -87,17 +103,74 @@ async function callNanoBananaEdit(prompt: string) {
     },
     body: JSON.stringify({
       model: "google/nano-banana-edit",
-      prompt,
+      input: {
+        prompt,
+        image_urls: [referenceImageUrl],
+        output_format: "png",
+        image_size: "16:9",
+      },
     }),
   });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`NanoBanana failed: ${response.status} ${body}`);
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`NanoBanana failed to create task: ${createResponse.status} ${createJson.message ?? ""}`);
   }
 
-  const data = await response.json();
-  return data.output_url;
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("NanoBanana response missing taskId");
+  }
+
+  return await pollNanoBananaResult(taskId);
+}
+
+async function pollNanoBananaResult(taskId: string) {
+  const maxAttempts = 10;
+  const delayMs = 3000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+    const resultResponse = await fetch(`${KIE_BASE_URL}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${KIE_API_KEY}`,
+      },
+    });
+
+    const resultJson = await resultResponse.json();
+
+    if (!resultResponse.ok || resultJson.code !== 200) {
+      throw new Error(`NanoBanana failed to query task: ${resultResponse.status} ${resultJson.message ?? ""}`);
+    }
+
+    const state = resultJson.data?.state;
+    if (state === "waiting" || state === "queuing" || state === "generating") {
+      continue;
+    }
+
+    if (state === "fail") {
+      throw new Error(resultJson.data?.failMsg || "NanoBanana task failed");
+    }
+
+    if (state === "success") {
+      const resultField = resultJson.data?.resultJson;
+      if (!resultField) {
+        throw new Error("NanoBanana result missing resultJson");
+      }
+
+      const parsed = JSON.parse(resultField);
+      const url = parsed.resultUrls?.[0];
+      if (!url) {
+        throw new Error("NanoBanana result missing result URL");
+      }
+      return url;
+    }
+  }
+
+  throw new Error("NanoBanana task timed out");
 }
 
 async function callSeedDream(prompt: string) {
@@ -159,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const imageUrl =
         engine === "nanobanana"
-          ? await callNanoBananaEdit(finalPrompt)
+          ? await callNanoBananaEdit(finalPrompt, selectedStyle.referenceImageUrl)
           : await callSeedDream(finalPrompt);
 
       const responseValidation = generateResponseSchema.safeParse({ imageUrl });
