@@ -1,0 +1,64 @@
+Build a small Node.js + Express web app that lets a user generate images based on a text prompt and a selected style.
+
+Requirements:
+
+1. Tech stack
+- Use Node.js with Express for the backend.
+- Serve a static frontend from a "public" directory.
+- Use plain JavaScript (no TypeScript) and no frontend framework is required.
+
+2. Backend structure
+- Create an "index.js" file as the main server entry.
+- Use `express.json()` to parse JSON requests.
+- Serve static files from the "public" folder using `express.static("public")`.
+- Listen on `process.env.PORT || 3000`.
+
+3. Style presets
+- In "index.js", define a constant array `STYLE_PRESETS` with a few style presets.
+- Each style preset should be an object with:
+  - id: string (internal ID, e.g. "cool_cyan_lineart")
+  - label: string (for UI display, e.g. "Cool cyan vector line art")
+  - description: string
+  - engines: array of strings (e.g. ["nanobanana", "seeddream"])
+  - basePrompt: string (describes the visual style)
+- Add at least two styles:
+  - "cool_cyan_lineart": clean vector line art, cyan-blue gradient palette, minimal white background.
+  - "warm_orange_flat": warm orange/red flat illustration, strong contrast on main subject, almost white background.
+
+4. Backend API endpoints
+- `GET /styles`
+  - Return the list of style presets as JSON.
+  - Only include id, label, description and engines in the response.
+- `POST /generate`
+  - Request body: `{ "prompt": string, "styleId": string, "engine": string }`.
+  - Validate that prompt, styleId and engine are provided.
+  - Find the style in `STYLE_PRESETS` by `styleId`.
+  - Check that the given engine is included in `style.engines`.
+  - Build a `finalPrompt` string that combines the user prompt and the style's `basePrompt`.
+  - For now, DO NOT call any external API. Instead, just log the engine and finalPrompt to the console and return a dummy image URL such as `"https://placehold.co/768x432/png?text=Demo+Image"`.
+  - Response JSON: `{ "imageUrl": string }`.
+- Add clear English comments in the backend to explain each step.
+
+5. Frontend files
+- Create `public/index.html` and `public/script.js`.
+- `index.html` should:
+  - Include a simple form with:
+    - A textarea for the user prompt.
+    - A `<select>` dropdown for style presets.
+    - A `<select>` dropdown for engine with options "nanobanana" and "seeddream".
+    - A "Generate image" button.
+  - Include a `<div id="status">` to display status messages.
+  - Include an `<img id="resultImg">` to display the generated image.
+  - Load `script.js` at the end of the body.
+  - Use simple but clean styling (can be inline `<style>` in the head).
+- `script.js` should:
+  - On page load, fetch `/styles` and populate the style `<select>` with options.
+  - When the button is clicked, send a POST request to `/generate` with the prompt, selected styleId and engine as JSON.
+  - Show "Generating..." while waiting for the response.
+  - When the response arrives, if there is an error, show it in the status div.
+  - If successful, set `resultImg.src` to the returned `imageUrl` and make the image visible.
+  - Include English comments in the code that explain the main steps.
+
+6. General
+- All code comments must be in English.
+- Make sure the project runs with `node index.js` or `npm start` and opens the web page correctly.
