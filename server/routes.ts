@@ -71,6 +71,39 @@ const STYLE_PRESETS: Array<StylePreset & { basePrompt: string }> = [
   },
 ];
 
+const NANO_API_URL = "https://kie.ai/api/v1/image/edit";
+const KIE_API_KEY = process.env.KIE_API_KEY;
+
+async function callNanoBananaEdit(prompt: string) {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
+  }
+
+  const response = await fetch(NANO_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "google/nano-banana-edit",
+      prompt,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`NanoBanana failed: ${response.status} ${body}`);
+  }
+
+  const data = await response.json();
+  return data.output_url;
+}
+
+async function callSeedDream(prompt: string) {
+  throw new Error(`SeedDream integration missing for prompt: ${prompt}`);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/styles - Return available style presets
   // This endpoint provides the list of style options for the frontend dropdown
@@ -87,10 +120,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/generate - Generate an image based on prompt, style, and engine
-  // This endpoint validates the request and returns a placeholder image URL
-  app.post("/api/generate", (req, res) => {
+  app.post("/api/generate", async (req, res) => {
     try {
-      // Validate the request body using Zod schema
       const validationResult = generateRequestSchema.safeParse(req.body);
 
       if (!validationResult.success) {
@@ -101,8 +132,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { prompt, styleId, engine } = validationResult.data;
-
-      // Find the selected style preset
       const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
 
       if (!selectedStyle) {
@@ -112,7 +141,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Verify that the selected engine is supported by this style
       if (!selectedStyle.engines.includes(engine)) {
         return res.status(400).json({
           error: "Invalid engine",
@@ -120,10 +148,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Combine the user prompt with the style's base prompt
-      const finalPrompt = `${prompt} ${selectedStyle.basePrompt}`;
+      const finalPrompt = `${prompt} ${selectedStyle.basePrompt}`.trim();
 
-      // Log the generation request to the console
       console.log("\n=== Image Generation Request ===");
       console.log(`Engine: ${engine}`);
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
@@ -131,14 +157,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
 
-      // Return a placeholder image URL
-      // In a real implementation, this would call an AI image generation API
-      const dummyImageUrl = "https://placehold.co/768x432/png?text=Demo+Image";
+      const imageUrl =
+        engine === "nanobanana"
+          ? await callNanoBananaEdit(finalPrompt)
+          : await callSeedDream(finalPrompt);
 
-      // Validate the response against the schema before returning
-      const responseValidation = generateResponseSchema.safeParse({
-        imageUrl: dummyImageUrl,
-      });
+      const responseValidation = generateResponseSchema.safeParse({ imageUrl });
 
       if (!responseValidation.success) {
         console.error("Response validation failed:", responseValidation.error);
