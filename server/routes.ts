@@ -90,6 +90,58 @@ if (!KIE_API_KEY) {
   console.warn("Warning: KIE_API_KEY is not set. NanoBanana requests will fail.");
 }
 
+const NEGATIVE_PROMPT = `- inconsistent character identity
+- incorrect character proportions
+- distorted anatomy or broken limbs
+- incorrect object scale (e.g., character larger than a car)
+- broken perspective or impossible angles
+- unwanted changes in clothing or hairstyle
+- mismatched art style within the same scene
+- unintended extra characters or duplicated faces
+- chaotic or cluttered composition (unless references show it)
+- low-quality details such as blurry shapes or noisy textures
+- no clean vector edges unless the reference uses vector lines
+- no high-saturation or neon colors
+- no deviation from the reference style across all scenes
+- no exaggerated gradients, strong shadows, or 3D effects
+- no floating, intersecting, or merged shapes`;
+
+function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: string }) {
+  return `PROMPT TEMPLATE
+
+[SCENE — ${userPrompt}]
+
+1. CAMERA & COMPOSITION
+- Camera angle: stable, undistorted view that clearly presents the subject.
+- Composition layout: balanced framing (${style.label} inspiration).
+- Framing: ensure the subject fits naturally without clipping or distortion.
+- Depth arrangement: clearly separated foreground, midground, and background with proper scale.
+
+2. ENVIRONMENT
+- Setting: ${userPrompt}.
+- Lighting: soft, even light suitable for the scene.
+- Atmosphere: match ${style.label} (${style.description}) tone.
+- Background complexity: follow the same simplification level as the reference style.
+
+3. MAIN CHARACTER
+- Pose: natural posture derived from the described action.
+- Expression: consistent with the character identity implied by the prompt.
+- Interaction: accurately placed relative to props/environment with correct scale.
+- Clothing: match character lock and respect ${style.basePrompt}.
+
+4. SECONDARY OBJECTS & ACTION
+- Vehicles, props, and signage follow the same stylization rules as ${style.label}.
+- Motion cues remain subtle and clean; all objects obey correct scale and perspective.
+
+5. STYLE ENFORCEMENT
+- Apply ${style.basePrompt}.
+- Maintain consistent color palette, lighting, texture density, and stroke treatment.
+- Keep background, character, and object detail density uniform; no stylistic drift.
+
+6. NEGATIVE PROMPT
+${NEGATIVE_PROMPT}`.trim();
+}
+
 async function callNanoBananaEdit(prompt: string, referenceImageUrl: string) {
   if (!KIE_API_KEY) {
     throw new Error("KIE_API_KEY is not set in the environment");
@@ -221,7 +273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const finalPrompt = `${prompt} ${selectedStyle.basePrompt}`.trim();
+      const finalPrompt = buildPrompt(prompt, selectedStyle);
 
       console.log("\n=== Image Generation Request ===");
       console.log(`Engine: ${engine}`);
