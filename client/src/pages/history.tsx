@@ -1,17 +1,40 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Sparkles, Image as ImageIcon } from "lucide-react";
+import { Clock, Sparkles, Image as ImageIcon, Plus } from "lucide-react";
 import type { SelectGenerationHistory } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import { addUserReferenceImage } from "@/lib/generationState";
+import { useToast } from "@/hooks/use-toast";
 
 export default function History() {
+  const [addedImages, setAddedImages] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
+  
   const { data: history, isLoading } = useQuery<SelectGenerationHistory[]>({
     queryKey: ["/api/history"],
     refetchInterval: 30000,
   });
+
+  const handleAddAsReference = (imageUrl: string) => {
+    const success = addUserReferenceImage(imageUrl);
+    if (success) {
+      setAddedImages(prev => new Set(prev).add(imageUrl));
+      toast({
+        title: "Added to references",
+        description: "Image added to reference images list.",
+      });
+    } else {
+      toast({
+        title: "Cannot add",
+        description: "Maximum 3 reference images or image already added.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -85,21 +108,32 @@ export default function History() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    asChild
-                    data-testid={`button-view-${item.id}`}
-                  >
-                    <a
-                      href={item.generatedImageUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-start"
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAddAsReference(item.generatedImageUrl)}
+                      data-testid={`button-add-reference-${item.id}`}
                     >
-                      View full image →
-                    </a>
-                  </Button>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add as Reference
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      data-testid={`button-view-${item.id}`}
+                    >
+                      <a
+                        href={item.generatedImageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-start"
+                      >
+                        View full image →
+                      </a>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
