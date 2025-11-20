@@ -310,7 +310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine, characterReference } = validationResult.data;
+      const { prompt, styleId, engine, characterReference, userReferenceImages } = validationResult.data;
       const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
 
       if (!selectedStyle) {
@@ -327,14 +327,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const hasCharacterReference = !!characterReference;
+      const hasCharacterReference = !!(characterReference || (userReferenceImages && userReferenceImages.length > 0));
       const finalPrompt = buildPrompt(prompt, selectedStyle, hasCharacterReference);
 
-      // Build image URLs array with character reference first (highest priority)
+      // Build image URLs array with priority order:
+      // 1. User-selected reference images (highest priority)
+      // 2. Character reference (legacy support, if not already in user references)
+      // 3. Style preset reference images
       const imageUrls: string[] = [];
-      if (characterReference) {
+      
+      if (userReferenceImages && userReferenceImages.length > 0) {
+        imageUrls.push(...userReferenceImages);
+      }
+      
+      if (characterReference && !imageUrls.includes(characterReference)) {
         imageUrls.push(characterReference);
       }
+      
       // Add all reference images for this style
       const styleReferenceUrls = getAllReferenceImageUrls(styleId);
       imageUrls.push(...styleReferenceUrls);
@@ -343,7 +352,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Engine: ${engine}`);
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
       console.log(`User Prompt: ${prompt}`);
-      console.log(`Character Reference: ${characterReference || "None"}`);
+      console.log(`User Reference Images: ${userReferenceImages?.join(", ") || "None"}`);
+      console.log(`Character Reference (legacy): ${characterReference || "None"}`);
       console.log(`Image URLs (priority order): ${imageUrls.join(", ")}`);
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
@@ -363,6 +373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           finalPrompt,
           referenceImageUrl: selectedStyle.referenceImageUrl,
           characterReferenceUrl: characterReference || undefined,
+          userReferenceUrls: userReferenceImages || undefined,
           generatedImageUrl: imageUrl,
         });
         historyId = savedHistory.id;
