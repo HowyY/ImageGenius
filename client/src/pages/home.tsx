@@ -91,15 +91,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-title">
-            AI Image Generator
-          </h1>
-          <p className="text-muted-foreground" data-testid="text-subtitle">
-            Transform your ideas into stunning visuals with AI-powered image generation
-          </p>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Card className="p-6" data-testid="card-form">
             <Form {...form}>
