@@ -25,16 +25,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, X, User } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
 import { getStyleLock, setStyleLock, getCharacterReference, setCharacterReference, clearCharacterReference, getLastGeneratedImage, setLastGeneratedImage } from "@/lib/generationState";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [selectedStyleDescription, setSelectedStyleDescription] = useState("");
   const [styleLocked, setStyleLocked] = useState(false);
   const [characterReference, setCharacterReferenceState] = useState<string | null>(null);
+  const [lastToastId, setLastToastId] = useState<string | undefined>(undefined);
+  const { toast, dismiss } = useToast();
 
   const form = useForm<GenerateRequest>({
     resolver: zodResolver(generateRequestSchema),
@@ -72,9 +75,20 @@ export default function Home() {
       const result = await response.json() as GenerateResponse;
       return result;
     },
+    onMutate: () => {
+      if (lastToastId) {
+        dismiss(lastToastId);
+      }
+    },
     onSuccess: (data) => {
       setGeneratedImage(data.imageUrl);
       setLastGeneratedImage(data.imageUrl);
+      queryClient.invalidateQueries({ queryKey: ["/api/history"] });
+      const { id } = toast({
+        title: "Image generated successfully!",
+        description: "Your image is ready.",
+      });
+      setLastToastId(id);
     },
   });
 
