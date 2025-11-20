@@ -16,8 +16,15 @@ The core functionality allows users to:
 **NEW: Style Locking & Character Consistency Features** (November 2025):
 - **Style Lock**: Users can lock their selected visual style, preventing accidental changes. The locked style is saved in localStorage and persists across page reloads.
 - **Character Reference**: Users can designate any generated image as a "character reference." Subsequent generations will prioritize maintaining that character's appearance (face, hairstyle, clothing) while applying the scene description.
-- **Image Priority System**: When a character reference is set, it's placed first in the API's image_urls array (highest priority), followed by style reference images.
-- **Smart Prompting**: The system automatically adds character consistency instructions to prompts when a character reference is active.
+- **User Reference Images** (Latest): Users can now select up to 3 generated images as references with customizable priority order:
+  - Add any generated image as a reference from the main page or history page
+  - Reorder reference images using arrow buttons (higher position = higher priority)
+  - Remove individual reference images
+  - Reference images are placed first in the API's image_urls array (highest priority)
+  - Followed by character reference (legacy support), then style preset reference images
+  - All reference data persists in localStorage across page reloads
+- **Image Priority System**: Priority order for API calls: 1) User reference images (in user-defined order), 2) Character reference (if set and not in user references), 3) Style preset reference images (all images, not just first one)
+- **Smart Prompting**: The system automatically adds character consistency instructions to prompts when user references or character reference is active.
 
 ## User Preferences
 
