@@ -41,8 +41,8 @@ export const stylePresetSchema = z.object({
 export const generateRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
   styleId: z.string().min(1, "Style is required"),
-  engine: z.enum(["nanobanana", "seeddream"], {
-    errorMap: () => ({ message: "Engine must be either 'nanobanana' or 'seeddream'" }),
+  engine: z.enum(["nanobanana", "seedream"], {
+    errorMap: () => ({ message: "Engine must be either 'nanobanana' or 'seedream'" }),
   }),
   characterReference: z.string().url().optional(),
 });

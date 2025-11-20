@@ -245,13 +245,13 @@ export default function Home() {
                           </Button>
                           <Button
                             type="button"
-                            variant={field.value === "seeddream" ? "default" : "outline"}
-                            onClick={() => field.onChange("seeddream")}
+                            variant={field.value === "seedream" ? "default" : "outline"}
+                            onClick={() => field.onChange("seedream")}
                             disabled={isGenerating}
                             className="flex-1"
-                            data-testid="button-engine-seeddream"
+                            data-testid="button-engine-seedream"
                           >
-                            Seeddream
+                            Seedream
                           </Button>
                         </div>
                       </FormControl>

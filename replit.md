@@ -7,7 +7,7 @@ This is a web application that allows users to generate AI images from text prom
 The core functionality allows users to:
 - Enter a text prompt describing the desired image
 - Select from predefined visual style presets (e.g., "Cool Cyan Vector Line Art", "Warm Orange Flat Illustration")
-- Choose between different AI engines ("nanobanana" or "seeddream")
+- Choose between different AI engines ("nanobanana" or "seedream")
 - **Lock a style** to maintain consistent visual style across multiple generations
 - **Set character reference** from generated images to maintain character consistency across different scenes
 - Generate images based on the combined prompt and style
@@ -155,7 +155,7 @@ Preferred communication style: Simple, everyday language.
   - Returns temporary URLs with 3-day retention
   - Supports FormData multipart uploads
 
-**SeedDream Engine**: Prepared but not yet implemented (throws error when selected)
+**Seedream Engine**: Prepared but not yet implemented (throws error when selected)
 
 **API Key Management**: 
 - `KIE_API_KEY` environment variable required for both services
