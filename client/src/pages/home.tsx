@@ -141,13 +141,13 @@ export default function Home() {
         setUserRefCount(newCount);
         setReferenceImagesKey(prev => prev + 1);
         toast({
-          title: "添加成功",
-          description: `图片已添加到参考列表 (${newCount}/3)`,
+          title: "Added to references",
+          description: `Image added to reference list (${newCount}/3)`,
         });
       } else {
         toast({
-          title: "无法添加",
-          description: "已达到最大数量(3张)或图片已存在",
+          title: "Cannot add",
+          description: "Maximum 3 reference images reached or image already exists",
           variant: "destructive",
         });
       }
@@ -384,7 +384,7 @@ export default function Home() {
                         data-testid="button-add-as-reference"
                       >
                         <Plus className="w-4 h-4 mr-2" />
-                        {userRefCount >= 3 ? `已满 (${userRefCount}/3)` : `添加为参考 (${userRefCount}/3)`}
+                        {userRefCount >= 3 ? `Full (${userRefCount}/3)` : `Add as Reference (${userRefCount}/3)`}
                       </Button>
                       <Button
                         onClick={handleSetCharacterReference}
