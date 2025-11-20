@@ -9,6 +9,7 @@ import type { SelectGenerationHistory } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { addUserReferenceImage, getUserReferenceImages } from "@/lib/generationState";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function History() {
   const [userRefCount, setUserRefCount] = useState(0);
@@ -126,16 +127,27 @@ export default function History() {
                         </Badge>
                       </div>
                     ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAddAsReference(item.generatedImageUrl)}
-                        disabled={userRefCount >= 3}
-                        data-testid={`button-add-reference-${item.id}`}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        {userRefCount >= 3 ? `Full (${userRefCount}/3)` : `Add as Reference (${userRefCount}/3)`}
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-block">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleAddAsReference(item.generatedImageUrl)}
+                              disabled={userRefCount >= 3}
+                              data-testid={`button-add-reference-${item.id}`}
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              {userRefCount >= 3 ? `Full (${userRefCount}/3)` : `Add as Reference (${userRefCount}/3)`}
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {userRefCount >= 3 
+                            ? "Maximum 3 references reached. Remove one to add new" 
+                            : "Add as reference (drag to reorder priority)"}
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                     <Button
                       variant="ghost"

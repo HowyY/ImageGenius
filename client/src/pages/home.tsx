@@ -31,6 +31,7 @@ import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/sch
 import { getStyleLock, setStyleLock, getLastGeneratedImage, setLastGeneratedImage, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
 import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -197,26 +198,35 @@ export default function Home() {
                       <div className="flex items-center justify-between gap-2">
                         <FormLabel data-testid="label-style">Style Preset</FormLabel>
                         {field.value && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={toggleStyleLock}
-                            className="h-auto p-1"
-                            data-testid="button-toggle-lock"
-                          >
-                            {styleLocked ? (
-                              <>
-                                <Lock className="w-4 h-4 mr-1 text-primary" />
-                                <Badge variant="default" className="text-xs" data-testid="badge-locked">Locked</Badge>
-                              </>
-                            ) : (
-                              <>
-                                <Unlock className="w-4 h-4 mr-1" />
-                                <span className="text-xs">Lock</span>
-                              </>
-                            )}
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={toggleStyleLock}
+                                className="h-auto p-1"
+                                data-testid="button-toggle-lock"
+                              >
+                                {styleLocked ? (
+                                  <>
+                                    <Lock className="w-4 h-4 mr-1 text-primary" />
+                                    <Badge variant="default" className="text-xs" data-testid="badge-locked">Locked</Badge>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Unlock className="w-4 h-4 mr-1" />
+                                    <span className="text-xs">Lock</span>
+                                  </>
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {styleLocked 
+                                ? "Style locked. Click to unlock" 
+                                : "Lock this style to prevent accidental changes"}
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                       <Select
@@ -325,16 +335,27 @@ export default function Home() {
                 {generatedImage && (
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        onClick={handleAddAsReference}
-                        variant="outline"
-                        size="sm"
-                        disabled={userRefCount >= 3}
-                        data-testid="button-add-as-reference"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        {userRefCount >= 3 ? `Full (${userRefCount}/3)` : `Add as Reference (${userRefCount}/3)`}
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-block">
+                            <Button
+                              onClick={handleAddAsReference}
+                              variant="outline"
+                              size="sm"
+                              disabled={userRefCount >= 3}
+                              data-testid="button-add-as-reference"
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              {userRefCount >= 3 ? `Full (${userRefCount}/3)` : `Add as Reference (${userRefCount}/3)`}
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {userRefCount >= 3 
+                            ? "Maximum 3 references reached. Remove one to add new" 
+                            : "Add as reference (drag to reorder priority)"}
+                        </TooltipContent>
+                      </Tooltip>
                       <Button
                         onClick={handleDownload}
                         variant="outline"
