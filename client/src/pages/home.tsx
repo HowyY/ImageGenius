@@ -28,7 +28,7 @@ import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unl
 import { apiRequest } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
-import { getStyleLock, setStyleLock, getCharacterReference, setCharacterReference, clearCharacterReference } from "@/lib/generationState";
+import { getStyleLock, setStyleLock, getCharacterReference, setCharacterReference, clearCharacterReference, getLastGeneratedImage, setLastGeneratedImage } from "@/lib/generationState";
 
 export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -53,9 +53,11 @@ export default function Home() {
   useEffect(() => {
     const { locked, styleId } = getStyleLock();
     const savedCharacterRef = getCharacterReference();
+    const savedImage = getLastGeneratedImage();
     
     setStyleLocked(locked);
     setCharacterReferenceState(savedCharacterRef);
+    setGeneratedImage(savedImage);
     
     if (locked && styleId) {
       form.setValue("styleId", styleId);
@@ -72,6 +74,7 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setGeneratedImage(data.imageUrl);
+      setLastGeneratedImage(data.imageUrl);
     },
   });
 

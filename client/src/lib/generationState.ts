@@ -1,11 +1,13 @@
 const STYLE_LOCK_KEY = 'ai_generator_style_lock';
 const LOCKED_STYLE_ID_KEY = 'ai_generator_locked_style_id';
 const CHARACTER_REFERENCE_KEY = 'ai_generator_character_reference';
+const LAST_GENERATED_IMAGE_KEY = 'ai_generator_last_generated_image';
 
 export interface GenerationState {
   styleLocked: boolean;
   lockedStyleId: string | null;
   characterReference: string | null;
+  lastGeneratedImage: string | null;
 }
 
 export function getStyleLock(): { locked: boolean; styleId: string | null } {
@@ -39,12 +41,30 @@ export function clearCharacterReference(): void {
   localStorage.removeItem(CHARACTER_REFERENCE_KEY);
 }
 
+export function getLastGeneratedImage(): string | null {
+  return localStorage.getItem(LAST_GENERATED_IMAGE_KEY);
+}
+
+export function setLastGeneratedImage(imageUrl: string | null): void {
+  if (imageUrl) {
+    localStorage.setItem(LAST_GENERATED_IMAGE_KEY, imageUrl);
+  } else {
+    localStorage.removeItem(LAST_GENERATED_IMAGE_KEY);
+  }
+}
+
+export function clearLastGeneratedImage(): void {
+  localStorage.removeItem(LAST_GENERATED_IMAGE_KEY);
+}
+
 export function getGenerationState(): GenerationState {
   const { locked, styleId } = getStyleLock();
   const characterReference = getCharacterReference();
+  const lastGeneratedImage = getLastGeneratedImage();
   return {
     styleLocked: locked,
     lockedStyleId: styleId,
     characterReference,
+    lastGeneratedImage,
   };
 }

@@ -72,9 +72,10 @@ Preferred communication style: Simple, everyday language.
 - Stores: prompt, styleId, styleLabel, engine, finalPrompt, referenceImageUrl, generatedImageUrl, characterReferenceUrl (optional), createdAt
 - Storage interface in `server/storage.ts` with graceful fallback when DATABASE_URL is not set
 
-**Client-Side Persistence**: localStorage for user preferences:
+**Client-Side Persistence**: localStorage for user preferences and session state:
 - Style lock status and locked style ID
 - Character reference image URL
+- Last generated image URL (persists across page navigation)
 - Managed via `client/src/lib/generationState.ts` utility functions
 
 **Reference Image Storage**: KIE File Upload API (https://kieai.redpandaai.co):
