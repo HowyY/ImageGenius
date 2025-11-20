@@ -37,7 +37,7 @@ export class MemStorage implements IStorage {
         finalPrompt: data.finalPrompt,
         referenceImageUrl: data.referenceImageUrl,
         generatedImageUrl: data.generatedImageUrl,
-        characterReferenceUrl: data.characterReferenceUrl,
+        userReferenceUrls: data.userReferenceUrls,
       })
       .returning();
     return result;

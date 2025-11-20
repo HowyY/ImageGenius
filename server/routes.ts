@@ -117,8 +117,8 @@ const NEGATIVE_PROMPT = `- inconsistent character identity
 - no exaggerated gradients, strong shadows, or 3D effects
 - no floating, intersecting, or merged shapes`;
 
-function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: string }, hasCharacterReference: boolean = false) {
-  const characterInstruction = hasCharacterReference 
+function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: string }, hasUserReference: boolean = false) {
+  const characterInstruction = hasUserReference 
     ? "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**\n"
     : "";
   
@@ -311,7 +311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine, characterReference, userReferenceImages } = validationResult.data;
+      const { prompt, styleId, engine, userReferenceImages } = validationResult.data;
       const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
 
       if (!selectedStyle) {
@@ -328,21 +328,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const hasCharacterReference = !!(characterReference || (userReferenceImages && userReferenceImages.length > 0));
-      const finalPrompt = buildPrompt(prompt, selectedStyle, hasCharacterReference);
+      const hasUserReference = !!(userReferenceImages && userReferenceImages.length > 0);
+      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference);
 
       // Build image URLs array with priority order:
       // 1. User-selected reference images (highest priority)
-      // 2. Character reference (legacy support, if not already in user references)
-      // 3. Style preset reference images
+      // 2. Style preset reference images
       const imageUrls: string[] = [];
       
       if (userReferenceImages && userReferenceImages.length > 0) {
         imageUrls.push(...userReferenceImages);
-      }
-      
-      if (characterReference && !imageUrls.includes(characterReference)) {
-        imageUrls.push(characterReference);
       }
       
       // Add all reference images for this style
@@ -354,7 +349,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
       console.log(`User Prompt: ${prompt}`);
       console.log(`User Reference Images: ${userReferenceImages?.join(", ") || "None"}`);
-      console.log(`Character Reference (legacy): ${characterReference || "None"}`);
       console.log(`Image URLs (priority order): ${imageUrls.join(", ")}`);
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
@@ -373,7 +367,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           engine,
           finalPrompt,
           referenceImageUrl: selectedStyle.referenceImageUrl,
-          characterReferenceUrl: characterReference || undefined,
           userReferenceUrls: userReferenceImages || undefined,
           generatedImageUrl: imageUrl,
         });
