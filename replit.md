@@ -9,22 +9,22 @@ The core functionality allows users to:
 - Select from predefined visual style presets (e.g., "Cool Cyan Vector Line Art", "Warm Orange Flat Illustration")
 - Choose between different AI engines ("nanobanana" or "seedream")
 - **Lock a style** to maintain consistent visual style across multiple generations
-- **Set character reference** from generated images to maintain character consistency across different scenes
+- **Select reference images** (up to 3) from generated images to guide future generations
 - Generate images based on the combined prompt and style
 - View generation history with all past creations
 
-**NEW: Style Locking & Character Consistency Features** (November 2025):
+**NEW: Style Locking & Reference Image Features** (November 2025):
 - **Style Lock**: Users can lock their selected visual style, preventing accidental changes. The locked style is saved in localStorage and persists across page reloads.
-- **Character Reference**: Users can designate any generated image as a "character reference." Subsequent generations will prioritize maintaining that character's appearance (face, hairstyle, clothing) while applying the scene description.
-- **User Reference Images** (Latest): Users can now select up to 3 generated images as references with customizable priority order:
+- **User Reference Images**: Users can select up to 3 generated images as references with customizable priority order:
   - Add any generated image as a reference from the main page or history page
-  - Reorder reference images using arrow buttons (higher position = higher priority)
-  - Remove individual reference images
+  - **Drag-and-drop reordering**: Intuitive interface to change priority order by dragging cards (higher position = higher priority)
+  - Remove individual reference images or clear all at once with "Clear All" button
   - Reference images are placed first in the API's image_urls array (highest priority)
-  - Followed by character reference (legacy support), then style preset reference images
+  - Followed by style preset reference images
   - All reference data persists in localStorage across page reloads
-- **Image Priority System**: Priority order for API calls: 1) User reference images (in user-defined order), 2) Character reference (if set and not in user references), 3) Style preset reference images (all images, not just first one)
-- **Smart Prompting**: The system automatically adds character consistency instructions to prompts when user references or character reference is active.
+  - Drag state managed with useRef to survive component re-renders
+- **Image Priority System**: Priority order for API calls: 1) User reference images (in user-defined order), 2) Style preset reference images (all images, not just first one)
+- **Smart Prompting**: The system automatically adds character consistency instructions to prompts when user references are active.
 
 ## User Preferences
 
@@ -56,7 +56,7 @@ The core functionality allows users to:
 
 **API Structure**: RESTful API with three main endpoints:
 - `GET /api/styles` - Returns available style presets for the UI
-- `POST /api/generate` - Accepts prompt, styleId, engine, and optional characterReference; generates image using Nano Banana API with proper image URL priority and saves to history
+- `POST /api/generate` - Accepts prompt, styleId, engine; generates image using Nano Banana API with proper image URL priority and saves to history
 - `GET /api/history` - Returns generation history from database (limit parameter optional, defaults to 50)
 
 **Request Validation**: Zod schemas validate incoming requests with detailed error messages
@@ -77,12 +77,12 @@ The core functionality allows users to:
 **Active Database**: PostgreSQL database (Neon) for generation history:
 - Schema definitions in `shared/schema.ts` with `generationHistory` table
 - Migration managed via `drizzle-kit push`
-- Stores: prompt, styleId, styleLabel, engine, finalPrompt, referenceImageUrl, generatedImageUrl, characterReferenceUrl (optional), createdAt
+- Stores: prompt, styleId, styleLabel, engine, finalPrompt, referenceImageUrl, generatedImageUrl, createdAt
 - Storage interface in `server/storage.ts` with graceful fallback when DATABASE_URL is not set
 
 **Client-Side Persistence**: localStorage for user preferences and session state:
 - Style lock status and locked style ID
-- Character reference image URL
+- User reference images array (up to 3 images with priority order)
 - Last generated image URL (persists across page navigation)
 - Managed via `client/src/lib/generationState.ts` utility functions
 
@@ -105,9 +105,9 @@ The core functionality allows users to:
 
 **Shared Schema Approach**: Type definitions and Zod validation schemas are centralized in the `shared/` directory and used by both frontend and backend, ensuring consistency:
 - `StylePreset` type
-- `GenerateRequest` type (includes optional characterReference URL)
+- `GenerateRequest` type
 - `GenerateResponse` type (includes optional historyId)
-- `generationHistory` database table schema (includes optional characterReferenceUrl)
+- `generationHistory` database table schema
 - `InsertGenerationHistory` and `SelectGenerationHistory` types
 
 **Path Aliases**: Configured in both TypeScript and Vite for clean imports:
@@ -154,9 +154,9 @@ The core functionality allows users to:
   - Creates tasks via `POST /api/v1/jobs/createTask`
   - Polls for results via `GET /api/v1/jobs/recordInfo?taskId={id}`
   - Supports multiple reference images with priority ordering (first image = highest priority)
-  - **Character Consistency**: Character reference images are placed first in image_urls array to prioritize character appearance
-  - **Style Reference**: ALL style preset reference images are sent (not just the first one), appended after character references to ensure comprehensive style understanding
-  - Custom prompts include character consistency instructions when applicable
+  - **User References**: User-selected reference images are placed first in image_urls array (in user-defined priority order)
+  - **Style Reference**: ALL style preset reference images are sent (not just the first one), appended after user references to ensure comprehensive style understanding
+  - Custom prompts include consistency instructions when user references are active
   - Output format configuration (PNG, 16:9 aspect ratio)
   - Maximum 10 polling attempts with 3-second delays
 - **File Upload API**: Uploads local reference images to KIE storage
