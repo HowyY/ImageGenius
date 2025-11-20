@@ -2,9 +2,19 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
 import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
+import { storage } from "./storage";
+import { uploadReferenceImages, type StyleImageMapping } from "./services/fileUpload";
+import { join } from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Define style presets with detailed visual descriptions
 const DEFAULT_REFERENCE_IMAGE = "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png";
+
+let uploadedReferenceImages: StyleImageMapping[] = [];
 
 const STYLE_PRESETS: Array<
   StylePreset & { basePrompt: string; referenceImageUrl: string }
@@ -229,6 +239,38 @@ async function callSeedDream(prompt: string) {
   throw new Error(`SeedDream integration missing for prompt: ${prompt}`);
 }
 
+function getReferenceImageUrl(styleId: string): string {
+  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
+  if (uploadedStyle && uploadedStyle.imageUrls.length > 0) {
+    return uploadedStyle.imageUrls[0];
+  }
+  return DEFAULT_REFERENCE_IMAGE;
+}
+
+async function initializeReferenceImages() {
+  try {
+    const referenceImagesPath = join(__dirname, "..", "client", "public", "reference-images");
+    console.log("\n=== Uploading Reference Images ===");
+    console.log(`Scanning directory: ${referenceImagesPath}`);
+    
+    uploadedReferenceImages = await uploadReferenceImages(referenceImagesPath);
+    
+    console.log(`✓ Successfully uploaded ${uploadedReferenceImages.length} style categories`);
+    for (const style of uploadedReferenceImages) {
+      console.log(`  - ${style.styleId}: ${style.imageUrls.length} images`);
+      for (const preset of STYLE_PRESETS) {
+        if (preset.id === style.styleId) {
+          preset.referenceImageUrl = style.imageUrls[0];
+        }
+      }
+    }
+    console.log("==================================\n");
+  } catch (error) {
+    console.error("Failed to upload reference images:", error);
+    console.warn("Using default reference images as fallback");
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/styles - Return available style presets
   // This endpoint provides the list of style options for the frontend dropdown
@@ -287,7 +329,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? await callNanoBananaEdit(finalPrompt, selectedStyle.referenceImageUrl)
           : await callSeedDream(finalPrompt);
 
-      const responseValidation = generateResponseSchema.safeParse({ imageUrl });
+      let historyId: number | undefined;
+      try {
+        const savedHistory = await storage.saveGenerationHistory({
+          prompt,
+          styleId,
+          styleLabel: selectedStyle.label,
+          engine,
+          finalPrompt,
+          referenceImageUrl: selectedStyle.referenceImageUrl,
+          generatedImageUrl: imageUrl,
+        });
+        historyId = savedHistory.id;
+        console.log(`✓ Saved to history with ID: ${historyId}`);
+      } catch (dbError) {
+        console.error("Failed to save generation history:", dbError);
+      }
+
+      const responseValidation = generateResponseSchema.safeParse({ imageUrl, historyId });
 
       if (!responseValidation.success) {
         console.error("Response validation failed:", responseValidation.error);
@@ -306,6 +365,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  app.get("/api/history", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+      const history = await storage.getGenerationHistory(limit);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching generation history:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch generation history",
+      });
+    }
+  });
+
+  await initializeReferenceImages();
 
   const httpServer = createServer(app);
 

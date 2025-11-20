@@ -1,4 +1,33 @@
+import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export const generationHistory = pgTable("generation_history", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  prompt: text("prompt").notNull(),
+  styleId: text("style_id").notNull(),
+  styleLabel: text("style_label").notNull(),
+  engine: text("engine").notNull(),
+  finalPrompt: text("final_prompt").notNull(),
+  referenceImageUrl: text("reference_image_url").notNull(),
+  generatedImageUrl: text("generated_image_url").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+const baseInsertSchema = createInsertSchema(generationHistory);
+
+export const insertGenerationHistorySchema = z.object({
+  prompt: z.string().min(1),
+  styleId: z.string().min(1),
+  styleLabel: z.string().min(1),
+  engine: z.string().min(1),
+  finalPrompt: z.string().min(1),
+  referenceImageUrl: z.string().url(),
+  generatedImageUrl: z.string().url(),
+});
+
+export type InsertGenerationHistory = z.infer<typeof insertGenerationHistorySchema>;
+export type SelectGenerationHistory = typeof generationHistory.$inferSelect;
 
 export const stylePresetSchema = z.object({
   id: z.string(),
@@ -17,6 +46,7 @@ export const generateRequestSchema = z.object({
 
 export const generateResponseSchema = z.object({
   imageUrl: z.string().url(),
+  historyId: z.number().optional(),
 });
 
 export type StylePreset = z.infer<typeof stylePresetSchema>;
