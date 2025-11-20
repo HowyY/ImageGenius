@@ -39,9 +39,10 @@ Preferred communication style: Simple, everyday language.
 
 **Framework**: Express.js running on Node.js with TypeScript
 
-**API Structure**: RESTful API with two main endpoints:
+**API Structure**: RESTful API with three main endpoints:
 - `GET /api/styles` - Returns available style presets for the UI
-- `POST /api/generate` - Accepts prompt, styleId, and engine; combines user prompt with style-specific base prompt
+- `POST /api/generate` - Accepts prompt, styleId, and engine; generates image using Nano Banana API and saves to history
+- `GET /api/history` - Returns generation history from database (limit parameter optional, defaults to 50)
 
 **Request Validation**: Zod schemas validate incoming requests with detailed error messages
 
@@ -54,16 +55,21 @@ Preferred communication style: Simple, everyday language.
 - Visual style descriptions (basePrompt)
 - Compatible AI engines
 - User-facing labels and descriptions
+- Reference images uploaded to KIE at server startup (from `client/public/reference-images/`)
 
 ### Data Storage Solutions
 
-**Current Implementation**: In-memory storage using a `MemStorage` class for user data (prepared for future authentication)
+**Active Database**: PostgreSQL database (Neon) for generation history:
+- Schema definitions in `shared/schema.ts` with `generationHistory` table
+- Migration managed via `drizzle-kit push`
+- Stores: prompt, styleId, styleLabel, engine, finalPrompt, referenceImageUrl, generatedImageUrl, createdAt
+- Storage interface in `server/storage.ts` with graceful fallback when DATABASE_URL is not set
 
-**Database Ready**: Drizzle ORM configured with PostgreSQL support:
-- Schema definitions in `shared/schema.ts`
-- Migration configuration in `drizzle.config.ts`
-- Neon Database serverless driver included
-- Database currently not active but infrastructure is prepared
+**Reference Image Storage**: KIE File Upload API (https://kieai.redpandaai.co):
+- Automatically uploads all images from `client/public/reference-images/` at server startup
+- Images organized by style directories (e.g., cool_cyan_lineart/)
+- Uploaded files stored on KIE temporary storage (3-day retention)
+- File upload service in `server/services/fileUpload.ts`
 
 ### Authentication and Authorization
 
@@ -79,7 +85,9 @@ Preferred communication style: Simple, everyday language.
 **Shared Schema Approach**: Type definitions and Zod validation schemas are centralized in the `shared/` directory and used by both frontend and backend, ensuring consistency:
 - `StylePreset` type
 - `GenerateRequest` type
-- `GenerateResponse` type
+- `GenerateResponse` type (includes optional historyId)
+- `generationHistory` database table schema
+- `InsertGenerationHistory` and `SelectGenerationHistory` types
 
 **Path Aliases**: Configured in both TypeScript and Vite for clean imports:
 - `@/*` for client components
@@ -117,5 +125,22 @@ Preferred communication style: Simple, everyday language.
 - **class-variance-authority**: Type-safe component variants
 - **nanoid**: Unique ID generation
 
-### Pending External API Integration
-The application is structured to integrate with AI image generation services (referenced as "nanobanana" and "seeddream" engines) but currently returns placeholder images. The architecture supports adding actual API calls without significant refactoring.
+### External API Integration
+
+**KIE AI Services** (https://api.kie.ai):
+- **Nano Banana Edit API**: Fully integrated for AI image generation
+  - Model: `google/nano-banana-edit`
+  - Creates tasks via `POST /api/v1/jobs/createTask`
+  - Polls for results via `GET /api/v1/jobs/recordInfo?taskId={id}`
+  - Supports reference images, custom prompts, and output format configuration
+  - Maximum 10 polling attempts with 3-second delays
+- **File Upload API**: Uploads local reference images to KIE storage
+  - Endpoint: `POST https://kieai.redpandaai.co/api/file-stream-upload`
+  - Returns temporary URLs with 3-day retention
+  - Supports FormData multipart uploads
+
+**SeedDream Engine**: Prepared but not yet implemented (throws error when selected)
+
+**API Key Management**: 
+- `KIE_API_KEY` environment variable required for both services
+- Set via Replit Secrets for secure storage
