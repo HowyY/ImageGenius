@@ -28,7 +28,8 @@ The core functionality allows users to:
 
 ## User Preferences
 
-Preferred communication style: Simple, everyday language.
+- **Communication**: Simple, everyday language in Chinese
+- **Code Standards**: All code, comments, UI text, and error messages must be in English only
 
 ## System Architecture
 
