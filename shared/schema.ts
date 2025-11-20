@@ -12,6 +12,7 @@ export const generationHistory = pgTable("generation_history", {
   referenceImageUrl: text("reference_image_url").notNull(),
   generatedImageUrl: text("generated_image_url").notNull(),
   characterReferenceUrl: text("character_reference_url"),
+  userReferenceUrls: text("user_reference_urls").array(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -26,6 +27,7 @@ export const insertGenerationHistorySchema = z.object({
   referenceImageUrl: z.string().url(),
   generatedImageUrl: z.string().url(),
   characterReferenceUrl: z.string().url().optional(),
+  userReferenceUrls: z.array(z.string().url()).max(3).optional(),
 });
 
 export type InsertGenerationHistory = z.infer<typeof insertGenerationHistorySchema>;
@@ -45,6 +47,7 @@ export const generateRequestSchema = z.object({
     errorMap: () => ({ message: "Engine must be either 'nanobanana' or 'seedream'" }),
   }),
   characterReference: z.string().url().optional(),
+  userReferenceImages: z.array(z.string().url()).max(3).optional(),
 });
 
 export const generateResponseSchema = z.object({
