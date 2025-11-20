@@ -20,17 +20,11 @@ const STYLE_PRESETS: Array<
   StylePreset & { basePrompt: string; referenceImageUrl: string }
 > = [
   {
-    id: "cool_cyan_lineart",
-<<<<<<< HEAD
-    label: "Cool Cyan Vector Line Art",
-    description: "Clean vector line art with cyan-blue gradient palette and minimal white background",
-    engines: ["nanobanana", "seedream"],
-=======
+    id: "cyan_sketchline_vector",
     label: "Cyan Sketchline Vector",
     description:
       "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
-    engines: ["nanobanana", "seeddream"],
->>>>>>> 48211ab (Rename cool cyan style to Cyan Sketchline Vector)
+    engines: ["nanobanana", "seedream"],
     basePrompt:
       "clean sketch-style vector line art, navy blue outlines, white negative space, subtle cyan to blue gradients for fills, minimalist details, modern financial illustration tone",
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
@@ -130,7 +124,7 @@ function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: stri
   
   return `PROMPT TEMPLATE
 
-[SCENE â€” ${userPrompt}]${characterInstruction}
+[SCENE â€?${userPrompt}]${characterInstruction}
 
 1. CAMERA & COMPOSITION
 - Camera angle: stable, undistorted view that clearly presents the subject.
@@ -247,7 +241,7 @@ async function pollNanoBananaResult(taskId: string) {
 }
 
 async function callSeedream(prompt: string) {
-  throw new Error(`Seedream integration missing for prompt: ${prompt}`);
+  throw new Error(`seedream integration missing for prompt: ${prompt}`);
 }
 
 function getReferenceImageUrl(styleId: string): string {
@@ -274,7 +268,7 @@ async function initializeReferenceImages() {
     
     uploadedReferenceImages = await uploadReferenceImages(referenceImagesPath);
     
-    console.log(`âœ“ Successfully uploaded ${uploadedReferenceImages.length} style categories`);
+    console.log(`âœ?Successfully uploaded ${uploadedReferenceImages.length} style categories`);
     for (const style of uploadedReferenceImages) {
       console.log(`  - ${style.styleId}: ${style.imageUrls.length} images`);
       for (const preset of STYLE_PRESETS) {
@@ -384,7 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           generatedImageUrl: imageUrl,
         });
         historyId = savedHistory.id;
-        console.log(`âœ“ Saved to history with ID: ${historyId}`);
+        console.log(`âœ?Saved to history with ID: ${historyId}`);
       } catch (dbError) {
         console.error("Failed to save generation history:", dbError);
       }
