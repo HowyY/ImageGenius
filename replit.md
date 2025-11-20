@@ -8,9 +8,16 @@ The core functionality allows users to:
 - Enter a text prompt describing the desired image
 - Select from predefined visual style presets (e.g., "Cool Cyan Vector Line Art", "Warm Orange Flat Illustration")
 - Choose between different AI engines ("nanobanana" or "seeddream")
+- **Lock a style** to maintain consistent visual style across multiple generations
+- **Set character reference** from generated images to maintain character consistency across different scenes
 - Generate images based on the combined prompt and style
+- View generation history with all past creations
 
-Currently, the backend returns placeholder images while the actual AI image generation API integration is pending.
+**NEW: Style Locking & Character Consistency Features** (November 2025):
+- **Style Lock**: Users can lock their selected visual style, preventing accidental changes. The locked style is saved in localStorage and persists across page reloads.
+- **Character Reference**: Users can designate any generated image as a "character reference." Subsequent generations will prioritize maintaining that character's appearance (face, hairstyle, clothing) while applying the scene description.
+- **Image Priority System**: When a character reference is set, it's placed first in the API's image_urls array (highest priority), followed by style reference images.
+- **Smart Prompting**: The system automatically adds character consistency instructions to prompts when a character reference is active.
 
 ## User Preferences
 
@@ -41,7 +48,7 @@ Preferred communication style: Simple, everyday language.
 
 **API Structure**: RESTful API with three main endpoints:
 - `GET /api/styles` - Returns available style presets for the UI
-- `POST /api/generate` - Accepts prompt, styleId, and engine; generates image using Nano Banana API and saves to history
+- `POST /api/generate` - Accepts prompt, styleId, engine, and optional characterReference; generates image using Nano Banana API with proper image URL priority and saves to history
 - `GET /api/history` - Returns generation history from database (limit parameter optional, defaults to 50)
 
 **Request Validation**: Zod schemas validate incoming requests with detailed error messages
@@ -62,8 +69,13 @@ Preferred communication style: Simple, everyday language.
 **Active Database**: PostgreSQL database (Neon) for generation history:
 - Schema definitions in `shared/schema.ts` with `generationHistory` table
 - Migration managed via `drizzle-kit push`
-- Stores: prompt, styleId, styleLabel, engine, finalPrompt, referenceImageUrl, generatedImageUrl, createdAt
+- Stores: prompt, styleId, styleLabel, engine, finalPrompt, referenceImageUrl, generatedImageUrl, characterReferenceUrl (optional), createdAt
 - Storage interface in `server/storage.ts` with graceful fallback when DATABASE_URL is not set
+
+**Client-Side Persistence**: localStorage for user preferences:
+- Style lock status and locked style ID
+- Character reference image URL
+- Managed via `client/src/lib/generationState.ts` utility functions
 
 **Reference Image Storage**: KIE File Upload API (https://kieai.redpandaai.co):
 - Automatically uploads all images from `client/public/reference-images/` at server startup
@@ -84,9 +96,9 @@ Preferred communication style: Simple, everyday language.
 
 **Shared Schema Approach**: Type definitions and Zod validation schemas are centralized in the `shared/` directory and used by both frontend and backend, ensuring consistency:
 - `StylePreset` type
-- `GenerateRequest` type
+- `GenerateRequest` type (includes optional characterReference URL)
 - `GenerateResponse` type (includes optional historyId)
-- `generationHistory` database table schema
+- `generationHistory` database table schema (includes optional characterReferenceUrl)
 - `InsertGenerationHistory` and `SelectGenerationHistory` types
 
 **Path Aliases**: Configured in both TypeScript and Vite for clean imports:
@@ -128,11 +140,15 @@ Preferred communication style: Simple, everyday language.
 ### External API Integration
 
 **KIE AI Services** (https://api.kie.ai):
-- **Nano Banana Edit API**: Fully integrated for AI image generation
+- **Nano Banana Edit API**: Fully integrated for AI image generation with multi-image support
   - Model: `google/nano-banana-edit`
   - Creates tasks via `POST /api/v1/jobs/createTask`
   - Polls for results via `GET /api/v1/jobs/recordInfo?taskId={id}`
-  - Supports reference images, custom prompts, and output format configuration
+  - Supports multiple reference images with priority ordering (first image = highest priority)
+  - **Character Consistency**: Character reference images are placed first in image_urls array to prioritize character appearance
+  - **Style Reference**: Style preset reference images are appended after character references
+  - Custom prompts include character consistency instructions when applicable
+  - Output format configuration (PNG, 16:9 aspect ratio)
   - Maximum 10 polling attempts with 3-second delays
 - **File Upload API**: Uploads local reference images to KIE storage
   - Endpoint: `POST https://kieai.redpandaai.co/api/file-stream-upload`

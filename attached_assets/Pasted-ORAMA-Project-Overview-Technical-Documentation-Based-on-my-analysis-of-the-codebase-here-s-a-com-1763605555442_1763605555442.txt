@@ -1,0 +1,228 @@
+ORAMA Project Overview - Technical Documentation
+Based on my analysis of the codebase, here's a comprehensive overview you can copy and share with your small project:
+
+Technology Stack
+Frontend
+Framework: React 18 + TypeScript
+Routing: Wouter (lightweight routing)
+Styling: Tailwind CSS + shadcn/ui components
+State Management:
+Zustand (client-side state)
+TanStack Query v5 (server state & caching)
+Forms: React Hook Form + Zod validation
+Build Tool: Vite
+UI Components: Radix UI primitives
+Backend
+Runtime: Node.js + Express
+Language: TypeScript (ES Modules)
+Database: PostgreSQL (Neon serverless)
+ORM: Drizzle ORM
+Authentication: JWT + bcrypt
+Session: Express Session
+File Processing: FFmpeg (video rendering)
+File Upload: Multer
+AI Services
+OpenAI API: GPT-4o (text), DALL-E (images), TTS (voice)
+Fal.ai: Veo3 model (video generation)
+Kling AI: Alternative video generation
+Infrastructure
+Email: SendGrid/Resend API
+File Storage: Local filesystem (/uploads)
+Port: 5000 (both API and frontend)
+Main Functionalities
+1. Multi-Stage Video Production Workflow
+Projects progress through 5 sequential stages:
+
+Outline: Define video parameters (format, duration, genre, style)
+Script: Scene-by-scene voice-over and visual descriptions
+Storyboard: Generate/upload images for each scene
+Audio: AI voice synthesis for voice-overs
+Video: Final video composition and rendering
+2. AI-Powered Content Generation
+Auto-generate outlines based on project parameters
+Generate scripts with voice-over text and visual descriptions
+Create images from text descriptions
+Synthesize voice-overs with multiple voice options
+Generate video clips from prompts
+3. Version Control System
+Multiple versions per project stage
+Only latest version is editable
+Approved versions are automatically locked
+Comment copying between versions
+Version duplication with asset copying
+4. Collaboration & Permissions
+5 Project Access Levels:
+
+Viewer (view only)
+Commenter (view + comment)
+Editor (edit content)
+Approver (approve stages)
+Manager (full project control)
+System Roles:
+
+Super Admin (platform-wide access)
+Regular User
+5. Commenting System
+Scene-specific threaded comments
+Stage-aware comments (script vs storyboard)
+Real-time comment counts
+Reply threads
+6. Asset Management
+Image upload and AI generation
+Video upload and AI generation
+Audio synthesis
+Intelligent caching (Zustand-based)
+Automatic cleanup
+7. Video Rendering
+FFmpeg-based scene composition
+Multiple aspect ratio support (16:9, 9:16, 1:1, 4:3)
+Voice-over synchronization
+Real-time render progress tracking
+8. Cost Tracking
+AI API usage tracking per project
+Configurable unit costs for AI models
+Budget monitoring
+9. Admin Tools
+User management (invite, deactivate, delete)
+Project state manipulation
+AI model cost configuration
+Audit logging
+Workflow history tracking
+Database Schema Overview
+Core Tables
+users
+├─ id, email, password (bcrypt)
+├─ role: "super_admin" | "user"
+└─ userType: "service" | "client"
+projects
+├─ id, title, format, duration
+├─ status: "outline" | "script" | "storyboard" | "production" | "completed"
+└─ userId (owner)
+projectVersions
+├─ id, projectId, versionNumber
+├─ approvalStage, approvalStatus
+└─ scriptLocked (when approved)
+scenes
+├─ id, projectId, versionId, sceneUuid
+├─ order, voiceOver, visualDescription
+└─ contains: images[], videos[], voiceOvers[]
+projectMembers
+├─ projectId, userId, accessLevelId
+└─ memberRole: "owner" | "contributor"
+accessLevels
+├─ id, name, permissionLevel (1-5)
+└─ "viewer" | "commenter" | "editor" | "approver" | "manager"
+comments
+├─ id, projectId, scriptVersionId, sceneUuid
+├─ stage, commentType, parentCommentId
+└─ threaded replies
+
+Supporting Tables
+images, videos, voiceOvers: Asset storage
+renderedVideos: Final output videos
+apiCosts, aiUnitCosts: Cost tracking
+workflowHistory: Stage transitions
+auditLogs: Admin actions
+pilotApplications: User applications
+API Architecture
+Authentication
+POST /api/auth/signup - User registration
+POST /api/auth/login - JWT authentication
+PUT /api/auth/password - Password update
+Projects
+GET /api/projects - List user projects
+POST /api/projects - Create project
+PUT /api/projects/:id - Update project
+DELETE /api/projects/:id - Delete project
+POST /api/projects/:id/duplicate - Duplicate project
+Versions
+GET /api/projects/:id/versions - List versions
+POST /api/projects/:id/versions - Create version
+POST /api/projects/:id/versions/:versionId/approve - Approve version
+Scenes
+POST /api/projects/:id/scenes - Create scene
+PUT /api/scenes/:id - Update scene
+DELETE /api/scenes/:id - Delete scene
+POST /api/scenes/:id/reorder - Reorder scenes
+AI Generation
+POST /api/ai/generate-outline - Generate outline
+POST /api/ai/generate-script - Generate script
+POST /api/scenes/:id/generate-image - Generate scene image
+POST /api/scenes/:id/generate-voice - Generate voice-over
+POST /api/scenes/:id/generate-video - Generate video clip
+Comments
+GET /api/comments/:versionId/:sceneUuid - Get comments
+POST /api/comments - Create comment
+PUT /api/comments/:id - Update comment
+DELETE /api/comments/:id - Delete comment
+Key Files for Integration
+If you need to integrate with this project, these are the critical files:
+
+Shared Schema (types & validation)
+shared/schema.ts - All database models + Zod schemas
+
+API Client Setup
+// From client/src/lib/queryClient.ts
+export async function apiRequest(
+  method: string,
+  url: string,
+  data?: unknown
+): Promise<Response> {
+  const token = localStorage.getItem("auth_token");
+  const res = await fetch(url, {
+    method,
+    headers: { 
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
+  });
+  return res;
+}
+
+Authentication Flow
+// Login returns: { user, token }
+// Store token: localStorage.setItem("auth_token", token)
+// Include in requests: Authorization: `Bearer ${token}`
+
+Permission Checking
+// Required permission levels (1-5):
+PERMISSION_LEVELS = {
+  VIEWER: 1,
+  COMMENTER: 2,
+  EDITOR: 3,
+  APPROVER: 4,
+  MANAGER: 5,
+}
+
+Environment Variables Needed
+DATABASE_URL=postgresql://...
+OPENAI_API_KEY=sk-...
+FAL_KEY=...
+SENDGRID_API_KEY=... or RESEND_API_KEY=...
+JWT_SECRET=your-secret-key
+NODE_ENV=development|production
+
+File Structure
+├── client/src/
+│   ├── pages/          # Route pages
+│   ├── components/     # Reusable UI components
+│   ├── hooks/          # Custom React hooks
+│   ├── stores/         # Zustand stores
+│   ├── lib/            # Utilities
+│   └── contexts/       # React contexts
+├── server/
+│   ├── index.ts        # Express app setup
+│   ├── routes.ts       # API endpoints
+│   ├── auth.ts         # JWT auth logic
+│   ├── storage.ts      # Database operations
+│   ├── openai.ts       # AI integrations
+│   ├── videoRenderer.ts # FFmpeg rendering
+│   └── email.ts        # Email service
+├── shared/
+│   └── schema.ts       # Shared types & validation
+└── uploads/            # Local file storage
+    ├── images/
+    ├── videos/
+    └── audio/

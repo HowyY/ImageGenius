@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Form,
   FormControl,
@@ -23,14 +24,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download } from "lucide-react";
+import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, X, User } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
+import { getStyleLock, setStyleLock, getCharacterReference, setCharacterReference, clearCharacterReference } from "@/lib/generationState";
 
 export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [selectedStyleDescription, setSelectedStyleDescription] = useState("");
+  const [styleLocked, setStyleLocked] = useState(false);
+  const [characterReference, setCharacterReferenceState] = useState<string | null>(null);
 
   const form = useForm<GenerateRequest>({
     resolver: zodResolver(generateRequestSchema),
@@ -38,12 +42,27 @@ export default function Home() {
       prompt: "",
       styleId: "",
       engine: "nanobanana",
+      characterReference: undefined,
     },
   });
 
   const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
     queryKey: ["/api/styles"],
   });
+
+  useEffect(() => {
+    const { locked, styleId } = getStyleLock();
+    const savedCharacterRef = getCharacterReference();
+    
+    setStyleLocked(locked);
+    setCharacterReferenceState(savedCharacterRef);
+    
+    if (locked && styleId) {
+      form.setValue("styleId", styleId);
+      const style = styles?.find((s) => s.id === styleId);
+      setSelectedStyleDescription(style?.description || "");
+    }
+  }, [styles]);
 
   const generateMutation = useMutation({
     mutationFn: async (data: GenerateRequest) => {
@@ -62,8 +81,32 @@ export default function Home() {
     setSelectedStyleDescription(style?.description || "");
   };
 
+  const toggleStyleLock = () => {
+    const currentStyleId = form.getValues("styleId");
+    const newLocked = !styleLocked;
+    
+    setStyleLocked(newLocked);
+    setStyleLock(newLocked, newLocked ? currentStyleId : null);
+  };
+
+  const handleSetCharacterReference = () => {
+    if (generatedImage) {
+      setCharacterReference(generatedImage);
+      setCharacterReferenceState(generatedImage);
+    }
+  };
+
+  const handleClearCharacterReference = () => {
+    clearCharacterReference();
+    setCharacterReferenceState(null);
+  };
+
   const onSubmit = (data: GenerateRequest) => {
-    generateMutation.mutate(data);
+    const requestData = {
+      ...data,
+      characterReference: characterReference || undefined,
+    };
+    generateMutation.mutate(requestData);
   };
 
   const isGenerating = generateMutation.isPending;
@@ -123,11 +166,35 @@ export default function Home() {
                   name="styleId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel data-testid="label-style">Style Preset</FormLabel>
+                      <div className="flex items-center justify-between gap-2">
+                        <FormLabel data-testid="label-style">Style Preset</FormLabel>
+                        {field.value && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={toggleStyleLock}
+                            className="h-auto p-1"
+                            data-testid="button-toggle-lock"
+                          >
+                            {styleLocked ? (
+                              <>
+                                <Lock className="w-4 h-4 mr-1 text-primary" />
+                                <Badge variant="default" className="text-xs" data-testid="badge-locked">Locked</Badge>
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="w-4 h-4 mr-1" />
+                                <span className="text-xs">Lock</span>
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                       <Select
                         value={field.value}
                         onValueChange={(value) => handleStyleChange(value, field.onChange)}
-                        disabled={stylesLoading || isGenerating}
+                        disabled={stylesLoading || isGenerating || styleLocked}
                       >
                         <FormControl>
                           <SelectTrigger data-testid="select-style" className="w-full">
@@ -193,6 +260,40 @@ export default function Home() {
                   )}
                 />
 
+                {characterReference && (
+                  <div className="border rounded-lg p-4 bg-card" data-testid="card-character-reference">
+                    <div className="flex items-start gap-3">
+                      <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0 border">
+                        <img 
+                          src={characterReference} 
+                          alt="Character reference" 
+                          className="w-full h-full object-cover"
+                          data-testid="img-character-reference"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <User className="w-4 h-4 text-primary" />
+                          <span className="text-sm font-medium" data-testid="text-character-reference-label">Character Reference Set</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground" data-testid="text-character-reference-description">
+                          New images will maintain this character's appearance
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearCharacterReference}
+                        className="h-auto p-1"
+                        data-testid="button-clear-character-reference"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <Button
                   type="submit"
                   disabled={isGenerating}
@@ -220,7 +321,17 @@ export default function Home() {
             <Card className="p-6" data-testid="card-result">
               <div className="space-y-4">
                 {generatedImage && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-between items-center gap-2">
+                    <Button
+                      onClick={handleSetCharacterReference}
+                      variant="outline"
+                      size="sm"
+                      data-testid="button-set-character-reference"
+                      disabled={characterReference === generatedImage}
+                    >
+                      <User className="w-4 h-4 mr-2" />
+                      {characterReference === generatedImage ? "Character Reference Set" : "Set as Character Reference"}
+                    </Button>
                     <Button
                       onClick={handleDownload}
                       variant="outline"
@@ -228,7 +339,7 @@ export default function Home() {
                       data-testid="button-download"
                     >
                       <Download className="w-4 h-4 mr-2" />
-                      Download Image
+                      Download
                     </Button>
                   </div>
                 )}

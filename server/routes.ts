@@ -116,10 +116,14 @@ const NEGATIVE_PROMPT = `- inconsistent character identity
 - no exaggerated gradients, strong shadows, or 3D effects
 - no floating, intersecting, or merged shapes`;
 
-function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: string }) {
+function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: string }, hasCharacterReference: boolean = false) {
+  const characterInstruction = hasCharacterReference 
+    ? "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**\n"
+    : "";
+  
   return `PROMPT TEMPLATE
 
-[SCENE — ${userPrompt}]
+[SCENE — ${userPrompt}]${characterInstruction}
 
 1. CAMERA & COMPOSITION
 - Camera angle: stable, undistorted view that clearly presents the subject.
@@ -152,7 +156,7 @@ function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: stri
 ${NEGATIVE_PROMPT}`.trim();
 }
 
-async function callNanoBananaEdit(prompt: string, referenceImageUrl: string) {
+async function callNanoBananaEdit(prompt: string, imageUrls: string[]) {
   if (!KIE_API_KEY) {
     throw new Error("KIE_API_KEY is not set in the environment");
   }
@@ -167,7 +171,7 @@ async function callNanoBananaEdit(prompt: string, referenceImageUrl: string) {
       model: "google/nano-banana-edit",
       input: {
         prompt,
-        image_urls: [referenceImageUrl],
+        image_urls: imageUrls,
         output_format: "png",
         image_size: "16:9",
       },
@@ -298,7 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine } = validationResult.data;
+      const { prompt, styleId, engine, characterReference } = validationResult.data;
       const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
 
       if (!selectedStyle) {
@@ -315,18 +319,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const finalPrompt = buildPrompt(prompt, selectedStyle);
+      const hasCharacterReference = !!characterReference;
+      const finalPrompt = buildPrompt(prompt, selectedStyle, hasCharacterReference);
+
+      // Build image URLs array with character reference first (highest priority)
+      const imageUrls: string[] = [];
+      if (characterReference) {
+        imageUrls.push(characterReference);
+      }
+      imageUrls.push(selectedStyle.referenceImageUrl);
 
       console.log("\n=== Image Generation Request ===");
       console.log(`Engine: ${engine}`);
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
       console.log(`User Prompt: ${prompt}`);
+      console.log(`Character Reference: ${characterReference || "None"}`);
+      console.log(`Image URLs (priority order): ${imageUrls.join(", ")}`);
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
 
       const imageUrl =
         engine === "nanobanana"
-          ? await callNanoBananaEdit(finalPrompt, selectedStyle.referenceImageUrl)
+          ? await callNanoBananaEdit(finalPrompt, imageUrls)
           : await callSeedDream(finalPrompt);
 
       let historyId: number | undefined;
@@ -338,6 +352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           engine,
           finalPrompt,
           referenceImageUrl: selectedStyle.referenceImageUrl,
+          characterReferenceUrl: characterReference || undefined,
           generatedImageUrl: imageUrl,
         });
         historyId = savedHistory.id;
