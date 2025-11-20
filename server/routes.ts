@@ -251,6 +251,14 @@ function getReferenceImageUrl(styleId: string): string {
   return DEFAULT_REFERENCE_IMAGE;
 }
 
+function getAllReferenceImageUrls(styleId: string): string[] {
+  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
+  if (uploadedStyle && uploadedStyle.imageUrls.length > 0) {
+    return uploadedStyle.imageUrls;
+  }
+  return [DEFAULT_REFERENCE_IMAGE];
+}
+
 async function initializeReferenceImages() {
   try {
     const referenceImagesPath = join(__dirname, "..", "client", "public", "reference-images");
@@ -327,7 +335,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (characterReference) {
         imageUrls.push(characterReference);
       }
-      imageUrls.push(selectedStyle.referenceImageUrl);
+      // Add all reference images for this style
+      const styleReferenceUrls = getAllReferenceImageUrls(styleId);
+      imageUrls.push(...styleReferenceUrls);
 
       console.log("\n=== Image Generation Request ===");
       console.log(`Engine: ${engine}`);

@@ -147,7 +147,7 @@ Preferred communication style: Simple, everyday language.
   - Polls for results via `GET /api/v1/jobs/recordInfo?taskId={id}`
   - Supports multiple reference images with priority ordering (first image = highest priority)
   - **Character Consistency**: Character reference images are placed first in image_urls array to prioritize character appearance
-  - **Style Reference**: Style preset reference images are appended after character references
+  - **Style Reference**: ALL style preset reference images are sent (not just the first one), appended after character references to ensure comprehensive style understanding
   - Custom prompts include character consistency instructions when applicable
   - Output format configuration (PNG, 16:9 aspect ratio)
   - Maximum 10 polling attempts with 3-second delays
