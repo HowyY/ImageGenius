@@ -341,7 +341,10 @@ export default function Home() {
 
                 <ReferenceImagesManager 
                   key={referenceImagesKey}
-                  onUpdate={() => setReferenceImagesKey(prev => prev + 1)}
+                  onUpdate={() => {
+                    setReferenceImagesKey(prev => prev + 1);
+                    setUserRefCount(getUserReferenceImages().length);
+                  }}
                 />
 
                 <Button
