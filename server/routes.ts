@@ -21,16 +21,9 @@ const STYLE_PRESETS: Array<
 > = [
   {
     id: "cool_cyan_lineart",
-<<<<<<< HEAD
     label: "Cool Cyan Vector Line Art",
     description: "Clean vector line art with cyan-blue gradient palette and minimal white background",
     engines: ["nanobanana", "seedream"],
-=======
-    label: "Cyan Sketchline Vector",
-    description:
-      "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
-    engines: ["nanobanana", "seeddream"],
->>>>>>> 48211ab (Rename cool cyan style to Cyan Sketchline Vector)
     basePrompt:
       "clean sketch-style vector line art, navy blue outlines, white negative space, subtle cyan to blue gradients for fills, minimalist details, modern financial illustration tone",
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,

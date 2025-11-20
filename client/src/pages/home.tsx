@@ -24,11 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, X, User, Plus } from "lucide-react";
+import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, Plus } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
-import { getStyleLock, setStyleLock, getCharacterReference, setCharacterReference, clearCharacterReference, getLastGeneratedImage, setLastGeneratedImage, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
+import { getStyleLock, setStyleLock, getLastGeneratedImage, setLastGeneratedImage, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
 import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 
@@ -36,7 +36,6 @@ export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [selectedStyleDescription, setSelectedStyleDescription] = useState("");
   const [styleLocked, setStyleLocked] = useState(false);
-  const [characterReference, setCharacterReferenceState] = useState<string | null>(null);
   const [lastToastId, setLastToastId] = useState<string | undefined>(undefined);
   const [referenceImagesKey, setReferenceImagesKey] = useState(0);
   const [userRefCount, setUserRefCount] = useState(0);
@@ -48,7 +47,6 @@ export default function Home() {
       prompt: "",
       styleId: "",
       engine: "nanobanana",
-      characterReference: undefined,
     },
   });
 
@@ -58,12 +56,10 @@ export default function Home() {
 
   useEffect(() => {
     const { locked, styleId } = getStyleLock();
-    const savedCharacterRef = getCharacterReference();
     const savedImage = getLastGeneratedImage();
     const userRefs = getUserReferenceImages();
     
     setStyleLocked(locked);
-    setCharacterReferenceState(savedCharacterRef);
     setGeneratedImage(savedImage);
     setUserRefCount(userRefs.length);
     
@@ -111,23 +107,10 @@ export default function Home() {
     setStyleLock(newLocked, newLocked ? currentStyleId : null);
   };
 
-  const handleSetCharacterReference = () => {
-    if (generatedImage) {
-      setCharacterReference(generatedImage);
-      setCharacterReferenceState(generatedImage);
-    }
-  };
-
-  const handleClearCharacterReference = () => {
-    clearCharacterReference();
-    setCharacterReferenceState(null);
-  };
-
   const onSubmit = (data: GenerateRequest) => {
     const userReferenceImages = getUserReferenceImages();
     const requestData = {
       ...data,
-      characterReference: characterReference || undefined,
       userReferenceImages: userReferenceImages.length > 0 ? userReferenceImages : undefined,
     };
     generateMutation.mutate(requestData);
@@ -305,40 +288,6 @@ export default function Home() {
                   )}
                 />
 
-                {characterReference && (
-                  <div className="border rounded-lg p-4 bg-card" data-testid="card-character-reference">
-                    <div className="flex items-start gap-3">
-                      <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0 border">
-                        <img 
-                          src={characterReference} 
-                          alt="Character reference" 
-                          className="w-full h-full object-cover"
-                          data-testid="img-character-reference"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <User className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium" data-testid="text-character-reference-label">Character Reference Set</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground" data-testid="text-character-reference-description">
-                          New images will maintain this character's appearance
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleClearCharacterReference}
-                        className="h-auto p-1"
-                        data-testid="button-clear-character-reference"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
                 <ReferenceImagesManager 
                   key={referenceImagesKey}
                   onUpdate={() => {
@@ -385,16 +334,6 @@ export default function Home() {
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         {userRefCount >= 3 ? `Full (${userRefCount}/3)` : `Add as Reference (${userRefCount}/3)`}
-                      </Button>
-                      <Button
-                        onClick={handleSetCharacterReference}
-                        variant="outline"
-                        size="sm"
-                        data-testid="button-set-character-reference"
-                        disabled={characterReference === generatedImage}
-                      >
-                        <User className="w-4 h-4 mr-2" />
-                        {characterReference === generatedImage ? "Character Reference Set" : "Set as Character Reference"}
                       </Button>
                       <Button
                         onClick={handleDownload}
