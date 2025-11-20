@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Sparkles, Image as ImageIcon, Plus } from "lucide-react";
+import { Clock, Sparkles, Image as ImageIcon, Plus, Check } from "lucide-react";
 import type { SelectGenerationHistory } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
-import { addUserReferenceImage } from "@/lib/generationState";
+import { addUserReferenceImage, getUserReferenceImages } from "@/lib/generationState";
 import { useToast } from "@/hooks/use-toast";
 
 export default function History() {
-  const [addedImages, setAddedImages] = useState<Set<string>>(new Set());
+  const [userRefCount, setUserRefCount] = useState(0);
+  const [userRefUrls, setUserRefUrls] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   
   const { data: history, isLoading } = useQuery<SelectGenerationHistory[]>({
@@ -19,18 +20,26 @@ export default function History() {
     refetchInterval: 30000,
   });
 
+  useEffect(() => {
+    const refs = getUserReferenceImages();
+    setUserRefCount(refs.length);
+    setUserRefUrls(new Set(refs));
+  }, []);
+
   const handleAddAsReference = (imageUrl: string) => {
     const success = addUserReferenceImage(imageUrl);
     if (success) {
-      setAddedImages(prev => new Set(prev).add(imageUrl));
+      const refs = getUserReferenceImages();
+      setUserRefCount(refs.length);
+      setUserRefUrls(new Set(refs));
       toast({
-        title: "Added to references",
-        description: "Image added to reference images list.",
+        title: "添加成功",
+        description: `图片已添加到参考列表 (${refs.length}/3)`,
       });
     } else {
       toast({
-        title: "Cannot add",
-        description: "Maximum 3 reference images or image already added.",
+        title: "无法添加",
+        description: "已达到最大数量(3张)或图片已存在",
         variant: "destructive",
       });
     }
@@ -109,15 +118,25 @@ export default function History() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAddAsReference(item.generatedImageUrl)}
-                      data-testid={`button-add-reference-${item.id}`}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add as Reference
-                    </Button>
+                    {userRefUrls.has(item.generatedImageUrl) ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          已添加为参考
+                        </Badge>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddAsReference(item.generatedImageUrl)}
+                        disabled={userRefCount >= 3}
+                        data-testid={`button-add-reference-${item.id}`}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        {userRefCount >= 3 ? `已满 (${userRefCount}/3)` : `添加为参考 (${userRefCount}/3)`}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
