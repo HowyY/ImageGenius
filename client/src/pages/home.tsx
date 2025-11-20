@@ -39,6 +39,7 @@ export default function Home() {
   const [characterReference, setCharacterReferenceState] = useState<string | null>(null);
   const [lastToastId, setLastToastId] = useState<string | undefined>(undefined);
   const [referenceImagesKey, setReferenceImagesKey] = useState(0);
+  const [userRefCount, setUserRefCount] = useState(0);
   const { toast, dismiss } = useToast();
 
   const form = useForm<GenerateRequest>({
@@ -59,10 +60,12 @@ export default function Home() {
     const { locked, styleId } = getStyleLock();
     const savedCharacterRef = getCharacterReference();
     const savedImage = getLastGeneratedImage();
+    const userRefs = getUserReferenceImages();
     
     setStyleLocked(locked);
     setCharacterReferenceState(savedCharacterRef);
     setGeneratedImage(savedImage);
+    setUserRefCount(userRefs.length);
     
     if (locked && styleId) {
       form.setValue("styleId", styleId);
@@ -134,15 +137,17 @@ export default function Home() {
     if (generatedImage) {
       const success = addUserReferenceImage(generatedImage);
       if (success) {
+        const newCount = getUserReferenceImages().length;
+        setUserRefCount(newCount);
         setReferenceImagesKey(prev => prev + 1);
         toast({
-          title: "Added to references",
-          description: "Image added to reference images list.",
+          title: "添加成功",
+          description: `图片已添加到参考列表 (${newCount}/3)`,
         });
       } else {
         toast({
-          title: "Cannot add",
-          description: "Maximum 3 reference images or image already added.",
+          title: "无法添加",
+          description: "已达到最大数量(3张)或图片已存在",
           variant: "destructive",
         });
       }
@@ -372,10 +377,11 @@ export default function Home() {
                         onClick={handleAddAsReference}
                         variant="outline"
                         size="sm"
+                        disabled={userRefCount >= 3}
                         data-testid="button-add-as-reference"
                       >
                         <Plus className="w-4 h-4 mr-2" />
-                        Add as Reference
+                        {userRefCount >= 3 ? `已满 (${userRefCount}/3)` : `添加为参考 (${userRefCount}/3)`}
                       </Button>
                       <Button
                         onClick={handleSetCharacterReference}
