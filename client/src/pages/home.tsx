@@ -24,12 +24,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, X, User } from "lucide-react";
+import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, X, User, Plus } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
-import { getStyleLock, setStyleLock, getCharacterReference, setCharacterReference, clearCharacterReference, getLastGeneratedImage, setLastGeneratedImage } from "@/lib/generationState";
+import { getStyleLock, setStyleLock, getCharacterReference, setCharacterReference, clearCharacterReference, getLastGeneratedImage, setLastGeneratedImage, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
 import { useToast } from "@/hooks/use-toast";
+import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 
 export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -37,6 +38,7 @@ export default function Home() {
   const [styleLocked, setStyleLocked] = useState(false);
   const [characterReference, setCharacterReferenceState] = useState<string | null>(null);
   const [lastToastId, setLastToastId] = useState<string | undefined>(undefined);
+  const [referenceImagesKey, setReferenceImagesKey] = useState(0);
   const { toast, dismiss } = useToast();
 
   const form = useForm<GenerateRequest>({
@@ -119,11 +121,32 @@ export default function Home() {
   };
 
   const onSubmit = (data: GenerateRequest) => {
+    const userReferenceImages = getUserReferenceImages();
     const requestData = {
       ...data,
       characterReference: characterReference || undefined,
+      userReferenceImages: userReferenceImages.length > 0 ? userReferenceImages : undefined,
     };
     generateMutation.mutate(requestData);
+  };
+
+  const handleAddAsReference = () => {
+    if (generatedImage) {
+      const success = addUserReferenceImage(generatedImage);
+      if (success) {
+        setReferenceImagesKey(prev => prev + 1);
+        toast({
+          title: "Added to references",
+          description: "Image added to reference images list.",
+        });
+      } else {
+        toast({
+          title: "Cannot add",
+          description: "Maximum 3 reference images or image already added.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const isGenerating = generateMutation.isPending;
@@ -311,6 +334,11 @@ export default function Home() {
                   </div>
                 )}
 
+                <ReferenceImagesManager 
+                  key={referenceImagesKey}
+                  onUpdate={() => setReferenceImagesKey(prev => prev + 1)}
+                />
+
                 <Button
                   type="submit"
                   disabled={isGenerating}
@@ -338,26 +366,37 @@ export default function Home() {
             <Card className="p-6" data-testid="card-result">
               <div className="space-y-4">
                 {generatedImage && (
-                  <div className="flex justify-between items-center gap-2">
-                    <Button
-                      onClick={handleSetCharacterReference}
-                      variant="outline"
-                      size="sm"
-                      data-testid="button-set-character-reference"
-                      disabled={characterReference === generatedImage}
-                    >
-                      <User className="w-4 h-4 mr-2" />
-                      {characterReference === generatedImage ? "Character Reference Set" : "Set as Character Reference"}
-                    </Button>
-                    <Button
-                      onClick={handleDownload}
-                      variant="outline"
-                      size="sm"
-                      data-testid="button-download"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download
-                    </Button>
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={handleAddAsReference}
+                        variant="outline"
+                        size="sm"
+                        data-testid="button-add-as-reference"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add as Reference
+                      </Button>
+                      <Button
+                        onClick={handleSetCharacterReference}
+                        variant="outline"
+                        size="sm"
+                        data-testid="button-set-character-reference"
+                        disabled={characterReference === generatedImage}
+                      >
+                        <User className="w-4 h-4 mr-2" />
+                        {characterReference === generatedImage ? "Character Reference Set" : "Set as Character Reference"}
+                      </Button>
+                      <Button
+                        onClick={handleDownload}
+                        variant="outline"
+                        size="sm"
+                        data-testid="button-download"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                    </div>
                   </div>
                 )}
                 <div className="aspect-video bg-muted rounded-lg overflow-hidden relative" data-testid="container-image">
