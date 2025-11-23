@@ -283,8 +283,10 @@ async function callSeedreamEdit(prompt: string, imageUrls: string[]) {
 }
 
 async function pollSeedreamResult(taskId: string) {
-  const maxAttempts = 10;
+  const maxAttempts = 20;
   const delayMs = 3000;
+
+  console.log(`[Seedream] Starting to poll task ${taskId} (max ${maxAttempts} attempts, ${delayMs}ms delay)`);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -303,12 +305,16 @@ async function pollSeedreamResult(taskId: string) {
     }
 
     const state = resultJson.data?.state;
+    console.log(`[Seedream] Polling attempt ${attempt + 1}/${maxAttempts}: state="${state}"`);
+
     if (state === "waiting" || state === "queuing" || state === "generating") {
       continue;
     }
 
     if (state === "fail") {
-      throw new Error(resultJson.data?.failMsg || "Seedream task failed");
+      const failMsg = resultJson.data?.failMsg || "Seedream task failed";
+      console.error(`[Seedream] Task failed: ${failMsg}`);
+      throw new Error(failMsg);
     }
 
     if (state === "success") {
@@ -322,10 +328,12 @@ async function pollSeedreamResult(taskId: string) {
       if (!url) {
         throw new Error("Seedream result missing result URL");
       }
+      console.log(`[Seedream] Task completed successfully: ${url}`);
       return url;
     }
   }
 
+  console.error(`[Seedream] Task timed out after ${maxAttempts * delayMs / 1000} seconds`);
   throw new Error("Seedream task timed out");
 }
 
