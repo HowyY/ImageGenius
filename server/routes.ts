@@ -240,8 +240,93 @@ async function pollNanoBananaResult(taskId: string) {
   throw new Error("NanoBanana task timed out");
 }
 
-async function callSeedream(prompt: string) {
-  throw new Error(`Seedream integration missing for prompt: ${prompt}`);
+async function callSeedreamEdit(prompt: string, imageUrls: string[]) {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
+  }
+
+  // Seedream API supports up to 10 image inputs
+  if (imageUrls.length > 10) {
+    throw new Error(`Seedream supports up to 10 reference images, but ${imageUrls.length} were provided`);
+  }
+
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "bytedance/seedream-v4-edit",
+      input: {
+        prompt,
+        image_urls: imageUrls,
+        image_size: "landscape_16_9",
+        image_resolution: "2K",
+        max_images: 1,
+      },
+    }),
+  });
+
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`Seedream failed to create task: ${createResponse.status} ${createJson.msg ?? ""}`);
+  }
+
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("Seedream response missing taskId");
+  }
+
+  return await pollSeedreamResult(taskId);
+}
+
+async function pollSeedreamResult(taskId: string) {
+  const maxAttempts = 10;
+  const delayMs = 3000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+    const resultResponse = await fetch(`${KIE_BASE_URL}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${KIE_API_KEY}`,
+      },
+    });
+
+    const resultJson = await resultResponse.json();
+
+    if (!resultResponse.ok || resultJson.code !== 200) {
+      throw new Error(`Seedream failed to query task: ${resultResponse.status} ${resultJson.msg ?? ""}`);
+    }
+
+    const state = resultJson.data?.state;
+    if (state === "waiting" || state === "queuing" || state === "generating") {
+      continue;
+    }
+
+    if (state === "fail") {
+      throw new Error(resultJson.data?.failMsg || "Seedream task failed");
+    }
+
+    if (state === "success") {
+      const resultField = resultJson.data?.resultJson;
+      if (!resultField) {
+        throw new Error("Seedream result missing resultJson");
+      }
+
+      const parsed = JSON.parse(resultField);
+      const url = parsed.resultUrls?.[0];
+      if (!url) {
+        throw new Error("Seedream result missing result URL");
+      }
+      return url;
+    }
+  }
+
+  throw new Error("Seedream task timed out");
 }
 
 function getReferenceImageUrl(styleId: string): string {
@@ -356,7 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const imageUrl =
         engine === "nanobanana"
           ? await callNanoBananaEdit(finalPrompt, imageUrls)
-          : await callSeedream(finalPrompt);
+          : await callSeedreamEdit(finalPrompt, imageUrls);
 
       let historyId: number | undefined;
       try {
