@@ -1,0 +1,59 @@
+[SCENE X — TITLE]
+
+1. CAMERA & COMPOSITION
+- Camera angle: [wide / medium / close-up / low angle / high angle / side view]. 
+  Use a stable, undistorted angle that clearly presents the subject.
+- Composition layout: [rule of thirds / centered / panorama]. 
+  Keep framing clean and balanced with no dramatic cropping.
+- Framing: [how the subject sits in the frame]. 
+  Ensure the subject’s body fits naturally inside the frame without clipping or distortion.
+- Depth arrangement: clearly separated foreground, midground, and background elements. 
+  Maintain correct spatial hierarchy with accurate scale and perspective.
+
+2. ENVIRONMENT
+- Setting: [place, time of day, interior/exterior], described simply and consistently.
+- Lighting: [soft daylight / warm sunset / diffuse indoor light / overcast]. 
+  Lighting must remain soft, even, and appropriate for the scene, without dramatic shadows.
+- Atmosphere: [clean, foggy, bright, moody, etc.], matching the reference style’s tone.
+- Background complexity: match the reference (simple / medium / detailed). 
+  Background must follow the same line density, fill density, and simplification level as the reference style.
+
+3. MAIN CHARACTER
+- Pose: [standing / walking / sitting / interacting], drawn correctly with natural posture.
+- Expression: [neutral / smiling / focused], consistent with character identity.
+- Interaction with environment: [touching an object, looking at something], placed physically correctly with proper scale.
+- Clothing: MUST match character lock exactly, including color palette, silhouette, and details. 
+  Do not alter hairstyle, accessories, or body shape across scenes.
+
+4. SECONDARY OBJECTS & ACTION
+- Vehicles, props, tools, signage, etc., must follow the same stylization rules as the reference style.
+- Motion cues: [small movement, gestures, wind, traffic, etc.], kept subtle and clean.
+- Object scale MUST follow spatial rules: no oversized or undersized elements.
+- All objects must maintain consistent perspective, outline quality, and detail density.
+
+5. STYLE ENFORCEMENT
+- Apply exact reference style: linework thickness, color palette, shading type, perspective style, and material rendering.
+- Maintain consistent color palette and lighting across all scenes; no deviations.
+- Texture density, grain pattern, and edge softness must match the reference exactly.
+- Use the same level of line softness, stroke texture, or roughness as the reference.
+- Keep background, character, and object details at the same level of simplification as shown in the reference.
+- All scenes must share identical visual tone, material treatment, and shading method.
+- Uniform art direction across scenes, with no stylistic drift.
+- No deviation from reference style; do not add extra details, complexity, or new visual elements.
+
+6. NEGATIVE PROMPT
+- inconsistent character identity  
+- incorrect character proportions  
+- distorted anatomy or broken limbs  
+- incorrect object scale (e.g., character larger than a car)  
+- broken perspective or impossible angles  
+- unwanted changes in clothing or hairstyle  
+- mismatched art style within the same scene  
+- unintended extra characters or duplicated faces  
+- chaotic or cluttered composition (unless references show it)  
+- low-quality details such as blurry shapes or noisy textures  
+- no clean vector edges unless the reference uses vector lines  
+- no high-saturation or neon colors  
+- no deviation from the reference style across all scenes  
+- no exaggerated gradients, strong shadows, or 3D effects  
+- no floating, intersecting, or merged shapes  
