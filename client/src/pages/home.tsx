@@ -110,9 +110,22 @@ export default function Home() {
 
   const onSubmit = (data: GenerateRequest) => {
     const userReferenceImages = getUserReferenceImages();
+    
+    // Load custom template from localStorage if exists
+    let customTemplate = undefined;
+    try {
+      const savedTemplate = localStorage.getItem("customPromptTemplate");
+      if (savedTemplate) {
+        customTemplate = JSON.parse(savedTemplate);
+      }
+    } catch (e) {
+      console.error("Failed to load custom template:", e);
+    }
+    
     const requestData = {
       ...data,
       userReferenceImages: userReferenceImages.length > 0 ? userReferenceImages : undefined,
+      customTemplate,
     };
     generateMutation.mutate(requestData);
   };

@@ -117,7 +117,18 @@ const NEGATIVE_PROMPT = `- inconsistent character identity
 - no exaggerated gradients, strong shadows, or 3D effects
 - no floating, intersecting, or merged shapes`;
 
-function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: string }, hasUserReference: boolean = false) {
+function buildPrompt(
+  userPrompt: string, 
+  style: StylePreset & { basePrompt: string }, 
+  hasUserReference: boolean = false,
+  customTemplate?: any
+) {
+  // If custom template is provided, use it
+  if (customTemplate) {
+    return buildPromptFromTemplate(userPrompt, style, hasUserReference, customTemplate);
+  }
+  
+  // Otherwise use default template
   const characterInstruction = hasUserReference 
     ? "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**\n"
     : "";
@@ -155,6 +166,69 @@ function buildPrompt(userPrompt: string, style: StylePreset & { basePrompt: stri
 
 6. NEGATIVE PROMPT
 ${NEGATIVE_PROMPT}`.trim();
+}
+
+function buildPromptFromTemplate(
+  userPrompt: string,
+  style: StylePreset & { basePrompt: string },
+  hasUserReference: boolean,
+  template: any
+) {
+  const characterInstruction = hasUserReference 
+    ? "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**\n"
+    : "";
+  
+  let prompt = `PROMPT TEMPLATE\n\n[SCENE — ${userPrompt}]${characterInstruction}\n\n`;
+
+  if (template.cameraComposition?.enabled) {
+    prompt += "1. CAMERA & COMPOSITION\n";
+    prompt += `- Camera angle: ${template.cameraComposition.cameraAngle}\n`;
+    prompt += `- Composition layout: ${template.cameraComposition.compositionLayout} (${style.label} inspiration)\n`;
+    prompt += `- Framing: ${template.cameraComposition.framing}\n`;
+    prompt += `- Depth arrangement: ${template.cameraComposition.depthArrangement}\n\n`;
+  }
+
+  if (template.environment?.enabled) {
+    prompt += "2. ENVIRONMENT\n";
+    const setting = template.environment.setting.replace("[Scene description]", userPrompt);
+    prompt += `- Setting: ${setting}\n`;
+    prompt += `- Lighting: ${template.environment.lighting}\n`;
+    const atmosphere = template.environment.atmosphere.replace("match style tone", `match ${style.label} (${style.description}) tone`);
+    prompt += `- Atmosphere: ${atmosphere}\n`;
+    prompt += `- Background complexity: ${template.environment.backgroundComplexity}\n\n`;
+  }
+
+  if (template.mainCharacter?.enabled) {
+    prompt += "3. MAIN CHARACTER\n";
+    prompt += `- Pose: ${template.mainCharacter.pose}\n`;
+    prompt += `- Expression: ${template.mainCharacter.expression}\n`;
+    prompt += `- Interaction: ${template.mainCharacter.interaction}\n`;
+    const clothing = template.mainCharacter.clothing.replace("match character lock and respect style", `match character lock and respect ${style.basePrompt}`);
+    prompt += `- Clothing: ${clothing}\n\n`;
+  }
+
+  if (template.secondaryObjects?.enabled) {
+    prompt += "4. SECONDARY OBJECTS & ACTION\n";
+    const objects = template.secondaryObjects.objects.replace("follow the same stylization rules as the style preset", `follow the same stylization rules as ${style.label}`);
+    prompt += `- Objects: ${objects}\n`;
+    prompt += `- Motion cues: ${template.secondaryObjects.motionCues}\n`;
+    prompt += `- Scale rules: ${template.secondaryObjects.scaleRules}\n\n`;
+  }
+
+  if (template.styleEnforcement?.enabled) {
+    prompt += "5. STYLE ENFORCEMENT\n";
+    prompt += `- Apply ${style.basePrompt}\n`;
+    prompt += `- ${template.styleEnforcement.styleRules}\n`;
+    prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+    prompt += `- Texture density: ${template.styleEnforcement.textureDensity}\n\n`;
+  }
+
+  if (template.negativePrompt?.enabled) {
+    prompt += "6. NEGATIVE PROMPT\n";
+    prompt += template.negativePrompt.items;
+  }
+
+  return prompt.trim();
 }
 
 async function callNanoBananaEdit(prompt: string, imageUrls: string[]) {
@@ -404,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine, userReferenceImages } = validationResult.data;
+      const { prompt, styleId, engine, userReferenceImages, customTemplate } = validationResult.data;
       const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
 
       if (!selectedStyle) {
@@ -422,7 +496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hasUserReference = !!(userReferenceImages && userReferenceImages.length > 0);
-      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference);
+      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, customTemplate);
 
       // Build image URLs array with priority order:
       // 1. User-selected reference images (highest priority)

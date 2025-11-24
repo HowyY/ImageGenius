@@ -38,6 +38,47 @@ export const stylePresetSchema = z.object({
   engines: z.array(z.string()),
 });
 
+export const promptTemplateSchema = z.object({
+  name: z.string(),
+  cameraComposition: z.object({
+    enabled: z.boolean(),
+    cameraAngle: z.string(),
+    compositionLayout: z.string(),
+    framing: z.string(),
+    depthArrangement: z.string(),
+  }),
+  environment: z.object({
+    enabled: z.boolean(),
+    setting: z.string(),
+    lighting: z.string(),
+    atmosphere: z.string(),
+    backgroundComplexity: z.string(),
+  }),
+  mainCharacter: z.object({
+    enabled: z.boolean(),
+    pose: z.string(),
+    expression: z.string(),
+    interaction: z.string(),
+    clothing: z.string(),
+  }),
+  secondaryObjects: z.object({
+    enabled: z.boolean(),
+    objects: z.string(),
+    motionCues: z.string(),
+    scaleRules: z.string(),
+  }),
+  styleEnforcement: z.object({
+    enabled: z.boolean(),
+    styleRules: z.string(),
+    colorPalette: z.string(),
+    textureDensity: z.string(),
+  }),
+  negativePrompt: z.object({
+    enabled: z.boolean(),
+    items: z.string(),
+  }),
+});
+
 export const generateRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
   styleId: z.string().min(1, "Style is required"),
@@ -45,6 +86,7 @@ export const generateRequestSchema = z.object({
     errorMap: () => ({ message: "Engine must be either 'nanobanana' or 'seedream'" }),
   }),
   userReferenceImages: z.array(z.string().url()).max(3).optional(),
+  customTemplate: promptTemplateSchema.optional(),
 });
 
 export const generateResponseSchema = z.object({
@@ -52,6 +94,7 @@ export const generateResponseSchema = z.object({
   historyId: z.number().optional(),
 });
 
+export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 export type StylePreset = z.infer<typeof stylePresetSchema>;
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;
 export type GenerateResponse = z.infer<typeof generateResponseSchema>;
