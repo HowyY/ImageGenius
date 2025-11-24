@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Save, Eye, Copy, RotateCcw, Palette } from "lucide-react";
+import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -22,6 +22,7 @@ import type { StylePreset } from "@shared/schema";
 
 interface PromptTemplate {
   name: string;
+  referenceImages?: string[];
   cameraComposition: {
     enabled: boolean;
     cameraAngle: string;
@@ -115,6 +116,10 @@ export default function PromptEditor() {
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [template, setTemplate] = useState<PromptTemplate>(DEFAULT_TEMPLATE);
   const [previewPrompt, setPreviewPrompt] = useState("");
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [draggedImageUrl, setDraggedImageUrl] = useState<string | null>(null);
+  const [dragOverImageUrl, setDragOverImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
@@ -135,13 +140,17 @@ export default function PromptEditor() {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         try {
-          setTemplate(JSON.parse(saved));
+          const loadedTemplate = JSON.parse(saved);
+          setTemplate(loadedTemplate);
+          setReferenceImages(loadedTemplate.referenceImages || []);
         } catch (e) {
           console.error("Failed to load saved template:", e);
           setTemplate(DEFAULT_TEMPLATE);
+          setReferenceImages([]);
         }
       } else {
         setTemplate(DEFAULT_TEMPLATE);
+        setReferenceImages([]);
       }
     }
   }, [selectedStyleId]);
@@ -200,6 +209,61 @@ export default function PromptEditor() {
     setPreviewPrompt(prompt);
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imageUrl = event.target?.result as string;
+        setReferenceImages((prev) => [...prev, imageUrl]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveImage = (imageUrl: string) => {
+    setReferenceImages((prev) => prev.filter((url) => url !== imageUrl));
+  };
+
+  const handleDragStart = (imageUrl: string) => {
+    setDraggedImageUrl(imageUrl);
+  };
+
+  const handleDragOver = (e: React.DragEvent, imageUrl: string) => {
+    e.preventDefault();
+    setDragOverImageUrl(imageUrl);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetImageUrl: string) => {
+    e.preventDefault();
+    
+    if (draggedImageUrl && draggedImageUrl !== targetImageUrl) {
+      const draggedIndex = referenceImages.indexOf(draggedImageUrl);
+      const targetIndex = referenceImages.indexOf(targetImageUrl);
+      
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        const newImages = [...referenceImages];
+        newImages.splice(draggedIndex, 1);
+        newImages.splice(targetIndex, 0, draggedImageUrl);
+        setReferenceImages(newImages);
+      }
+    }
+    
+    setDraggedImageUrl(null);
+    setDragOverImageUrl(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedImageUrl(null);
+    setDragOverImageUrl(null);
+  };
+
   const handleSave = () => {
     if (!selectedStyleId) {
       toast({
@@ -210,13 +274,18 @@ export default function PromptEditor() {
       return;
     }
     
+    const templateToSave = {
+      ...template,
+      referenceImages,
+    };
+    
     const storageKey = `promptTemplate_${selectedStyleId}`;
-    localStorage.setItem(storageKey, JSON.stringify(template));
+    localStorage.setItem(storageKey, JSON.stringify(templateToSave));
     
     const selectedStyle = styles?.find(s => s.id === selectedStyleId);
     toast({
       title: "Template saved",
-      description: `Template for ${selectedStyle?.label || selectedStyleId} has been saved.`,
+      description: `Template for ${selectedStyle?.label || selectedStyleId} has been saved with ${referenceImages.length} reference images.`,
     });
   };
 
@@ -287,6 +356,98 @@ export default function PromptEditor() {
                   onChange={(e) => setTemplate({ ...template, name: e.target.value })}
                   placeholder="My Custom Template"
                 />
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <div>
+                  <Label>Reference Images (Priority Order)</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Upload and arrange reference images for this style preset
+                  </p>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Reference Images
+                </Button>
+
+                {referenceImages.length > 0 && (
+                  <div className="space-y-2">
+                    {referenceImages.map((imageUrl, index) => (
+                      <Card
+                        key={imageUrl}
+                        draggable
+                        onDragStart={() => handleDragStart(imageUrl)}
+                        onDragOver={(e) => handleDragOver(e, imageUrl)}
+                        onDrop={(e) => handleDrop(e, imageUrl)}
+                        onDragEnd={handleDragEnd}
+                        className={`p-2 transition-all cursor-move ${
+                          draggedImageUrl === imageUrl ? "opacity-50" : ""
+                        } ${
+                          dragOverImageUrl === imageUrl && draggedImageUrl !== imageUrl
+                            ? "border-primary bg-accent/50"
+                            : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex-shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing">
+                            <GripVertical className="h-5 w-5" />
+                          </div>
+                          <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted">
+                            <img
+                              src={imageUrl}
+                              alt={`Reference ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-muted-foreground truncate">
+                              Priority #{index + 1}
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleRemoveImage(imageUrl)}
+                            className="h-8 w-8 flex-shrink-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
+                    <p className="text-xs text-muted-foreground">
+                      Drag and drop to reorder. Higher priority images are used first during generation.
+                    </p>
+                  </div>
+                )}
+
+                {referenceImages.length === 0 && (
+                  <Card className="p-8 border-dashed">
+                    <div className="flex flex-col items-center justify-center text-muted-foreground">
+                      <ImageIcon className="w-12 h-12 mb-2 opacity-40" />
+                      <p className="text-sm">No reference images uploaded</p>
+                      <p className="text-xs mt-1">Click the button above to add images</p>
+                    </div>
+                  </Card>
+                )}
               </div>
 
               <Separator />
