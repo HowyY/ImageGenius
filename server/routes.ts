@@ -4,9 +4,9 @@ import { z } from "zod";
 import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
 import { storage } from "./storage";
 import { uploadReferenceImages, uploadFileToKIE, type StyleImageMapping } from "./services/fileUpload";
-import { join } from "path";
+import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
-import { dirname } from "path";
+import { readdirSync, existsSync, statSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -448,71 +448,80 @@ async function pollSeedreamResult(taskId: string) {
   throw new Error("Seedream task timed out");
 }
 
-function getReferenceImageUrl(styleId: string): string {
-  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
-  if (uploadedStyle && uploadedStyle.imageUrls.length > 0) {
-    return uploadedStyle.imageUrls[0];
+// Get all reference image file paths for a style from the file system
+function getStyleReferenceImagePaths(styleId: string): string[] {
+  const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
+  
+  if (!existsSync(styleDir) || !statSync(styleDir).isDirectory()) {
+    return [];
   }
-  return DEFAULT_REFERENCE_IMAGE;
+
+  try {
+    const files = readdirSync(styleDir);
+    const imagePaths = files
+      .filter((file) => {
+        const ext = extname(file).toLowerCase();
+        return [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext);
+      })
+      .map((file) => `/reference-images/${styleId}/${file}`);
+    
+    return imagePaths;
+  } catch (error) {
+    console.error(`Error reading style directory ${styleId}:`, error);
+    return [];
+  }
 }
 
-function getAllReferenceImageUrls(styleId: string): string[] {
-  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
-  if (uploadedStyle && uploadedStyle.imageUrls.length > 0) {
-    return uploadedStyle.imageUrls;
-  }
-  return [DEFAULT_REFERENCE_IMAGE];
-}
+// In-memory cache for uploaded image URLs to avoid re-uploading
+// Store promises to handle concurrent requests for the same image
+const uploadCache = new Map<string, Promise<string>>();
 
-function convertRelativePathToUrl(path: string, styleId: string): string {
-  // If already a full URL, return as-is
-  if (path.startsWith('http://') || path.startsWith('https://')) {
-    return path;
+async function uploadImageOnDemand(relativePath: string, styleId: string): Promise<string> {
+  const cacheKey = `${styleId}:${relativePath}`;
+  
+  // Check if upload is already in progress or completed
+  if (uploadCache.has(cacheKey)) {
+    return uploadCache.get(cacheKey)!;
   }
 
-  // Extract filename from relative path
-  // Example: /reference-images/cyan_sketchline_vector/1.png -> 1.png
-  const fileName = path.split('/').pop();
-  if (!fileName) {
-    console.warn(`Invalid path format: ${path}`);
-    return path;
-  }
+  // Build absolute file path
+  // Remove leading slash from relativePath to prevent path.join from discarding base path
+  const normalizedPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+  const referenceImagesPath = join(__dirname, "..", "client", "public");
+  const fullPath = join(referenceImagesPath, normalizedPath);
 
-  // Find matching uploaded URL by filename
-  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
-  if (uploadedStyle) {
-    const matchingUrl = uploadedStyle.imageUrls.find((url) => url.endsWith(fileName));
-    if (matchingUrl) {
-      return matchingUrl;
+  // Create and cache the upload promise to prevent duplicate uploads
+  const uploadPromise = (async () => {
+    try {
+      console.log(`Uploading on-demand: ${relativePath}`);
+      // Extract filename for upload path
+      const fileName = relativePath.split('/').pop() || 'unknown';
+      const uploadPath = `reference-images/${styleId}`;
+      
+      const uploaded = await uploadFileToKIE(fullPath, uploadPath, fileName);
+      console.log(`✓ Uploaded: ${uploaded.fileUrl}`);
+      
+      return uploaded.fileUrl;
+    } catch (error) {
+      console.error(`Failed to upload ${relativePath}:`, error);
+      // Remove failed upload from cache to allow retry
+      uploadCache.delete(cacheKey);
+      throw error;
     }
-  }
+  })();
 
-  console.warn(`Could not find uploaded URL for: ${path}, using as-is`);
-  return path;
+  // Cache the promise immediately to prevent concurrent uploads
+  uploadCache.set(cacheKey, uploadPromise);
+  
+  return uploadPromise;
 }
 
 async function initializeReferenceImages() {
-  try {
-    const referenceImagesPath = join(__dirname, "..", "client", "public", "reference-images");
-    console.log("\n=== Uploading Reference Images ===");
-    console.log(`Scanning directory: ${referenceImagesPath}`);
-    
-    uploadedReferenceImages = await uploadReferenceImages(referenceImagesPath);
-    
-    console.log(`✓ Successfully uploaded ${uploadedReferenceImages.length} style categories`);
-    for (const style of uploadedReferenceImages) {
-      console.log(`  - ${style.styleId}: ${style.imageUrls.length} images`);
-      for (const preset of STYLE_PRESETS) {
-        if (preset.id === style.styleId) {
-          preset.referenceImageUrl = style.imageUrls[0];
-        }
-      }
-    }
-    console.log("==================================\n");
-  } catch (error) {
-    console.error("Failed to upload reference images:", error);
-    console.warn("Using default reference images as fallback");
-  }
+  // No longer uploading images at startup
+  // Images will be uploaded on-demand when needed
+  console.log("\n=== Reference Images On-Demand Mode ===");
+  console.log("Images will be uploaded only when used in generation");
+  console.log("=======================================\n");
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -578,44 +587,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls.push(...userReferenceImages);
       }
       
-      // Add template reference images if exists (convert relative paths to full URLs)
+      // Add template reference images if exists (upload on-demand)
       if (templateReferenceImages && templateReferenceImages.length > 0) {
-        const convertedUrls = templateReferenceImages.map(path => 
-          convertRelativePathToUrl(path, styleId)
-        );
-        imageUrls.push(...convertedUrls);
+        console.log(`Uploading ${templateReferenceImages.length} template reference images on-demand...`);
+        const uploadPromises = templateReferenceImages.map(async (path) => {
+          try {
+            // Upload image on-demand (uses cache if already uploaded)
+            return await uploadImageOnDemand(path, styleId);
+          } catch (error) {
+            console.error(`Failed to upload template image ${path}:`, error);
+            return null;
+          }
+        });
+        
+        const uploadedUrls = await Promise.all(uploadPromises);
+        const validUrls = uploadedUrls.filter((url): url is string => url !== null);
+        imageUrls.push(...validUrls);
       }
       
-      // Add style preset reference images (with deduplication based on filename)
-      // For Seedream: limit total reference images to 4 to improve processing speed
-      const styleReferenceUrls = getAllReferenceImageUrls(styleId);
+      // Add style preset reference images (upload on-demand with deduplication)
+      // Get all reference image file paths from the file system
+      const styleReferencePaths = getStyleReferenceImagePaths(styleId);
       
-      // Extract filenames from existing URLs for comparison
-      const existingFileNames = new Set(
-        imageUrls.map(url => {
-          const parts = url.split('/');
-          return parts[parts.length - 1]; // Get filename from URL
-        })
-      );
-      
-      // Filter out any URLs whose filename already exists
-      const uniqueStyleUrls = styleReferenceUrls.filter(url => {
-        const fileName = url.split('/').pop();
-        const isUnique = fileName && !existingFileNames.has(fileName);
-        if (!isUnique && fileName) {
-          console.log(`Skipping duplicate reference image: ${fileName}`);
+      if (styleReferencePaths.length > 0) {
+        // Extract filenames from existing URLs for comparison
+        const existingFileNames = new Set(
+          imageUrls.map(url => {
+            const parts = url.split('/');
+            return parts[parts.length - 1]; // Get filename from URL
+          })
+        );
+        
+        // Filter out any paths whose filename already exists
+        const uniquePaths = styleReferencePaths.filter(path => {
+          const fileName = path.split('/').pop();
+          const isUnique = fileName && !existingFileNames.has(fileName);
+          if (!isUnique && fileName) {
+            console.log(`Skipping duplicate reference image: ${fileName}`);
+          }
+          return isUnique;
+        });
+        
+        // Determine how many style images to upload
+        let pathsToUpload = uniquePaths;
+        if (engine === "seedream") {
+          const MAX_SEEDREAM_REFS = 4;
+          const currentRefCount = imageUrls.length;
+          const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
+          pathsToUpload = uniquePaths.slice(0, maxStyleRefs);
         }
-        return isUnique;
-      });
-      
-      if (engine === "seedream") {
-        const MAX_SEEDREAM_REFS = 4;
-        const currentRefCount = imageUrls.length;
-        const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
-        imageUrls.push(...uniqueStyleUrls.slice(0, maxStyleRefs));
-      } else {
-        // For other engines (like nanobanana), add all unique style reference images
-        imageUrls.push(...uniqueStyleUrls);
+        
+        // Upload style preset images on-demand
+        if (pathsToUpload.length > 0) {
+          console.log(`Uploading ${pathsToUpload.length} style preset images on-demand...`);
+          const styleUploadPromises = pathsToUpload.map(async (path) => {
+            try {
+              return await uploadImageOnDemand(path, styleId);
+            } catch (error) {
+              console.error(`Failed to upload style preset image ${path}:`, error);
+              return null;
+            }
+          });
+          
+          const styleUploadedUrls = await Promise.all(styleUploadPromises);
+          const validStyleUrls = styleUploadedUrls.filter((url): url is string => url !== null);
+          imageUrls.push(...validStyleUrls);
+        }
       }
 
       console.log("\n=== Image Generation Request ===");
