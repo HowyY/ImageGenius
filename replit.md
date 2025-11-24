@@ -20,6 +20,21 @@ The project's ambition is to provide a user-friendly and powerful tool for creat
 
 ## Recent Changes
 
+### November 24, 2025 - Duplicate Reference Images Fix
+-   **Issue**: Same reference images were sent twice to KIE API (8 for nanobanana, 4 for seedream)
+    -   Template reference images: 1.png, 2.png, 3.png
+    -   Style preset duplicates: 1.png, 2.png, 3.png (again)
+    -   Result: Total 6 duplicates instead of 5 unique images
+-   **Root Cause**: String-based URL comparison failed when imageUrls contained mixed formats (relative paths vs absolute URLs)
+-   **Solution**: Implemented filename-based deduplication in `/api/generate` handler
+    -   Extract filenames from all existing imageUrls into a Set
+    -   Filter style preset URLs by checking if filename already exists
+    -   Works regardless of path format (relative or absolute)
+    -   Added logging to show which duplicates were skipped
+-   **Result**: No duplicate images sent to KIE API
+    -   nanobanana: 5 unique images (3 template + 2 style preset)
+    -   seedream: 4 unique images (capped by MAX_SEEDREAM_REFS)
+
 ### November 24, 2025 - Color Palette Validation Fix
 -   **Issue**: Templates with empty `customColors` arrays causing validation errors
 -   **Root Cause**: localStorage templates contained `referenceImages` field not in `promptTemplateSchema`
