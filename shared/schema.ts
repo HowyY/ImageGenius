@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -14,6 +14,15 @@ export const generationHistory = pgTable("generation_history", {
   userReferenceUrls: text("user_reference_urls").array(),
   allReferenceImageUrls: text("all_reference_image_urls").array(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const promptTemplates = pgTable("prompt_templates", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  styleId: text("style_id").notNull().unique(),
+  templateData: jsonb("template_data").notNull(),
+  referenceImages: text("reference_images").array().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 const baseInsertSchema = createInsertSchema(generationHistory);
@@ -32,6 +41,15 @@ export const insertGenerationHistorySchema = z.object({
 
 export type InsertGenerationHistory = z.infer<typeof insertGenerationHistorySchema>;
 export type SelectGenerationHistory = typeof generationHistory.$inferSelect;
+
+export const insertPromptTemplateSchema = z.object({
+  styleId: z.string().min(1),
+  templateData: z.any(),
+  referenceImages: z.array(z.string()).optional(),
+});
+
+export type InsertPromptTemplate = z.infer<typeof insertPromptTemplateSchema>;
+export type SelectPromptTemplate = typeof promptTemplates.$inferSelect;
 
 const colorSchema = z.object({
   name: z.string(),
