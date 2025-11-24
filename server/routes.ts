@@ -230,8 +230,12 @@ function buildPromptFromTemplate(
     prompt += `- ${template.styleEnforcement.styleRules}\n`;
     
     // Handle color palette based on mode
-    if (template.colorMode === "custom" && template.customColors?.colors && template.customColors.colors.length > 0) {
-      // Custom color palette - descriptive format with usage guidance
+    if (template.colorMode === "default") {
+      // Explicit default mode: Do not specify colors, let AI learn from reference images
+      // Skip color palette entirely - no color definitions in prompt
+    } else if (template.customColors?.colors && template.customColors.colors.length > 0) {
+      // Custom color palette (explicit or legacy templates with customColors but no colorMode)
+      // Descriptive format with usage guidance
       prompt += "- Color palette:\n";
       template.customColors.colors.forEach((color: any, index: number) => {
         const usage = color.role ? ` (primarily for ${color.role})` : '';
@@ -239,7 +243,7 @@ function buildPromptFromTemplate(
       });
       prompt += "  • Maintain consistent use of these colors throughout the image\n";
     } else if (style.defaultColors?.colors) {
-      // Style default colors - descriptive format
+      // Style default colors (when template has no custom colors and colorMode not set to default)
       prompt += "- Color palette:\n";
       style.defaultColors.colors.forEach((color: any, index: number) => {
         const usage = color.role ? ` (primarily for ${color.role})` : '';
