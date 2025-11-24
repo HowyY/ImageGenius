@@ -87,6 +87,7 @@ export const generateRequestSchema = z.object({
   }),
   userReferenceImages: z.array(z.string().url()).max(3).optional(),
   customTemplate: promptTemplateSchema.optional(),
+  templateReferenceImages: z.array(z.string().url()).optional(),
 });
 
 export const generateResponseSchema = z.object({

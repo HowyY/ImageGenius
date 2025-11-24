@@ -478,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine, userReferenceImages, customTemplate } = validationResult.data;
+      const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages } = validationResult.data;
       const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
 
       if (!selectedStyle) {
@@ -502,11 +502,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build image URLs array with priority order:
       // 1. User-selected reference images (highest priority)
-      // 2. Style preset reference images
+      // 2. Template reference images (from Prompt Editor)
+      // 3. Style preset reference images (uploaded from public/reference-images)
       const imageUrls: string[] = [];
       
       if (userReferenceImages && userReferenceImages.length > 0) {
         imageUrls.push(...userReferenceImages);
+      }
+      
+      // Add template reference images if exists
+      if (templateReferenceImages && templateReferenceImages.length > 0) {
+        imageUrls.push(...templateReferenceImages);
       }
       
       // Add style preset reference images
@@ -514,8 +520,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const styleReferenceUrls = getAllReferenceImageUrls(styleId);
       if (engine === "seedream") {
         const MAX_SEEDREAM_REFS = 4;
-        const userRefCount = userReferenceImages?.length || 0;
-        const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - userRefCount);
+        const currentRefCount = imageUrls.length;
+        const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
         imageUrls.push(...styleReferenceUrls.slice(0, maxStyleRefs));
       } else {
         // For other engines (like nanobanana), add all style reference images
@@ -527,6 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
       console.log(`User Prompt: ${prompt}`);
       console.log(`User Reference Images: ${userReferenceImages?.join(", ") || "None"}`);
+      console.log(`Template Reference Images: ${templateReferenceImages?.join(", ") || "None"}`);
       console.log(`Image URLs (priority order): ${imageUrls.join(", ")}`);
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");

@@ -113,12 +113,15 @@ export default function Home() {
     
     // Load style-specific custom template from localStorage if exists
     let customTemplate = undefined;
+    let templateReferenceImages: string[] = [];
     try {
       const storageKey = `promptTemplate_${data.styleId}`;
       const savedTemplate = localStorage.getItem(storageKey);
       if (savedTemplate) {
         customTemplate = JSON.parse(savedTemplate);
-        console.log(`Using custom template for style: ${data.styleId}`);
+        // Extract reference images from template
+        templateReferenceImages = customTemplate.referenceImages || [];
+        console.log(`Using custom template for style: ${data.styleId} with ${templateReferenceImages.length} reference images`);
       }
     } catch (e) {
       console.error("Failed to load custom template:", e);
@@ -128,6 +131,7 @@ export default function Home() {
       ...data,
       userReferenceImages: userReferenceImages.length > 0 ? userReferenceImages : undefined,
       customTemplate,
+      templateReferenceImages: templateReferenceImages.length > 0 ? templateReferenceImages : undefined,
     };
     generateMutation.mutate(requestData);
   };
