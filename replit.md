@@ -159,14 +159,18 @@ The core functionality allows users to:
   - Custom prompts include consistency instructions when user references are active
   - Output format configuration (PNG, 16:9 aspect ratio)
   - Maximum 10 polling attempts with 3-second delays
-- **Seedream V4 Edit API**: Fully integrated for AI image generation (November 2025)
+- **Seedream V4 Edit API**: Fully integrated for AI image generation with performance optimizations (November 2025)
   - Model: `bytedance/seedream-v4-edit`
   - Creates tasks via `POST /api/v1/jobs/createTask`
   - Polls for results via `GET /api/v1/jobs/recordInfo?taskId={id}`
-  - Supports up to 10 reference images with priority ordering
-  - Same priority system as Nano Banana (user references first, then style preset references)
+  - **Reference Image Optimization**: Caps total reference images at 4 for optimal performance
+    - User reference images: up to 3 (prioritized first)
+    - Style preset images: dynamically calculated (4 - user reference count)
+    - Example: 2 user refs → 2 style preset refs (total: 4)
+    - Uses Math.max(0, limit) guard for backend resilience
   - Image configuration: landscape_16_9 aspect ratio, 2K resolution, max_images: 1
-  - Maximum 10 polling attempts with 3-second delays
+  - **Extended Polling**: Maximum 30 polling attempts with 3-second delays (90 seconds total)
+    - Increased from 60s to accommodate 70-90s typical processing times
   - No output_format parameter (different from Nano Banana API)
 - **File Upload API**: Uploads local reference images to KIE storage
   - Endpoint: `POST https://kieai.redpandaai.co/api/file-stream-upload`
