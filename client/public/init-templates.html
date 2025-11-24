@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Initialize Templates</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #0052a3;
+    }
+    .success {
+      background: #10b981;
+      padding: 12px;
+      border-radius: 6px;
+      color: white;
+      margin: 20px 0;
+      display: none;
+    }
+    .info {
+      background: #f0f9ff;
+      border-left: 4px solid #0066cc;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    pre {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Template Initialization</h1>
+    
+    <div class="info">
+      <h3>Template Configuration:</h3>
+      <ul>
+        <li><strong>Template 1 (Cyan Sketchline Vector):</strong> Original detailed format, default colors from reference images</li>
+        <li><strong>Template 2 (Warm Orange Flat):</strong> Custom color palette for testing</li>
+      </ul>
+    </div>
+
+    <button onclick="initializeTemplates()">Initialize Templates</button>
+    <button onclick="viewTemplates()">View Current Templates</button>
+    <button onclick="clearTemplates()">Clear All Templates</button>
+
+    <div id="success" class="success"></div>
+    <div id="output"></div>
+  </div>
+
+  <script>
+    function initializeTemplates() {
+      // Template 1: Cyan Sketchline Vector - Original detailed format with default colors
+      const template1 = {
+        name: "Cyan Vector Template",
+        colorMode: "default",
+        customColors: undefined,
+        cameraComposition: {
+          enabled: true,
+          cameraAngle: "stable, undistorted view that clearly presents the subject",
+          compositionLayout: "balanced framing",
+          framing: "ensure the subject fits naturally without clipping or distortion",
+          depthArrangement: "clearly separated foreground, midground, and background with proper scale"
+        },
+        environment: {
+          enabled: true,
+          setting: "[Scene description]",
+          lighting: "soft, even light suitable for the scene",
+          atmosphere: "match style tone",
+          backgroundComplexity: "follow the same simplification level as the reference style"
+        },
+        mainCharacter: {
+          enabled: true,
+          pose: "natural posture derived from the described action",
+          expression: "consistent with the character identity implied by the prompt",
+          interaction: "accurately placed relative to props/environment with correct scale",
+          clothing: "match character lock and respect style"
+        },
+        secondaryObjects: {
+          enabled: true,
+          objects: "follow the same stylization rules as the style preset",
+          motionCues: "remain subtle and clean",
+          scaleRules: "all objects obey correct scale and perspective"
+        },
+        styleEnforcement: {
+          enabled: true,
+          styleRules: "clean sketch-style vector line art, navy blue outlines, white negative space, subtle cyan to blue gradients for fills, minimalist details, modern financial illustration tone",
+          colorPalette: "consistent across all scenes",
+          textureDensity: "uniform detail density"
+        },
+        negativePrompt: {
+          enabled: true,
+          items: `- inconsistent character identity
+- incorrect character proportions
+- distorted anatomy or broken limbs
+- incorrect object scale
+- broken perspective or impossible angles
+- unwanted changes in clothing or hairstyle
+- mismatched art style within the same scene
+- unintended extra characters or duplicated faces
+- chaotic or cluttered composition
+- low-quality details such as blurry shapes or noisy textures`
+        },
+        referenceImages: []
+      };
+
+      // Template 2: Warm Orange Flat - Custom color palette version
+      const template2 = {
+        name: "Orange Flat Template",
+        colorMode: "custom",
+        customColors: {
+          name: "Warm Orange Palette",
+          colors: [
+            { name: "Warm Orange", hex: "#FF6B35", role: "primary fills" },
+            { name: "Deep Red", hex: "#D32F2F", role: "accents" },
+            { name: "Light Peach", hex: "#FFE5B4", role: "highlights" },
+            { name: "Off White", hex: "#FAFAFA", role: "background" }
+          ]
+        },
+        cameraComposition: {
+          enabled: true,
+          cameraAngle: "stable, undistorted view that clearly presents the subject",
+          compositionLayout: "balanced framing",
+          framing: "ensure the subject fits naturally without clipping or distortion",
+          depthArrangement: "clearly separated foreground, midground, and background with proper scale"
+        },
+        environment: {
+          enabled: true,
+          setting: "[Scene description]",
+          lighting: "soft, even light suitable for the scene",
+          atmosphere: "match style tone",
+          backgroundComplexity: "follow the same simplification level as the reference style"
+        },
+        mainCharacter: {
+          enabled: true,
+          pose: "natural posture derived from the described action",
+          expression: "consistent with the character identity implied by the prompt",
+          interaction: "accurately placed relative to props/environment with correct scale",
+          clothing: "match character lock and respect style"
+        },
+        secondaryObjects: {
+          enabled: true,
+          objects: "follow the same stylization rules as the style preset",
+          motionCues: "remain subtle and clean",
+          scaleRules: "all objects obey correct scale and perspective"
+        },
+        styleEnforcement: {
+          enabled: true,
+          styleRules: "warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
+          colorPalette: "warm orange palette",
+          textureDensity: "flat, minimal texture"
+        },
+        negativePrompt: {
+          enabled: true,
+          items: `- inconsistent character identity
+- incorrect character proportions
+- distorted anatomy or broken limbs
+- incorrect object scale
+- broken perspective or impossible angles
+- unwanted changes in clothing or hairstyle
+- mismatched art style within the same scene
+- unintended extra characters or duplicated faces
+- chaotic or cluttered composition
+- low-quality details such as blurry shapes or noisy textures`
+        },
+        referenceImages: []
+      };
+
+      // Save templates to localStorage
+      localStorage.setItem('promptTemplate_cyan_sketchline_vector', JSON.stringify(template1));
+      localStorage.setItem('promptTemplate_warm_orange_flat', JSON.stringify(template2));
+
+      // Show success message
+      const successDiv = document.getElementById('success');
+      successDiv.textContent = '✓ Templates initialized successfully! You can now go to Prompt Editor.';
+      successDiv.style.display = 'block';
+
+      setTimeout(() => {
+        successDiv.style.display = 'none';
+      }, 5000);
+    }
+
+    function viewTemplates() {
+      const template1 = localStorage.getItem('promptTemplate_cyan_sketchline_vector');
+      const template2 = localStorage.getItem('promptTemplate_warm_orange_flat');
+
+      const output = document.getElementById('output');
+      output.innerHTML = `
+        <h3>Template 1 (Cyan Sketchline Vector):</h3>
+        <pre>${template1 ? JSON.stringify(JSON.parse(template1), null, 2) : 'Not found'}</pre>
+        
+        <h3>Template 2 (Warm Orange Flat):</h3>
+        <pre>${template2 ? JSON.stringify(JSON.parse(template2), null, 2) : 'Not found'}</pre>
+      `;
+    }
+
+    function clearTemplates() {
+      localStorage.removeItem('promptTemplate_cyan_sketchline_vector');
+      localStorage.removeItem('promptTemplate_warm_orange_flat');
+      
+      const successDiv = document.getElementById('success');
+      successDiv.textContent = '✓ All templates cleared!';
+      successDiv.style.display = 'block';
+
+      setTimeout(() => {
+        successDiv.style.display = 'none';
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

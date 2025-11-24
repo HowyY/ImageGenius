@@ -1,0 +1,47 @@
+PROMPT TEMPLATE
+
+[SCENE — Two man are sitting on the chair and chatting ]
+
+1. CAMERA & COMPOSITION
+- Camera angle: stable, undistorted view that clearly presents the subject.
+- Composition layout: balanced framing (Cyan Sketchline Vector inspiration).
+- Framing: ensure the subject fits naturally without clipping or distortion.
+- Depth arrangement: clearly separated foreground, midground, and background with proper scale.
+
+2. ENVIRONMENT
+- Setting: Two man are sitting on the chair and chatting .
+- Lighting: soft, even light suitable for the scene.
+- Atmosphere: match Cyan Sketchline Vector (Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework) tone.
+- Background complexity: follow the same simplification level as the reference style.
+
+3. MAIN CHARACTER
+- Pose: natural posture derived from the described action.
+- Expression: consistent with the character identity implied by the prompt.
+- Interaction: accurately placed relative to props/environment with correct scale.
+- Clothing: match character lock and respect clean sketch-style vector line art, navy blue outlines, white negative space, subtle cyan to blue gradients for fills, minimalist details, modern financial illustration tone.
+
+4. SECONDARY OBJECTS & ACTION
+- Vehicles, props, and signage follow the same stylization rules as Cyan Sketchline Vector.
+- Motion cues remain subtle and clean; all objects obey correct scale and perspective.
+
+5. STYLE ENFORCEMENT
+- Apply clean sketch-style vector line art, navy blue outlines, white negative space, subtle cyan to blue gradients for fills, minimalist details, modern financial illustration tone.
+- Maintain consistent color palette, lighting, texture density, and stroke treatment.
+- Keep background, character, and object detail density uniform; no stylistic drift.
+
+6. NEGATIVE PROMPT
+- inconsistent character identity
+- incorrect character proportions
+- distorted anatomy or broken limbs
+- incorrect object scale (e.g., character larger than a car)
+- broken perspective or impossible angles
+- unwanted changes in clothing or hairstyle
+- mismatched art style within the same scene
+- unintended extra characters or duplicated faces
+- chaotic or cluttered composition (unless references show it)
+- low-quality details such as blurry shapes or noisy textures
+- no clean vector edges unless the reference uses vector lines
+- no high-saturation or neon colors
+- no deviation from the reference style across all scenes
+- no exaggerated gradients, strong shadows, or 3D effects
+- no floating, intersecting, or merged shapes
