@@ -231,27 +231,21 @@ function buildPromptFromTemplate(
     
     // Handle color palette based on mode
     if (template.colorMode === "custom" && template.customColors?.colors && template.customColors.colors.length > 0) {
-      // Custom color palette - structured format with hex codes
-      prompt += "- COLOR PALETTE (STRICT):\n";
-      const totalColors = template.customColors.colors.length;
-      const percentages = [60, 30, 10]; // Default percentages for first 3 colors
+      // Custom color palette - descriptive format with usage guidance
+      prompt += "- Color palette:\n";
       template.customColors.colors.forEach((color: any, index: number) => {
-        const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
-        const role = color.role ? ` for ${color.role}` : '';
-        prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
+        const usage = color.role ? ` (primarily for ${color.role})` : '';
+        prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
       });
-      prompt += "  • Use ONLY these colors, no other colors allowed\n";
+      prompt += "  • Maintain consistent use of these colors throughout the image\n";
     } else if (style.defaultColors?.colors) {
-      // Style default colors - structured format
-      prompt += "- COLOR PALETTE (STRICT):\n";
-      const totalColors = style.defaultColors.colors.length;
-      const percentages = [60, 30, 10];
+      // Style default colors - descriptive format
+      prompt += "- Color palette:\n";
       style.defaultColors.colors.forEach((color: any, index: number) => {
-        const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
-        const role = color.role ? ` for ${color.role}` : '';
-        prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
+        const usage = color.role ? ` (primarily for ${color.role})` : '';
+        prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
       });
-      prompt += "  • Use ONLY these colors, no other colors allowed\n";
+      prompt += "  • Maintain consistent use of these colors throughout the image\n";
     } else {
       // Fallback to text description
       prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
