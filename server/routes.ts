@@ -586,17 +586,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls.push(...convertedUrls);
       }
       
-      // Add style preset reference images
+      // Add style preset reference images (with deduplication based on filename)
       // For Seedream: limit total reference images to 4 to improve processing speed
       const styleReferenceUrls = getAllReferenceImageUrls(styleId);
+      
+      // Extract filenames from existing URLs for comparison
+      const existingFileNames = new Set(
+        imageUrls.map(url => {
+          const parts = url.split('/');
+          return parts[parts.length - 1]; // Get filename from URL
+        })
+      );
+      
+      // Filter out any URLs whose filename already exists
+      const uniqueStyleUrls = styleReferenceUrls.filter(url => {
+        const fileName = url.split('/').pop();
+        const isUnique = fileName && !existingFileNames.has(fileName);
+        if (!isUnique && fileName) {
+          console.log(`Skipping duplicate reference image: ${fileName}`);
+        }
+        return isUnique;
+      });
+      
       if (engine === "seedream") {
         const MAX_SEEDREAM_REFS = 4;
         const currentRefCount = imageUrls.length;
         const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
-        imageUrls.push(...styleReferenceUrls.slice(0, maxStyleRefs));
+        imageUrls.push(...uniqueStyleUrls.slice(0, maxStyleRefs));
       } else {
-        // For other engines (like nanobanana), add all style reference images
-        imageUrls.push(...styleReferenceUrls);
+        // For other engines (like nanobanana), add all unique style reference images
+        imageUrls.push(...uniqueStyleUrls);
       }
 
       console.log("\n=== Image Generation Request ===");
