@@ -509,6 +509,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validationResult = generateRequestSchema.safeParse(req.body);
 
       if (!validationResult.success) {
+        console.error("\n=== Validation Failed for /api/generate ===");
+        console.error("Request body:", JSON.stringify(req.body, null, 2));
+        console.error("Validation errors:", JSON.stringify(validationResult.error.errors, null, 2));
+        console.error("==========================================\n");
         return res.status(400).json({
           error: "Validation failed",
           details: validationResult.error.errors,
