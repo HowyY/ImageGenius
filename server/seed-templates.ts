@@ -148,10 +148,11 @@ async function seedTemplates() {
   
   for (const template of defaultTemplates) {
     try {
-      await storage.saveTemplate(template.styleId, {
-        templateData: template.templateData,
-        referenceImages: template.referenceImages,
-      });
+      await storage.saveTemplate(
+        template.styleId, 
+        template.templateData,
+        template.referenceImages
+      );
       console.log(`✓ Seeded template for style: ${template.styleId}`);
     } catch (error) {
       console.error(`✗ Failed to seed template for ${template.styleId}:`, error);
