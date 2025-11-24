@@ -138,6 +138,7 @@ export default function PromptEditor() {
   const touchCurrentY = useRef<number>(0);
   const touchStartTime = useRef<number>(0);
   const isDraggingTouch = useRef<boolean>(false);
+  const isInitialRender = useRef<boolean>(true);
   const { toast } = useToast();
 
   const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
@@ -307,8 +308,20 @@ export default function PromptEditor() {
   }, [template]);
 
   useEffect(() => {
-    // Generate preview
-    generatePreview();
+    // Generate preview immediately on initial render
+    if (isInitialRender.current) {
+      isInitialRender.current = false;
+      generatePreview();
+      return;
+    }
+
+    // Debounce preview generation to avoid frequent updates
+    const timeoutId = setTimeout(() => {
+      generatePreview();
+    }, 300); // 300ms delay for subsequent updates
+
+    // Cleanup timeout on unmount or when dependencies change
+    return () => clearTimeout(timeoutId);
   }, [generatePreview]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
