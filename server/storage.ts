@@ -1,10 +1,13 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import {
   generationHistory,
+  promptTemplates,
   type InsertGenerationHistory,
   type SelectGenerationHistory,
+  type InsertPromptTemplate,
+  type SelectPromptTemplate,
 } from "@shared/schema";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -19,6 +22,8 @@ if (DATABASE_URL) {
 export interface IStorage {
   saveGenerationHistory(data: InsertGenerationHistory): Promise<SelectGenerationHistory>;
   getGenerationHistory(limit?: number): Promise<SelectGenerationHistory[]>;
+  getTemplate(styleId: string): Promise<SelectPromptTemplate | null>;
+  saveTemplate(styleId: string, templateData: any, referenceImages?: string[]): Promise<SelectPromptTemplate>;
 }
 
 export class MemStorage implements IStorage {
@@ -54,6 +59,54 @@ export class MemStorage implements IStorage {
       .from(generationHistory)
       .orderBy(desc(generationHistory.createdAt))
       .limit(limit);
+  }
+
+  async getTemplate(styleId: string): Promise<SelectPromptTemplate | null> {
+    if (!db) {
+      return null;
+    }
+
+    const results = await db
+      .select()
+      .from(promptTemplates)
+      .where(eq(promptTemplates.styleId, styleId))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
+  async saveTemplate(styleId: string, templateData: any, referenceImages: string[] = []): Promise<SelectPromptTemplate> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Check if template already exists
+    const existing = await this.getTemplate(styleId);
+
+    if (existing) {
+      // Update existing template
+      const [result] = await db
+        .update(promptTemplates)
+        .set({
+          templateData,
+          referenceImages,
+          updatedAt: new Date(),
+        })
+        .where(eq(promptTemplates.styleId, styleId))
+        .returning();
+      return result;
+    } else {
+      // Insert new template
+      const [result] = await db
+        .insert(promptTemplates)
+        .values({
+          styleId,
+          templateData,
+          referenceImages,
+        })
+        .returning();
+      return result;
+    }
   }
 }
 
