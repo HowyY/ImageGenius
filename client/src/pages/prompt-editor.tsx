@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,7 @@ export default function PromptEditor() {
     if (styles && styles.length > 0 && !selectedStyleId) {
       setSelectedStyleId(styles[0].id);
     }
-  }, [styles]);
+  }, [styles, selectedStyleId]);
 
   useEffect(() => {
     // Load saved template for selected style
@@ -160,23 +160,36 @@ export default function PromptEditor() {
     try {
       const basePath = `/reference-images/${styleId}`;
       const imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
-      const localImages: string[] = [];
       
-      // Try to load images with common naming patterns (1.png, 2.png, etc.)
+      // Build all possible image paths
+      const imagePaths: string[] = [];
       for (let i = 1; i <= 10; i++) {
         for (const ext of imageExtensions) {
-          const imagePath = `${basePath}/${i}.${ext}`;
-          try {
-            const response = await fetch(imagePath, { method: 'HEAD' });
-            if (response.ok) {
-              localImages.push(imagePath);
-              break; // Found this number, move to next
-            }
-          } catch {
-            // Image doesn't exist, continue
-          }
+          imagePaths.push(`${basePath}/${i}.${ext}`);
         }
       }
+      
+      // Check all paths in parallel
+      const checkPromises = imagePaths.map(async (imagePath) => {
+        try {
+          const response = await fetch(imagePath, { method: 'HEAD' });
+          return response.ok ? imagePath : null;
+        } catch {
+          return null;
+        }
+      });
+      
+      // Wait for all checks to complete
+      const results = await Promise.all(checkPromises);
+      
+      // Filter out null values and sort by filename
+      const localImages = results
+        .filter((path): path is string => path !== null)
+        .sort((a, b) => {
+          const numA = parseInt(a.match(/\/(\d+)\./)?.[1] || '0');
+          const numB = parseInt(b.match(/\/(\d+)\./)?.[1] || '0');
+          return numA - numB;
+        });
       
       if (localImages.length > 0) {
         setReferenceImages(localImages);
@@ -187,12 +200,7 @@ export default function PromptEditor() {
     }
   };
 
-  useEffect(() => {
-    // Generate preview
-    generatePreview();
-  }, [template]);
-
-  const generatePreview = () => {
+  const generatePreview = useCallback(() => {
     let prompt = "PROMPT TEMPLATE\n\n[SCENE — {userPrompt}]\n\n";
 
     if (template.cameraComposition.enabled) {
@@ -239,7 +247,12 @@ export default function PromptEditor() {
     }
 
     setPreviewPrompt(prompt);
-  };
+  }, [template]);
+
+  useEffect(() => {
+    // Generate preview
+    generatePreview();
+  }, [generatePreview]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -543,7 +556,8 @@ export default function PromptEditor() {
                   <TabsTrigger value="character">Character</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="camera" className="space-y-4 mt-4">
+                <div className="max-h-[400px] overflow-y-auto">
+                  <TabsContent value="camera" className="space-y-4 mt-4">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="camera-enabled">Enable Camera & Composition</Label>
                     <Switch
@@ -787,6 +801,7 @@ export default function PromptEditor() {
                     </>
                   )}
                 </TabsContent>
+              </div>
               </Tabs>
 
               <Separator />
