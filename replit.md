@@ -28,17 +28,13 @@ The core functionality allows users to:
 
 ## Recent Code Quality Improvements (November 24, 2025)
 
-**Prompt Editor Performance & UX Enhancements**:
+**Prompt Editor Performance & React Best Practices**:
 - **Fixed React Hook Dependencies**: Added missing `selectedStyleId` dependency to initial style-loading useEffect (line 137), eliminating React warnings and preventing closure bugs
 - **Optimized Preview Generation**: Wrapped `generatePreview` function in `useCallback` with proper `template` dependency, preventing unnecessary re-renders and improving performance
 - **Parallel Reference Image Loading**: Refactored `loadLocalReferenceImages` from serial fetch to parallel `Promise.all` execution:
   - Before: ~50 sequential HEAD requests (slow)
   - After: Single parallel batch request (fast)
   - Maintains deterministic numerical sorting of reference images
-- **Stable Tab Layout**: Added fixed-height container (`max-h-[400px] overflow-y-auto`) for Tabs content area:
-  - Prevents Negative Prompt section from moving when switching between Camera/Environment/Character tabs
-  - Content scrolls within fixed container if it exceeds 400px height
-  - Maintains professional, stable UI across all breakpoints
 
 **Technical Details**:
 - All changes passed architect review with zero security concerns

@@ -556,8 +556,7 @@ export default function PromptEditor() {
                   <TabsTrigger value="character">Character</TabsTrigger>
                 </TabsList>
 
-                <div className="max-h-[400px] overflow-y-auto">
-                  <TabsContent value="camera" className="space-y-4 mt-4">
+                <TabsContent value="camera" className="space-y-4 mt-4">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="camera-enabled">Enable Camera & Composition</Label>
                     <Switch
@@ -801,7 +800,6 @@ export default function PromptEditor() {
                     </>
                   )}
                 </TabsContent>
-              </div>
               </Tabs>
 
               <Separator />
