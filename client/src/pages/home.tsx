@@ -32,6 +32,7 @@ import { getStyleLock, setStyleLock, getLastGeneratedImage, setLastGeneratedImag
 import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ImageWithFallback } from "@/components/ImageWithFallback";
 
 export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -419,12 +420,13 @@ export default function Home() {
                 )}
 
                 {generatedImage && !isGenerating && (
-                  <img
+                  <ImageWithFallback
                     src={generatedImage}
                     alt="Generated artwork"
                     className="w-full h-full object-cover transition-opacity duration-300"
                     loading="lazy"
                     data-testid="img-result"
+                    fallbackText="Failed to load generated image"
                   />
                 )}
                 </div>

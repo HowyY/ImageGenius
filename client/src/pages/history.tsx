@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { addUserReferenceImage, getUserReferenceImages } from "@/lib/generationState";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ImageWithFallback } from "@/components/ImageWithFallback";
 
 export default function History() {
   const [userRefCount, setUserRefCount] = useState(0);
@@ -91,12 +92,13 @@ export default function History() {
                 data-testid={`card-history-${item.id}`}
               >
                 <div className="relative aspect-video bg-muted">
-                  <img
+                  <ImageWithFallback
                     src={item.generatedImageUrl}
                     alt={item.prompt}
                     className="w-full h-full object-cover"
                     data-testid={`img-generated-${item.id}`}
                     loading="lazy"
+                    fallbackText="Failed to load image"
                   />
                 </div>
                 <CardHeader>

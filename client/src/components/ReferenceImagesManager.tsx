@@ -8,6 +8,7 @@ import {
   reorderUserReferenceImages,
   clearUserReferenceImages,
 } from "@/lib/generationState";
+import { ImageWithFallback } from "@/components/ImageWithFallback";
 
 interface ReferenceImagesManagerProps {
   onUpdate?: () => void;
@@ -126,12 +127,13 @@ export function ReferenceImagesManager({ onUpdate }: ReferenceImagesManagerProps
                 <GripVertical className="h-5 w-5" />
               </div>
               <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted">
-                <img
+                <ImageWithFallback
                   src={imageUrl}
                   alt={`Reference ${index + 1}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
                   data-testid={`img-reference-${index}`}
+                  fallbackText="Load failed"
                 />
               </div>
               <div className="flex-1 min-w-0">

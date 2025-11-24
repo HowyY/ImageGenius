@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { StylePreset } from "@shared/schema";
+import { ImageWithFallback } from "@/components/ImageWithFallback";
 
 interface ImageReference {
   id: string;
@@ -337,7 +338,43 @@ export default function PromptEditor() {
       return;
     }
 
-    const uploadPromises = Array.from(files).map(async (file) => {
+    // File size validation: 10MB limit
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    const filesArray = Array.from(files);
+    const oversizedFiles = filesArray.filter(file => file.size > MAX_FILE_SIZE);
+    
+    if (oversizedFiles.length > 0) {
+      const fileNames = oversizedFiles.map(f => f.name).join(", ");
+      const fileSizeMB = (oversizedFiles[0].size / (1024 * 1024)).toFixed(2);
+      toast({
+        title: "File too large",
+        description: `${oversizedFiles.length === 1 
+          ? `${fileNames} (${fileSizeMB}MB) exceeds` 
+          : `${oversizedFiles.length} files exceed`} the 10MB size limit. Please use smaller images.`,
+        variant: "destructive",
+      });
+      
+      // Filter out oversized files
+      const validFiles = filesArray.filter(file => file.size <= MAX_FILE_SIZE);
+      if (validFiles.length === 0) {
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+      
+      // Show info about valid files being uploaded
+      if (validFiles.length > 0) {
+        toast({
+          title: "Processing valid files",
+          description: `Uploading ${validFiles.length} file(s) under 10MB limit.`,
+        });
+      }
+    }
+
+    const validFiles = filesArray.filter(file => file.size <= MAX_FILE_SIZE);
+    const uploadPromises = validFiles.map(async (file) => {
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async (event) => {
@@ -691,11 +728,12 @@ export default function PromptEditor() {
                                 className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted cursor-pointer group relative"
                                 onClick={() => setPreviewImageUrl(image.url)}
                               >
-                                <img
+                                <ImageWithFallback
                                   src={image.url}
                                   alt={`Reference ${index + 1}`}
                                   className="w-full h-full object-cover"
                                   loading="lazy"
+                                  fallbackText="Load failed"
                                 />
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                   <Maximize2 className="h-6 w-6 text-white" />
@@ -1078,11 +1116,12 @@ export default function PromptEditor() {
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
           {previewImageUrl && (
             <div className="relative w-full">
-              <img
+              <ImageWithFallback
                 src={previewImageUrl}
                 alt="Preview"
                 className="w-full h-auto rounded-lg"
                 loading="lazy"
+                fallbackText="Failed to load preview image"
               />
             </div>
           )}
