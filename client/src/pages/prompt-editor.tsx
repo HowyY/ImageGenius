@@ -134,6 +134,10 @@ export default function PromptEditor() {
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const touchStartY = useRef<number>(0);
+  const touchCurrentY = useRef<number>(0);
+  const touchStartTime = useRef<number>(0);
+  const isDraggingTouch = useRef<boolean>(false);
   const { toast } = useToast();
 
   const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
@@ -418,6 +422,74 @@ export default function PromptEditor() {
     setDragOverImageId(null);
   };
 
+  const handleTouchStart = (e: React.TouchEvent, imageId: string) => {
+    const touch = e.touches[0];
+    touchStartY.current = touch.clientY;
+    touchCurrentY.current = touch.clientY;
+    touchStartTime.current = Date.now();
+    isDraggingTouch.current = false;
+    
+    // Set a timeout for long press detection (500ms)
+    setTimeout(() => {
+      if (touchStartTime.current > 0 && !isDraggingTouch.current) {
+        // Long press detected - start dragging
+        isDraggingTouch.current = true;
+        setDraggedImageId(imageId);
+      }
+    }, 500);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, imageId: string) => {
+    const touch = e.touches[0];
+    const deltaY = Math.abs(touch.clientY - touchStartY.current);
+    
+    // If moved more than 10px before long press, cancel drag intent
+    if (!isDraggingTouch.current && deltaY > 10) {
+      touchStartTime.current = 0;
+      return;
+    }
+    
+    // Only handle drag if long press was detected
+    if (!isDraggingTouch.current || !draggedImageId) return;
+    
+    // Prevent default scrolling when dragging
+    e.preventDefault();
+    
+    touchCurrentY.current = touch.clientY;
+    
+    // Determine which image is being hovered based on touch position
+    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+    const cardElement = elements.find(el => el.getAttribute('data-image-id'));
+    
+    if (cardElement) {
+      const hoveredImageId = cardElement.getAttribute('data-image-id');
+      if (hoveredImageId && hoveredImageId !== draggedImageId) {
+        setDragOverImageId(hoveredImageId);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isDraggingTouch.current && draggedImageId && dragOverImageId && draggedImageId !== dragOverImageId) {
+      const draggedIndex = referenceImages.findIndex(img => img.id === draggedImageId);
+      const targetIndex = referenceImages.findIndex(img => img.id === dragOverImageId);
+      
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        const newImages = [...referenceImages];
+        const [draggedImage] = newImages.splice(draggedIndex, 1);
+        newImages.splice(targetIndex, 0, draggedImage);
+        setReferenceImages(newImages);
+      }
+    }
+    
+    setDraggedImageId(null);
+    setDragOverImageId(null);
+    touchStartY.current = 0;
+    touchCurrentY.current = 0;
+    touchStartTime.current = 0;
+    isDraggingTouch.current = false;
+  };
+
   const handleSave = () => {
     if (!selectedStyleId) {
       toast({
@@ -580,11 +652,16 @@ export default function PromptEditor() {
                           layout
                         >
                           <Card
+                            data-image-id={image.id}
                             draggable
                             onDragStart={() => handleDragStart(image.id)}
                             onDragOver={(e) => handleDragOver(e, image.id)}
                             onDrop={(e) => handleDrop(e, image.id)}
                             onDragEnd={handleDragEnd}
+                            onTouchStart={(e) => handleTouchStart(e, image.id)}
+                            onTouchMove={(e) => handleTouchMove(e, image.id)}
+                            onTouchEnd={handleTouchEnd}
+                            style={{ touchAction: 'pan-y' }}
                             className={`p-2 transition-all cursor-move ${
                               draggedImageId === image.id ? "opacity-50" : ""
                             } ${
@@ -655,10 +732,10 @@ export default function PromptEditor() {
               <Separator />
 
               <Tabs defaultValue="camera" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="camera">Camera</TabsTrigger>
-                  <TabsTrigger value="environment">Environment</TabsTrigger>
-                  <TabsTrigger value="character">Character</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-3 h-auto">
+                  <TabsTrigger value="camera" className="text-xs sm:text-sm">Camera</TabsTrigger>
+                  <TabsTrigger value="environment" className="text-xs sm:text-sm">Environment</TabsTrigger>
+                  <TabsTrigger value="character" className="text-xs sm:text-sm">Character</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="camera" className="space-y-4 mt-4">
@@ -942,12 +1019,12 @@ export default function PromptEditor() {
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button onClick={handleSave} className="flex-1">
                   <Save className="w-4 h-4 mr-2" />
                   Save Template
                 </Button>
-                <Button onClick={handleReset} variant="outline">
+                <Button onClick={handleReset} variant="outline" className="sm:w-auto">
                   <RotateCcw className="w-4 h-4 mr-2" />
                   Reset
                 </Button>
@@ -966,8 +1043,8 @@ export default function PromptEditor() {
                 </Button>
               </div>
 
-              <div className="bg-muted rounded-lg p-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-                <pre className="text-sm whitespace-pre-wrap font-mono">{previewPrompt}</pre>
+              <div className="bg-muted rounded-lg p-4 max-h-[400px] sm:max-h-[500px] lg:max-h-[calc(100vh-200px)] overflow-y-auto">
+                <pre className="text-xs sm:text-sm whitespace-pre-wrap font-mono">{previewPrompt}</pre>
               </div>
 
               <div className="text-xs text-muted-foreground">
