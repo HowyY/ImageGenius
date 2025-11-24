@@ -169,11 +169,24 @@ export default function PromptEditor() {
         }
       }
       
-      // Check all paths in parallel
+      // Check all paths in parallel with stricter validation
       const checkPromises = imagePaths.map(async (imagePath) => {
         try {
           const response = await fetch(imagePath, { method: 'HEAD' });
-          return response.ok ? imagePath : null;
+          
+          // Strict validation: must be OK status, have image content type, and non-zero size
+          if (!response.ok) {
+            return null;
+          }
+          
+          const contentType = response.headers.get('Content-Type');
+          const contentLength = response.headers.get('Content-Length');
+          
+          // Verify it's actually an image with content
+          const isImage = contentType && contentType.startsWith('image/');
+          const hasContent = contentLength && parseInt(contentLength, 10) > 0;
+          
+          return (isImage && hasContent) ? imagePath : null;
         } catch {
           return null;
         }
