@@ -283,7 +283,7 @@ async function callSeedreamEdit(prompt: string, imageUrls: string[]) {
 }
 
 async function pollSeedreamResult(taskId: string) {
-  const maxAttempts = 20;
+  const maxAttempts = 30;
   const delayMs = 3000;
 
   console.log(`[Seedream] Starting to poll task ${taskId} (max ${maxAttempts} attempts, ${delayMs}ms delay)`);
@@ -433,9 +433,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls.push(...userReferenceImages);
       }
       
-      // Add all reference images for this style
+      // Add style preset reference images
+      // For Seedream: limit total reference images to 4 to improve processing speed
       const styleReferenceUrls = getAllReferenceImageUrls(styleId);
-      imageUrls.push(...styleReferenceUrls);
+      if (engine === "seedream") {
+        const MAX_SEEDREAM_REFS = 4;
+        const userRefCount = userReferenceImages?.length || 0;
+        const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - userRefCount);
+        imageUrls.push(...styleReferenceUrls.slice(0, maxStyleRefs));
+      } else {
+        // For other engines (like nanobanana), add all style reference images
+        imageUrls.push(...styleReferenceUrls);
+      }
 
       console.log("\n=== Image Generation Request ===");
       console.log(`Engine: ${engine}`);
