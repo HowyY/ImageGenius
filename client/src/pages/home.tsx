@@ -28,7 +28,8 @@ import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unl
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
-import { getStyleLock, setStyleLock, getLastGeneratedImage, setLastGeneratedImage, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
+import { getStyleLock, setStyleLock, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
+import type { SelectGenerationHistory } from "@shared/schema";
 import { normalizeTemplateColors } from "@/lib/templateUtils";
 import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
@@ -58,21 +59,36 @@ export default function Home() {
     queryKey: ["/api/styles"],
   });
 
+  // Fetch latest history to get most recent generated image
+  const { data: historyData } = useQuery<SelectGenerationHistory[]>({
+    queryKey: ["/api/history"],
+  });
+
   useEffect(() => {
     const { locked, styleId } = getStyleLock();
-    const savedImage = getLastGeneratedImage();
     const userRefs = getUserReferenceImages();
     
     setStyleLocked(locked);
-    setGeneratedImage(savedImage);
     setUserRefCount(userRefs.length);
     
-    if (locked && styleId) {
-      form.setValue("styleId", styleId);
-      const style = styles?.find((s) => s.id === styleId);
-      setSelectedStyleDescription(style?.description || "");
+    // Use latest history image if no generated image in current session
+    if (!generatedImage && historyData && historyData.length > 0) {
+      setGeneratedImage(historyData[0].generatedImageUrl);
     }
-  }, [styles]);
+    
+    if (locked && styleId && styles) {
+      form.setValue("styleId", styleId);
+      const style = styles.find((s) => s.id === styleId);
+      setSelectedStyleDescription(style?.description || "");
+    } else if (!locked && styles && styles.length > 0) {
+      // Auto-select first style if not locked and no style selected
+      const currentStyleId = form.getValues("styleId");
+      if (!currentStyleId) {
+        form.setValue("styleId", styles[0].id);
+        setSelectedStyleDescription(styles[0].description || "");
+      }
+    }
+  }, [styles, historyData, generatedImage]);
 
   const generateMutation = useMutation({
     mutationFn: async (data: GenerateRequest) => {
@@ -87,11 +103,10 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setGeneratedImage(data.imageUrl);
-      setLastGeneratedImage(data.imageUrl);
       queryClient.invalidateQueries({ queryKey: ["/api/history"] });
       const { id } = toast({
         title: "Image generated successfully!",
-        description: "Your image is ready.",
+        description: "Your image is ready. Generate another or try a different style.",
       });
       setLastToastId(id);
     },
