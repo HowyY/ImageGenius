@@ -256,11 +256,11 @@ export default function History() {
                 </div>
 
                 {/* Reference Images Sent to KIE */}
-                {selectedItem.allReferenceImageUrls && selectedItem.allReferenceImageUrls.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-sm text-muted-foreground">
-                      REFERENCE IMAGES SENT TO KIE ({selectedItem.allReferenceImageUrls.length} total)
-                    </h3>
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">
+                    REFERENCE IMAGES SENT TO KIE
+                  </h3>
+                  {selectedItem.allReferenceImageUrls && selectedItem.allReferenceImageUrls.length > 0 ? (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       {selectedItem.allReferenceImageUrls.map((url, idx) => (
                         <div key={idx} className="space-y-2">
@@ -282,8 +282,18 @@ export default function History() {
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="p-4 bg-muted/50 rounded-md border border-dashed">
+                      <p className="text-sm text-muted-foreground text-center">
+                        No reference image data available for this generation.
+                        <br />
+                        <span className="text-xs">
+                          (This is an older record created before the debug feature was added)
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Full Prompt Sent to KIE */}
                 <div className="space-y-2">
