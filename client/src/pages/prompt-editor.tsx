@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon, Maximize2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -20,9 +27,14 @@ import {
 } from "@/components/ui/select";
 import type { StylePreset } from "@shared/schema";
 
+interface ImageReference {
+  id: string;
+  url: string;
+}
+
 interface PromptTemplate {
   name: string;
-  referenceImages?: string[];
+  referenceImages?: ImageReference[];
   cameraComposition: {
     enabled: boolean;
     cameraAngle: string;
@@ -116,9 +128,11 @@ export default function PromptEditor() {
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [template, setTemplate] = useState<PromptTemplate>(DEFAULT_TEMPLATE);
   const [previewPrompt, setPreviewPrompt] = useState("");
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
-  const [draggedImageUrl, setDraggedImageUrl] = useState<string | null>(null);
-  const [dragOverImageUrl, setDragOverImageUrl] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<ImageReference[]>([]);
+  const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
+  const [dragOverImageId, setDragOverImageId] = useState<string | null>(null);
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -145,7 +159,14 @@ export default function PromptEditor() {
         try {
           const loadedTemplate = JSON.parse(saved);
           setTemplate(loadedTemplate);
-          setReferenceImages(loadedTemplate.referenceImages || []);
+          // Convert old string array to ImageReference array for backward compatibility
+          const images = (loadedTemplate.referenceImages || []).map((item: any) => {
+            if (typeof item === 'string') {
+              return { id: crypto.randomUUID(), url: item };
+            }
+            return item;
+          });
+          setReferenceImages(images);
         } catch (e) {
           console.error("Failed to load saved template:", e);
           // Set default template with style label as name
@@ -169,6 +190,7 @@ export default function PromptEditor() {
   }, [selectedStyleId, styles]);
 
   const loadLocalReferenceImages = async (styleId: string) => {
+    setIsLoadingImages(true);
     try {
       const basePath = `/reference-images/${styleId}`;
       const imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
@@ -217,11 +239,17 @@ export default function PromptEditor() {
         });
       
       if (localImages.length > 0) {
-        setReferenceImages(localImages);
+        const imageRefs = localImages.map(url => ({
+          id: crypto.randomUUID(),
+          url
+        }));
+        setReferenceImages(imageRefs);
         console.log(`Loaded ${localImages.length} local reference images for ${styleId}`);
       }
     } catch (error) {
       console.error("Failed to load local reference images:", error);
+    } finally {
+      setIsLoadingImages(false);
     }
   };
 
@@ -330,7 +358,11 @@ export default function PromptEditor() {
 
     try {
       const uploadedPaths = await Promise.all(uploadPromises);
-      setReferenceImages((prev) => [...prev, ...uploadedPaths]);
+      const newImageRefs = uploadedPaths.map(url => ({
+        id: crypto.randomUUID(),
+        url
+      }));
+      setReferenceImages((prev) => [...prev, ...newImageRefs]);
       
       toast({
         title: "Images uploaded",
@@ -349,41 +381,41 @@ export default function PromptEditor() {
     }
   };
 
-  const handleRemoveImage = (imageUrl: string) => {
-    setReferenceImages((prev) => prev.filter((url) => url !== imageUrl));
+  const handleRemoveImage = (imageId: string) => {
+    setReferenceImages((prev) => prev.filter((img) => img.id !== imageId));
   };
 
-  const handleDragStart = (imageUrl: string) => {
-    setDraggedImageUrl(imageUrl);
+  const handleDragStart = (imageId: string) => {
+    setDraggedImageId(imageId);
   };
 
-  const handleDragOver = (e: React.DragEvent, imageUrl: string) => {
+  const handleDragOver = (e: React.DragEvent, imageId: string) => {
     e.preventDefault();
-    setDragOverImageUrl(imageUrl);
+    setDragOverImageId(imageId);
   };
 
-  const handleDrop = (e: React.DragEvent, targetImageUrl: string) => {
+  const handleDrop = (e: React.DragEvent, targetImageId: string) => {
     e.preventDefault();
     
-    if (draggedImageUrl && draggedImageUrl !== targetImageUrl) {
-      const draggedIndex = referenceImages.indexOf(draggedImageUrl);
-      const targetIndex = referenceImages.indexOf(targetImageUrl);
+    if (draggedImageId && draggedImageId !== targetImageId) {
+      const draggedIndex = referenceImages.findIndex(img => img.id === draggedImageId);
+      const targetIndex = referenceImages.findIndex(img => img.id === targetImageId);
       
       if (draggedIndex !== -1 && targetIndex !== -1) {
         const newImages = [...referenceImages];
-        newImages.splice(draggedIndex, 1);
-        newImages.splice(targetIndex, 0, draggedImageUrl);
+        const [draggedImage] = newImages.splice(draggedIndex, 1);
+        newImages.splice(targetIndex, 0, draggedImage);
         setReferenceImages(newImages);
       }
     }
     
-    setDraggedImageUrl(null);
-    setDragOverImageUrl(null);
+    setDraggedImageId(null);
+    setDragOverImageId(null);
   };
 
   const handleDragEnd = () => {
-    setDraggedImageUrl(null);
-    setDragOverImageUrl(null);
+    setDraggedImageId(null);
+    setDragOverImageId(null);
   };
 
   const handleSave = () => {
@@ -512,71 +544,111 @@ export default function PromptEditor() {
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full"
+                  disabled={isLoadingImages}
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   Upload Reference Images
                 </Button>
 
-                {referenceImages.length > 0 && (
+                {isLoadingImages && (
                   <div className="space-y-2">
-                    {referenceImages.map((imageUrl, index) => (
-                      <Card
-                        key={imageUrl}
-                        draggable
-                        onDragStart={() => handleDragStart(imageUrl)}
-                        onDragOver={(e) => handleDragOver(e, imageUrl)}
-                        onDrop={(e) => handleDrop(e, imageUrl)}
-                        onDragEnd={handleDragEnd}
-                        className={`p-2 transition-all cursor-move ${
-                          draggedImageUrl === imageUrl ? "opacity-50" : ""
-                        } ${
-                          dragOverImageUrl === imageUrl && draggedImageUrl !== imageUrl
-                            ? "border-primary bg-accent/50"
-                            : ""
-                        }`}
-                      >
+                    {[1, 2, 3].map((i) => (
+                      <Card key={i} className="p-2">
                         <div className="flex items-center gap-2">
-                          <div className="flex-shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing">
-                            <GripVertical className="h-5 w-5" />
-                          </div>
-                          <div className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted">
-                            <img
-                              src={imageUrl}
-                              alt={`Reference ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                          <Skeleton className="h-5 w-5 flex-shrink-0" />
+                          <Skeleton className="h-16 w-16 rounded flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs text-muted-foreground truncate">
-                              Priority #{index + 1}
-                            </div>
+                            <Skeleton className="h-4 w-20" />
                           </div>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleRemoveImage(imageUrl)}
-                            className="h-8 w-8 flex-shrink-0"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
+                          <Skeleton className="h-8 w-8 flex-shrink-0" />
                         </div>
                       </Card>
                     ))}
+                  </div>
+                )}
+
+                {!isLoadingImages && referenceImages.length > 0 && (
+                  <div className="space-y-2">
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      {referenceImages.map((image, index) => (
+                        <motion.div
+                          key={image.id}
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          transition={{ duration: 0.3 }}
+                          layout
+                        >
+                          <Card
+                            draggable
+                            onDragStart={() => handleDragStart(image.id)}
+                            onDragOver={(e) => handleDragOver(e, image.id)}
+                            onDrop={(e) => handleDrop(e, image.id)}
+                            onDragEnd={handleDragEnd}
+                            className={`p-2 transition-all cursor-move ${
+                              draggedImageId === image.id ? "opacity-50" : ""
+                            } ${
+                              dragOverImageId === image.id && draggedImageId !== image.id
+                                ? "border-primary bg-accent/50"
+                                : ""
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="flex-shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing">
+                                <GripVertical className="h-5 w-5" />
+                              </div>
+                              <div 
+                                className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-muted cursor-pointer group relative"
+                                onClick={() => setPreviewImageUrl(image.url)}
+                              >
+                                <img
+                                  src={image.url}
+                                  alt={`Reference ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Maximize2 className="h-6 w-6 text-white" />
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs text-muted-foreground truncate">
+                                  Priority #{index + 1}
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleRemoveImage(image.id)}
+                                className="h-8 w-8 flex-shrink-0"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                     <p className="text-xs text-muted-foreground">
-                      Drag and drop to reorder. Higher priority images are used first during generation.
+                      Drag and drop to reorder. Click image to preview. Higher priority images are used first during generation.
                     </p>
                   </div>
                 )}
 
-                {referenceImages.length === 0 && (
-                  <Card className="p-8 border-dashed">
-                    <div className="flex flex-col items-center justify-center text-muted-foreground">
-                      <ImageIcon className="w-12 h-12 mb-2 opacity-40" />
-                      <p className="text-sm">No reference images uploaded</p>
-                      <p className="text-xs mt-1">Click the button above to add images</p>
-                    </div>
-                  </Card>
+                {!isLoadingImages && referenceImages.length === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Card className="p-8 border-dashed">
+                      <div className="flex flex-col items-center justify-center text-muted-foreground">
+                        <ImageIcon className="w-12 h-12 mb-2 opacity-40" />
+                        <p className="text-sm">No reference images uploaded</p>
+                        <p className="text-xs mt-1">Click the button above to add images</p>
+                      </div>
+                    </Card>
+                  </motion.div>
                 )}
               </div>
 
@@ -908,6 +980,22 @@ export default function PromptEditor() {
           </Card>
         </div>
       </div>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={previewImageUrl !== null} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogTitle className="sr-only">Image Preview</DialogTitle>
+          {previewImageUrl && (
+            <div className="relative w-full">
+              <img
+                src={previewImageUrl}
+                alt="Preview"
+                className="w-full h-auto rounded-lg"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

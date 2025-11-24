@@ -46,10 +46,22 @@ The core functionality allows users to:
   - After: Single parallel batch request (fast)
   - Maintains deterministic numerical sorting of reference images
 
+**Reference Image Data Structure Refactoring** (November 24, 2025):
+- **Migrated from string[] to ImageReference[] objects**: Refactored reference image handling to support robust framer-motion exit animations
+  - **New Structure**: `ImageReference { id: string, url: string }` - each image has a unique ID generated via `crypto.randomUUID()`
+  - **AnimatePresence Compatibility**: Unique IDs enable proper tracking for smooth fade-out/scale animations when removing images
+  - **Type Safety**: Updated `PromptTemplate` interface to correctly type `referenceImages?: ImageReference[]`
+  - **Handler Updates**: All functions (upload, drag/drop, remove) refactored to operate on image IDs instead of URLs
+  - **Backward Compatibility**: Loading logic converts legacy `string[]` templates to new `ImageReference[]` format automatically
+  - **Rendering**: Updated map iterations to use `image.id` as React keys and `image.url` for display
+- **Architecture Fix**: Resolved critical issue where AnimatePresence requires motion components as direct children - static wrapper divs prevent exit transitions
+- **Verified**: Zero LSP errors, all TypeScript types consistent, passed architect review with no security concerns
+
 **Technical Details**:
 - All changes passed verification with zero security concerns
 - No breaking changes to existing functionality
 - Improved code follows React best practices and performance patterns
+- Migration path tested for localStorage data compatibility
 
 ## User Preferences
 
