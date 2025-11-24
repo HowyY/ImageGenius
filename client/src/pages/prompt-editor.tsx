@@ -589,8 +589,15 @@ export default function PromptEditor() {
       return;
     }
     
+    // Clean up customColors if it's empty
+    let cleanedTemplate = { ...template };
+    if (cleanedTemplate.colorMode === "custom" && 
+        (!cleanedTemplate.customColors?.colors || cleanedTemplate.customColors.colors.length === 0)) {
+      cleanedTemplate.customColors = undefined;
+    }
+    
     const templateToSave = {
-      ...template,
+      ...cleanedTemplate,
       referenceImages,
     };
     

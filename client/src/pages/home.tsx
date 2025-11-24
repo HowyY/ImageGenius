@@ -122,6 +122,13 @@ export default function Home() {
         customTemplate = JSON.parse(savedTemplate);
         // Extract reference images from template
         templateReferenceImages = customTemplate.referenceImages || [];
+        
+        // Clean up customColors if it's empty to avoid validation errors
+        if (customTemplate.colorMode === "custom" && 
+            (!customTemplate.customColors?.colors || customTemplate.customColors.colors.length === 0)) {
+          customTemplate.customColors = undefined;
+        }
+        
         console.log(`Using custom template for style: ${data.styleId} with ${templateReferenceImages.length} reference images`);
       }
     } catch (e) {
