@@ -305,7 +305,7 @@ async function callNanoBananaEdit(prompt: string, imageUrls: string[]) {
 }
 
 async function pollNanoBananaResult(taskId: string) {
-  const maxAttempts = 10;
+  const maxAttempts = 40;
   const delayMs = 3000;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
