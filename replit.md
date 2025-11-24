@@ -18,6 +18,17 @@ The project's ambition is to provide a user-friendly and powerful tool for creat
 -   **Communication**: Simple, everyday language in Chinese
 -   **Code Standards**: All code, comments, UI text, and error messages must be in English only
 
+## Recent Changes
+
+### November 24, 2025 - Color Palette Validation Fix
+-   **Issue**: Templates with empty `customColors` arrays causing validation errors
+-   **Root Cause**: localStorage templates contained `referenceImages` field not in `promptTemplateSchema`
+-   **Solution**: Created `normalizeTemplateColors` utility in `client/src/lib/templateUtils.ts`
+    -   Removes non-schema fields (like `referenceImages`) from templates
+    -   Cleans up empty `customColors` arrays by resetting to "default" mode
+    -   Applied at persistence boundaries: template load, save, and generation
+-   **Result**: All color modes (default and custom) now work without validation errors
+
 ## System Architecture
 
 ### Frontend Architecture
