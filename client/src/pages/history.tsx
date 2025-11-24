@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Sparkles, Image as ImageIcon, Plus, Check } from "lucide-react";
+import { Clock, Sparkles, Image as ImageIcon, Plus, Check, Copy } from "lucide-react";
 import type { SelectGenerationHistory } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { addUserReferenceImage, getUserReferenceImages } from "@/lib/generationState";
@@ -42,6 +42,22 @@ export default function History() {
       toast({
         title: "Cannot add",
         description: "Maximum 3 reference images reached or image already exists",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCopyPrompt = async (prompt: string) => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast({
+        title: "Prompt copied",
+        description: "The prompt has been copied to your clipboard",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Please try again",
         variant: "destructive",
       });
     }
@@ -151,6 +167,15 @@ export default function History() {
                         </TooltipContent>
                       </Tooltip>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopyPrompt(item.prompt)}
+                      data-testid={`button-copy-prompt-${item.id}`}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Prompt
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
