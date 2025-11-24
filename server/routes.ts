@@ -26,7 +26,16 @@ const STYLE_PRESETS: Array<
       "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
     engines: ["nanobanana", "seedream"],
     basePrompt:
-      "clean sketch-style vector line art, navy blue outlines, white negative space, subtle cyan to blue gradients for fills, minimalist details, modern financial illustration tone",
+      "clean sketch-style vector line art, white negative space, minimalist details, modern financial illustration tone",
+    defaultColors: {
+      name: "Cyan & Navy Palette",
+      colors: [
+        { name: "Navy Blue", hex: "#1E3A8A", role: "outlines" },
+        { name: "Cyan", hex: "#06B6D4", role: "fills" },
+        { name: "Light Cyan", hex: "#22D3EE", role: "highlights" },
+        { name: "White", hex: "#FFFFFF", role: "background" },
+      ],
+    },
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
@@ -219,7 +228,35 @@ function buildPromptFromTemplate(
     prompt += "5. STYLE ENFORCEMENT\n";
     prompt += `- Apply ${style.basePrompt}\n`;
     prompt += `- ${template.styleEnforcement.styleRules}\n`;
-    prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+    
+    // Handle color palette based on mode
+    if (template.colorMode === "custom" && template.customColors?.colors && template.customColors.colors.length > 0) {
+      // Custom color palette - structured format with hex codes
+      prompt += "- COLOR PALETTE (STRICT):\n";
+      const totalColors = template.customColors.colors.length;
+      const percentages = [60, 30, 10]; // Default percentages for first 3 colors
+      template.customColors.colors.forEach((color: any, index: number) => {
+        const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
+        const role = color.role ? ` for ${color.role}` : '';
+        prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
+      });
+      prompt += "  • Use ONLY these colors, no other colors allowed\n";
+    } else if (style.defaultColors?.colors) {
+      // Style default colors - structured format
+      prompt += "- COLOR PALETTE (STRICT):\n";
+      const totalColors = style.defaultColors.colors.length;
+      const percentages = [60, 30, 10];
+      style.defaultColors.colors.forEach((color: any, index: number) => {
+        const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
+        const role = color.role ? ` for ${color.role}` : '';
+        prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
+      });
+      prompt += "  • Use ONLY these colors, no other colors allowed\n";
+    } else {
+      // Fallback to text description
+      prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+    }
+    
     prompt += `- Texture density: ${template.styleEnforcement.textureDensity}\n\n`;
   }
 

@@ -25,8 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { StylePreset } from "@shared/schema";
+import type { StylePreset, Color } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { ColorPaletteManager } from "@/components/ColorPaletteManager";
 
 interface ImageReference {
   id: string;
@@ -36,6 +37,11 @@ interface ImageReference {
 interface PromptTemplate {
   name: string;
   referenceImages?: ImageReference[];
+  colorMode?: "default" | "custom";
+  customColors?: {
+    name?: string;
+    colors: Color[];
+  };
   cameraComposition: {
     enabled: boolean;
     cameraAngle: string;
@@ -77,6 +83,8 @@ interface PromptTemplate {
 
 const DEFAULT_TEMPLATE: PromptTemplate = {
   name: "Default Template",
+  colorMode: "default",
+  customColors: undefined,
   cameraComposition: {
     enabled: true,
     cameraAngle: "stable, undistorted view that clearly presents the subject",
@@ -296,7 +304,38 @@ export default function PromptEditor() {
     if (template.styleEnforcement.enabled) {
       prompt += "5. STYLE ENFORCEMENT\n";
       prompt += `- ${template.styleEnforcement.styleRules}\n`;
-      prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+      
+      // Handle color palette based on mode
+      if (template.colorMode === "custom" && template.customColors?.colors && template.customColors.colors.length > 0) {
+        // Custom color palette - structured format with hex codes
+        prompt += "- COLOR PALETTE (STRICT):\n";
+        const totalColors = template.customColors.colors.length;
+        const percentages = [60, 30, 10]; // Default percentages for first 3 colors
+        template.customColors.colors.forEach((color, index) => {
+          const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
+          const role = color.role ? ` for ${color.role}` : '';
+          prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
+        });
+        prompt += "  • Use ONLY these colors, no other colors allowed\n";
+      } else if (styles?.find(s => s.id === selectedStyleId)?.defaultColors?.colors) {
+        // Style default colors - structured format
+        const defaultColors = styles.find(s => s.id === selectedStyleId)?.defaultColors;
+        if (defaultColors) {
+          prompt += "- COLOR PALETTE (STRICT):\n";
+          const totalColors = defaultColors.colors.length;
+          const percentages = [60, 30, 10];
+          defaultColors.colors.forEach((color, index) => {
+            const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
+            const role = color.role ? ` for ${color.role}` : '';
+            prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
+          });
+          prompt += "  • Use ONLY these colors, no other colors allowed\n";
+        }
+      } else {
+        // Fallback to text description
+        prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+      }
+      
       prompt += `- Texture density: ${template.styleEnforcement.textureDensity}\n\n`;
     }
 
@@ -784,10 +823,14 @@ export default function PromptEditor() {
               <Separator />
 
               <Tabs defaultValue="camera" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-3 h-auto">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
                   <TabsTrigger value="camera" className="text-xs sm:text-sm">Camera</TabsTrigger>
                   <TabsTrigger value="environment" className="text-xs sm:text-sm">Environment</TabsTrigger>
                   <TabsTrigger value="character" className="text-xs sm:text-sm">Character</TabsTrigger>
+                  <TabsTrigger value="colors" className="text-xs sm:text-sm">
+                    <Palette className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Colors
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="camera" className="space-y-4 mt-4">
@@ -1033,6 +1076,90 @@ export default function PromptEditor() {
                       </div>
                     </>
                   )}
+                </TabsContent>
+
+                <TabsContent value="colors" className="space-y-4 mt-4">
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Color Mode</Label>
+                      <div className="space-y-2 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="color-mode-default"
+                            name="color-mode"
+                            value="default"
+                            checked={template.colorMode === "default" || !template.colorMode}
+                            onChange={(e) =>
+                              setTemplate({
+                                ...template,
+                                colorMode: "default",
+                              })
+                            }
+                            data-testid="radio-color-mode-default"
+                          />
+                          <Label htmlFor="color-mode-default" className="font-normal cursor-pointer">
+                            Use style default colors
+                            {styles?.find(s => s.id === selectedStyleId)?.defaultColors && (
+                              <span className="text-muted-foreground text-sm ml-2">
+                                ({styles.find(s => s.id === selectedStyleId)?.defaultColors?.colors.length || 0} colors)
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                        
+                        {styles?.find(s => s.id === selectedStyleId)?.defaultColors && (
+                          <div className="ml-6 flex flex-wrap gap-2">
+                            {styles.find(s => s.id === selectedStyleId)?.defaultColors?.colors.map((color, i) => (
+                              <div key={i} className="flex items-center gap-2 text-sm">
+                                <div
+                                  className="w-6 h-6 rounded border"
+                                  style={{ backgroundColor: color.hex }}
+                                  title={`${color.name} (${color.hex})`}
+                                />
+                                <span className="text-muted-foreground">{color.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="color-mode-custom"
+                            name="color-mode"
+                            value="custom"
+                            checked={template.colorMode === "custom"}
+                            onChange={(e) =>
+                              setTemplate({
+                                ...template,
+                                colorMode: "custom",
+                                customColors: template.customColors || { colors: [] },
+                              })
+                            }
+                            data-testid="radio-color-mode-custom"
+                          />
+                          <Label htmlFor="color-mode-custom" className="font-normal cursor-pointer">
+                            Use custom color palette
+                          </Label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {template.colorMode === "custom" && (
+                      <div className="space-y-4 pl-6">
+                        <ColorPaletteManager
+                          colors={template.customColors?.colors || []}
+                          onColorsChange={(colors) =>
+                            setTemplate({
+                              ...template,
+                              customColors: { ...template.customColors, colors },
+                            })
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
                 </TabsContent>
               </Tabs>
 

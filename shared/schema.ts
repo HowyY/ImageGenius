@@ -31,15 +31,29 @@ export const insertGenerationHistorySchema = z.object({
 export type InsertGenerationHistory = z.infer<typeof insertGenerationHistorySchema>;
 export type SelectGenerationHistory = typeof generationHistory.$inferSelect;
 
+const colorSchema = z.object({
+  name: z.string(),
+  hex: z.string().regex(/^#[0-9A-F]{6}$/i, "Invalid hex color"),
+  role: z.string().optional(),
+});
+
+const colorPaletteSchema = z.object({
+  name: z.string().optional(),
+  colors: z.array(colorSchema).min(1).max(10),
+});
+
 export const stylePresetSchema = z.object({
   id: z.string(),
   label: z.string(),
   description: z.string(),
   engines: z.array(z.string()),
+  defaultColors: colorPaletteSchema.optional(),
 });
 
 export const promptTemplateSchema = z.object({
   name: z.string(),
+  colorMode: z.enum(["default", "custom"]).optional().default("default"),
+  customColors: colorPaletteSchema.optional(),
   cameraComposition: z.object({
     enabled: z.boolean(),
     cameraAngle: z.string(),
@@ -95,6 +109,8 @@ export const generateResponseSchema = z.object({
   historyId: z.number().optional(),
 });
 
+export type Color = z.infer<typeof colorSchema>;
+export type ColorPalette = z.infer<typeof colorPaletteSchema>;
 export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 export type StylePreset = z.infer<typeof stylePresetSchema>;
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;
