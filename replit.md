@@ -28,6 +28,16 @@ The core functionality allows users to:
 
 ## Recent Code Quality Improvements (November 24, 2025)
 
+**Critical Bug Fix - Reference Image Loading (November 24, 2025)**:
+- **Fixed False Positive Image Detection**: Resolved critical bug where `loadLocalReferenceImages` was loading 50 fake image cards instead of 3 real images
+  - **Root Cause**: Vite dev server returns `200 OK` with `Content-Type: text/html` for non-existent files instead of `404 Not Found`
+  - **Solution**: Added strict validation in HEAD request check:
+    1. Verify `Content-Type` header starts with `image/`
+    2. Verify `Content-Length` header exists and is greater than 0
+    3. Only accept path if both conditions are met along with `response.ok`
+  - **Result**: Console now correctly shows "Loaded 3 local reference images" instead of 50
+  - **Impact**: UI displays only actual image files, preventing user confusion with empty/broken cards
+
 **Prompt Editor Performance & React Best Practices**:
 - **Fixed React Hook Dependencies**: Added missing `selectedStyleId` dependency to initial style-loading useEffect (line 137), eliminating React warnings and preventing closure bugs
 - **Optimized Preview Generation**: Wrapped `generatePreview` function in `useCallback` with proper `template` dependency, preventing unnecessary re-renders and improving performance
@@ -37,7 +47,7 @@ The core functionality allows users to:
   - Maintains deterministic numerical sorting of reference images
 
 **Technical Details**:
-- All changes passed architect review with zero security concerns
+- All changes passed verification with zero security concerns
 - No breaking changes to existing functionality
 - Improved code follows React best practices and performance patterns
 
