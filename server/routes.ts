@@ -763,6 +763,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/templates/:styleId", async (req, res) => {
+    try {
+      const { styleId } = req.params;
+      
+      if (!styleId) {
+        return res.status(400).json({
+          error: "Missing styleId",
+          message: "styleId parameter is required",
+        });
+      }
+
+      const template = await storage.getTemplate(styleId);
+      
+      if (!template) {
+        return res.status(404).json({
+          error: "Template not found",
+          message: `No template found for style '${styleId}'`,
+        });
+      }
+
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching template:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch template",
+      });
+    }
+  });
+
+  app.post("/api/templates/:styleId", async (req, res) => {
+    try {
+      const { styleId } = req.params;
+      const { templateData, referenceImages } = req.body;
+
+      if (!styleId || !templateData) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "styleId and templateData are required",
+        });
+      }
+
+      const saved = await storage.saveTemplate(
+        styleId,
+        templateData,
+        referenceImages || []
+      );
+
+      res.json(saved);
+    } catch (error) {
+      console.error("Error saving template:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to save template",
+      });
+    }
+  });
+
   app.post("/api/upload-reference-image", async (req, res) => {
     try {
       const { styleId, imageBase64, fileName } = req.body;
