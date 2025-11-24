@@ -325,12 +325,17 @@ async function pollNanoBananaResult(taskId: string) {
     }
 
     const state = resultJson.data?.state;
-    if (state === "waiting" || state === "queuing" || state === "generating") {
+    console.log(`[NanoBanana] Attempt ${attempt + 1}/${maxAttempts}, state: ${state}`);
+    
+    // Continue polling for any in-progress states
+    if (state === "waiting" || state === "queuing" || state === "queued" || state === "generating" || state === "processing") {
       continue;
     }
 
     if (state === "fail") {
-      throw new Error(resultJson.data?.failMsg || "NanoBanana task failed");
+      const failMsg = resultJson.data?.failMsg || "NanoBanana task failed";
+      console.error(`[NanoBanana] Task failed: ${failMsg}`);
+      throw new Error(failMsg);
     }
 
     if (state === "success") {
@@ -344,10 +349,15 @@ async function pollNanoBananaResult(taskId: string) {
       if (!url) {
         throw new Error("NanoBanana result missing result URL");
       }
+      console.log(`[NanoBanana] Task completed successfully: ${url}`);
       return url;
     }
+    
+    // Handle unknown states - log and continue polling rather than failing immediately
+    console.warn(`[NanoBanana] Unknown state '${state}', continuing to poll...`);
   }
 
+  console.error(`[NanoBanana] Task timed out after ${maxAttempts * delayMs / 1000} seconds`);
   throw new Error("NanoBanana task timed out");
 }
 
@@ -477,6 +487,12 @@ function getStyleReferenceImagePaths(styleId: string): string[] {
 const uploadCache = new Map<string, Promise<string>>();
 
 async function uploadImageOnDemand(relativePath: string, styleId: string): Promise<string> {
+  // If the path is already an HTTPS URL (from previously uploaded images), return it directly
+  if (relativePath.startsWith('https://') || relativePath.startsWith('http://')) {
+    console.log(`Using existing uploaded URL: ${relativePath}`);
+    return relativePath;
+  }
+  
   const cacheKey = `${styleId}:${relativePath}`;
   
   // Check if upload is already in progress or completed
@@ -610,20 +626,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const styleReferencePaths = getStyleReferenceImagePaths(styleId);
       
       if (styleReferencePaths.length > 0) {
-        // Extract filenames from existing URLs for comparison
-        const existingFileNames = new Set(
-          imageUrls.map(url => {
-            const parts = url.split('/');
-            return parts[parts.length - 1]; // Get filename from URL
-          })
+        // Normalize URLs/paths to enable proper comparison
+        // Extracts the relative path portion (e.g., "/reference-images/style-1/1.png")
+        const normalizePathForComparison = (urlOrPath: string): string => {
+          // If it's an HTTP(S) URL, extract the path portion after the domain
+          if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+            try {
+              const url = new URL(urlOrPath);
+              // Extract path after domain, look for /reference-images/ pattern
+              const match = url.pathname.match(/\/reference-images\/.*$/);
+              return match ? match[0] : urlOrPath;
+            } catch {
+              return urlOrPath;
+            }
+          }
+          
+          // For local paths, ensure consistent format with leading slash
+          // Handle both "/reference-images/..." and "reference-images/..."
+          if (urlOrPath.includes('reference-images/')) {
+            // Extract everything from "reference-images/" onward
+            const match = urlOrPath.match(/reference-images\/.*$/);
+            if (match) {
+              // Return with leading slash for consistency
+              return '/' + match[0];
+            }
+          }
+          
+          return urlOrPath;
+        };
+        
+        // Build set of existing normalized paths for deduplication
+        const existingNormalizedPaths = new Set(
+          imageUrls.map(url => normalizePathForComparison(url))
         );
         
-        // Filter out any paths whose filename already exists
+        // Filter out any paths that already exist (by full normalized path, not just filename)
         const uniquePaths = styleReferencePaths.filter(path => {
-          const fileName = path.split('/').pop();
-          const isUnique = fileName && !existingFileNames.has(fileName);
-          if (!isUnique && fileName) {
-            console.log(`Skipping duplicate reference image: ${fileName}`);
+          const normalizedPath = normalizePathForComparison(path);
+          const isUnique = !existingNormalizedPaths.has(normalizedPath);
+          if (!isUnique) {
+            console.log(`Skipping duplicate reference image: ${normalizedPath}`);
           }
           return isUnique;
         });
