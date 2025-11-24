@@ -682,6 +682,7 @@ export default function PromptEditor() {
                                   src={image.url}
                                   alt={`Reference ${index + 1}`}
                                   className="w-full h-full object-cover"
+                                  loading="lazy"
                                 />
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                   <Maximize2 className="h-6 w-6 text-white" />
@@ -1068,6 +1069,7 @@ export default function PromptEditor() {
                 src={previewImageUrl}
                 alt="Preview"
                 className="w-full h-auto rounded-lg"
+                loading="lazy"
               />
             </div>
           )}

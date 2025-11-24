@@ -423,6 +423,7 @@ export default function Home() {
                     src={generatedImage}
                     alt="Generated artwork"
                     className="w-full h-full object-cover transition-opacity duration-300"
+                    loading="lazy"
                     data-testid="img-result"
                   />
                 )}

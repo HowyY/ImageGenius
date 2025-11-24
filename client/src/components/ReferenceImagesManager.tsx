@@ -130,6 +130,7 @@ export function ReferenceImagesManager({ onUpdate }: ReferenceImagesManagerProps
                   src={imageUrl}
                   alt={`Reference ${index + 1}`}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                   data-testid={`img-reference-${index}`}
                 />
               </div>
