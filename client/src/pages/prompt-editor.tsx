@@ -186,8 +186,38 @@ export default function PromptEditor() {
       if (savedTemplate && savedTemplate.templateData) {
         try {
           const loadedTemplate = savedTemplate.templateData;
+          // Merge with DEFAULT_TEMPLATE to ensure all fields exist
+          const mergedTemplate = {
+            ...DEFAULT_TEMPLATE,
+            ...loadedTemplate,
+            // Merge nested objects properly
+            cameraComposition: {
+              ...DEFAULT_TEMPLATE.cameraComposition,
+              ...(loadedTemplate.cameraComposition || {}),
+            },
+            environment: {
+              ...DEFAULT_TEMPLATE.environment,
+              ...(loadedTemplate.environment || {}),
+            },
+            mainCharacter: {
+              ...DEFAULT_TEMPLATE.mainCharacter,
+              ...(loadedTemplate.mainCharacter || {}),
+            },
+            secondaryObjects: {
+              ...DEFAULT_TEMPLATE.secondaryObjects,
+              ...(loadedTemplate.secondaryObjects || {}),
+            },
+            styleEnforcement: {
+              ...DEFAULT_TEMPLATE.styleEnforcement,
+              ...(loadedTemplate.styleEnforcement || {}),
+            },
+            negativePrompt: {
+              ...DEFAULT_TEMPLATE.negativePrompt,
+              ...(loadedTemplate.negativePrompt || {}),
+            },
+          };
           // Normalize template to clean up any legacy empty customColors
-          setTemplate(normalizeTemplateColors(loadedTemplate));
+          setTemplate(normalizeTemplateColors(mergedTemplate));
           // Convert reference image paths to ImageReference array
           const images = (savedTemplate.referenceImages || []).map((path: string) => {
             return { id: crypto.randomUUID(), url: path };
@@ -660,6 +690,25 @@ export default function PromptEditor() {
       description: "Preview prompt has been copied to clipboard.",
     });
   };
+
+  // Show loading state while data is being fetched
+  if (stylesLoading || (selectedStyleId && templateLoading)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold">Prompt Template Editor</h1>
+            <p className="text-muted-foreground mt-2">
+              Customize prompt templates for each style preset (Admin Only)
+            </p>
+          </div>
+          <div className="flex items-center justify-center py-12">
+            <p className="text-muted-foreground">Loading template...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
