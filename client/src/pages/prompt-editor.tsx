@@ -734,7 +734,6 @@ export default function PromptEditor() {
             <Select
               value={selectedStyleId}
               onValueChange={setSelectedStyleId}
-              disabled={stylesLoading}
             >
               <SelectTrigger id="style-select" className="w-[280px]">
                 <SelectValue placeholder={stylesLoading ? "Loading..." : "Select a style"} />
