@@ -121,8 +121,11 @@ export default function Home() {
       const savedTemplate = localStorage.getItem(storageKey);
       if (savedTemplate) {
         const loadedTemplate = JSON.parse(savedTemplate);
-        // Extract reference images from template
-        templateReferenceImages = loadedTemplate.referenceImages || [];
+        // Extract reference image URLs from template (convert from {id, url}[] to string[])
+        const refImages = loadedTemplate.referenceImages || [];
+        templateReferenceImages = refImages.map((ref: any) => 
+          typeof ref === 'string' ? ref : ref.url
+        );
         
         // Normalize template to clean up empty customColors
         customTemplate = normalizeTemplateColors(loadedTemplate);

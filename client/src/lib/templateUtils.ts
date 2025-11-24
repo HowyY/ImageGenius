@@ -27,11 +27,20 @@ export function normalizeTemplateColors<T extends Partial<PromptTemplate>>(
     };
   }
 
+  // If colorMode is default, remove customColors to avoid validation issues
+  if (cleanTemplate.colorMode === "default") {
+    return {
+      ...cleanTemplate,
+      customColors: undefined,
+    };
+  }
+
   // Ensure colorMode has a default value if not set
   if (!cleanTemplate.colorMode) {
     return {
       ...cleanTemplate,
       colorMode: "default" as const,
+      customColors: undefined,
     };
   }
 
