@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navigation } from "@/components/navigation";
 import Home from "@/pages/home";
 import History from "@/pages/history";
+import PromptEditor from "@/pages/prompt-editor";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -13,6 +14,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/history" component={History} />
+      <Route path="/prompt-editor" component={PromptEditor} />
       <Route component={NotFound} />
     </Switch>
   );

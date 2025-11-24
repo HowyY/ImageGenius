@@ -36,6 +36,18 @@ export function Navigation() {
                 History
               </Link>
             </Button>
+            {/* New button for Prompt Editor */}
+            <Button
+              variant={location === "/prompt-editor" ? "default" : "ghost"}
+              size="sm"
+              asChild
+              data-testid="button-nav-prompt-editor"
+            >
+              <Link href="/prompt-editor">
+                <Sparkles className="w-4 h-4 mr-2" /> {/* Assuming Sparkles or FileEdit icon */}
+                Prompt Editor
+              </Link>
+            </Button>
           </nav>
         </div>
       </div>
