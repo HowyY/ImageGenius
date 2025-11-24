@@ -29,6 +29,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
 import { getStyleLock, setStyleLock, getLastGeneratedImage, setLastGeneratedImage, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
+import { normalizeTemplateColors } from "@/lib/templateUtils";
 import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -119,15 +120,12 @@ export default function Home() {
       const storageKey = `promptTemplate_${data.styleId}`;
       const savedTemplate = localStorage.getItem(storageKey);
       if (savedTemplate) {
-        customTemplate = JSON.parse(savedTemplate);
+        const loadedTemplate = JSON.parse(savedTemplate);
         // Extract reference images from template
-        templateReferenceImages = customTemplate.referenceImages || [];
+        templateReferenceImages = loadedTemplate.referenceImages || [];
         
-        // Clean up customColors if it's empty to avoid validation errors
-        if (customTemplate.colorMode === "custom" && 
-            (!customTemplate.customColors?.colors || customTemplate.customColors.colors.length === 0)) {
-          customTemplate.customColors = undefined;
-        }
+        // Normalize template to clean up empty customColors
+        customTemplate = normalizeTemplateColors(loadedTemplate);
         
         console.log(`Using custom template for style: ${data.styleId} with ${templateReferenceImages.length} reference images`);
       }

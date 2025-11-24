@@ -28,6 +28,7 @@ import {
 import type { StylePreset, Color } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { ColorPaletteManager } from "@/components/ColorPaletteManager";
+import { normalizeTemplateColors } from "@/lib/templateUtils";
 
 interface ImageReference {
   id: string;
@@ -172,7 +173,8 @@ export default function PromptEditor() {
       if (saved) {
         try {
           const loadedTemplate = JSON.parse(saved);
-          setTemplate(loadedTemplate);
+          // Normalize template to clean up any legacy empty customColors
+          setTemplate(normalizeTemplateColors(loadedTemplate));
           // Convert old string array to ImageReference array for backward compatibility
           const images = (loadedTemplate.referenceImages || []).map((item: any) => {
             if (typeof item === 'string') {
@@ -184,18 +186,18 @@ export default function PromptEditor() {
         } catch (e) {
           console.error("Failed to load saved template:", e);
           // Set default template with style label as name
-          setTemplate({
+          setTemplate(normalizeTemplateColors({
             ...DEFAULT_TEMPLATE,
             name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
-          });
+          }));
           setReferenceImages([]);
         }
       } else {
         // Set default template with style label as name
-        setTemplate({
+        setTemplate(normalizeTemplateColors({
           ...DEFAULT_TEMPLATE,
           name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
-        });
+        }));
         // Clear existing reference images first, then load local ones
         setReferenceImages([]);
         loadLocalReferenceImages(selectedStyleId);
@@ -589,15 +591,8 @@ export default function PromptEditor() {
       return;
     }
     
-    // Clean up customColors if it's empty
-    let cleanedTemplate = { ...template };
-    if (cleanedTemplate.colorMode === "custom" && 
-        (!cleanedTemplate.customColors?.colors || cleanedTemplate.customColors.colors.length === 0)) {
-      cleanedTemplate.customColors = undefined;
-    }
-    
     const templateToSave = {
-      ...cleanedTemplate,
+      ...normalizeTemplateColors(template),
       referenceImages,
     };
     
@@ -1157,12 +1152,13 @@ export default function PromptEditor() {
                       <div className="space-y-4 pl-6">
                         <ColorPaletteManager
                           colors={template.customColors?.colors || []}
-                          onColorsChange={(colors) =>
-                            setTemplate({
+                          onColorsChange={(colors) => {
+                            const updatedTemplate = {
                               ...template,
                               customColors: { ...template.customColors, colors },
-                            })
-                          }
+                            };
+                            setTemplate(normalizeTemplateColors(updatedTemplate));
+                          }}
                         />
                       </div>
                     )}
