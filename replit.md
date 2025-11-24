@@ -20,6 +20,25 @@ The project's ambition is to provide a user-friendly and powerful tool for creat
 
 ## Recent Changes
 
+### November 24, 2025 - On-Demand Reference Image Upload
+-   **Issue**: All images in `client/public/reference-images/` were uploaded to KIE at server startup, including deleted images
+    -   User deleted images in Prompt Editor but files remained in file system
+    -   Deleted images were still uploaded to KIE on every server restart
+    -   Wasted KIE API quota and storage
+-   **Root Cause**: `initializeReferenceImages` automatically uploaded all files in reference-images folders at startup
+-   **Solution**: Implemented on-demand upload system with Promise-based caching
+    -   Created `uploadImageOnDemand(path, styleId)` with in-memory Promise cache
+    -   Created `getStyleReferenceImagePaths(styleId)` to scan file system on each generation
+    -   Updated `/api/generate` to upload template and style preset images only when needed
+    -   Promise cache prevents duplicate uploads during concurrent requests
+    -   Failed uploads clear cache to allow retry
+    -   Path normalization removes leading slash before joining
+-   **Result**: Images only uploaded when actually used in generation
+    -   Server startup: No uploads, faster boot time
+    -   Deleted images: Never uploaded to KIE
+    -   Cached images: Reused across requests
+    -   Concurrent requests: Share same upload Promise, no duplicates
+
 ### November 24, 2025 - Duplicate Reference Images Fix
 -   **Issue**: Same reference images were sent twice to KIE API (8 for nanobanana, 4 for seedream)
     -   Template reference images: 1.png, 2.png, 3.png
