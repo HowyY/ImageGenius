@@ -464,6 +464,33 @@ function getAllReferenceImageUrls(styleId: string): string[] {
   return [DEFAULT_REFERENCE_IMAGE];
 }
 
+function convertRelativePathToUrl(path: string, styleId: string): string {
+  // If already a full URL, return as-is
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  // Extract filename from relative path
+  // Example: /reference-images/cyan_sketchline_vector/1.png -> 1.png
+  const fileName = path.split('/').pop();
+  if (!fileName) {
+    console.warn(`Invalid path format: ${path}`);
+    return path;
+  }
+
+  // Find matching uploaded URL by filename
+  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
+  if (uploadedStyle) {
+    const matchingUrl = uploadedStyle.imageUrls.find((url) => url.endsWith(fileName));
+    if (matchingUrl) {
+      return matchingUrl;
+    }
+  }
+
+  console.warn(`Could not find uploaded URL for: ${path}, using as-is`);
+  return path;
+}
+
 async function initializeReferenceImages() {
   try {
     const referenceImagesPath = join(__dirname, "..", "client", "public", "reference-images");
@@ -551,9 +578,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls.push(...userReferenceImages);
       }
       
-      // Add template reference images if exists
+      // Add template reference images if exists (convert relative paths to full URLs)
       if (templateReferenceImages && templateReferenceImages.length > 0) {
-        imageUrls.push(...templateReferenceImages);
+        const convertedUrls = templateReferenceImages.map(path => 
+          convertRelativePathToUrl(path, styleId)
+        );
+        imageUrls.push(...convertedUrls);
       }
       
       // Add style preset reference images
