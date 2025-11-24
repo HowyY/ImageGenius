@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, Plus } from "lucide-react";
+import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, Plus, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
@@ -43,6 +43,7 @@ export default function Home() {
   const [referenceImagesKey, setReferenceImagesKey] = useState(0);
   const [userRefCount, setUserRefCount] = useState(0);
   const { toast, dismiss } = useToast();
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const form = useForm<GenerateRequest>({
     resolver: zodResolver(generateRequestSchema),
@@ -200,10 +201,40 @@ export default function Home() {
                   name="prompt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel data-testid="label-prompt">Describe your image</FormLabel>
+                      <div className="flex items-center justify-between gap-2">
+                        <FormLabel data-testid="label-prompt">Describe your image</FormLabel>
+                        {field.value && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  field.onChange("");
+                                  toast({
+                                    description: "Prompt cleared",
+                                  });
+                                  setTimeout(() => {
+                                    promptTextareaRef.current?.focus();
+                                  }, 0);
+                                }}
+                                className="h-auto p-1"
+                                data-testid="button-clear-prompt"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Clear prompt
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                       <FormControl>
                         <Textarea
                           {...field}
+                          ref={promptTextareaRef}
                           data-testid="input-prompt"
                           placeholder="A serene mountain landscape at sunset, with snow-capped peaks reflecting golden light..."
                           className="min-h-32 resize-none text-base"
