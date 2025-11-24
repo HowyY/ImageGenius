@@ -20,6 +20,19 @@ The project's ambition is to provide a user-friendly and powerful tool for creat
 
 ## Recent Changes
 
+### November 24, 2025 - Cross-Domain State Consistency Fix
+-   **Issue**: Dev webview and browser showed different data due to localStorage domain isolation
+    -   Style Preset not auto-selecting in dev webview
+    -   Last generated image showing different images between dev webview and external browser
+-   **Root Cause**: localStorage is domain-specific (replit.dev vs external URL)
+-   **Solution**: 
+    -   Replaced localStorage-based `lastGeneratedImageUrl` with database query
+    -   Added useQuery for `/api/history` to get latest generated image
+    -   Added auto-selection logic for first style when not locked and no style is currently selected
+-   **Result**: Both dev webview and browser now show consistent data
+    -   Same generated image displayed regardless of access URL
+    -   Style Preset auto-selects first option on load
+
 ### November 24, 2025 - Template Storage Migration to PostgreSQL Database
 -   **Issue**: Template data stored in browser localStorage caused cross-domain sync issues
     -   Templates saved on replit.dev domain couldn't be accessed from external URLs
@@ -101,8 +114,8 @@ The backend is an **Express.js** application running on **Node.js** with **TypeS
     -   All data defined by Drizzle ORM schemas in `shared/schema.ts`
 -   **Client-Side Persistence**: **localStorage** is used for user preferences like:
     -   Style lock status
-    -   Last generated image URL
-    -   Note: Template data is now stored in PostgreSQL instead of localStorage
+    -   User-selected reference images for generation
+    -   Note: Template data and last generated image are now fetched from PostgreSQL instead of localStorage for cross-domain consistency
 -   **Reference Image Storage**: The **KIE File Upload API** is used to store reference images:
     -   Images uploaded on-demand only when used in generation
     -   Provides temporary URLs for API requests
