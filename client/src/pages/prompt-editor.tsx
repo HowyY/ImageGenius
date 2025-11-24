@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Save, Eye, Copy, RotateCcw } from "lucide-react";
+import { Save, Eye, Copy, RotateCcw, Palette } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { StylePreset } from "@shared/schema";
 
 interface PromptTemplate {
   name: string;
@@ -104,21 +112,39 @@ const DEFAULT_TEMPLATE: PromptTemplate = {
 };
 
 export default function PromptEditor() {
+  const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [template, setTemplate] = useState<PromptTemplate>(DEFAULT_TEMPLATE);
   const [previewPrompt, setPreviewPrompt] = useState("");
   const { toast } = useToast();
 
+  const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
+    queryKey: ["/api/styles"],
+  });
+
   useEffect(() => {
-    // Load saved template from localStorage
-    const saved = localStorage.getItem("customPromptTemplate");
-    if (saved) {
-      try {
-        setTemplate(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load saved template:", e);
+    // Load the first style by default
+    if (styles && styles.length > 0 && !selectedStyleId) {
+      setSelectedStyleId(styles[0].id);
+    }
+  }, [styles]);
+
+  useEffect(() => {
+    // Load saved template for selected style
+    if (selectedStyleId) {
+      const storageKey = `promptTemplate_${selectedStyleId}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          setTemplate(JSON.parse(saved));
+        } catch (e) {
+          console.error("Failed to load saved template:", e);
+          setTemplate(DEFAULT_TEMPLATE);
+        }
+      } else {
+        setTemplate(DEFAULT_TEMPLATE);
       }
     }
-  }, []);
+  }, [selectedStyleId]);
 
   useEffect(() => {
     // Generate preview
@@ -175,10 +201,22 @@ export default function PromptEditor() {
   };
 
   const handleSave = () => {
-    localStorage.setItem("customPromptTemplate", JSON.stringify(template));
+    if (!selectedStyleId) {
+      toast({
+        title: "No style selected",
+        description: "Please select a style first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const storageKey = `promptTemplate_${selectedStyleId}`;
+    localStorage.setItem(storageKey, JSON.stringify(template));
+    
+    const selectedStyle = styles?.find(s => s.id === selectedStyleId);
     toast({
       title: "Template saved",
-      description: "Your custom prompt template has been saved successfully.",
+      description: `Template for ${selectedStyle?.label || selectedStyleId} has been saved.`,
     });
   };
 
@@ -204,9 +242,39 @@ export default function PromptEditor() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Prompt Template Editor</h1>
           <p className="text-muted-foreground mt-2">
-            Customize your prompt template to fine-tune image generation
+            Customize prompt templates for each style preset (Admin Only)
           </p>
         </div>
+
+        <Card className="p-6 mb-6">
+          <div className="flex items-center gap-4">
+            <Palette className="w-5 h-5 text-primary" />
+            <div className="flex-1">
+              <Label htmlFor="style-select" className="text-base font-semibold">
+                Select Style to Edit
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Each style can have its own custom template
+              </p>
+            </div>
+            <Select
+              value={selectedStyleId}
+              onValueChange={setSelectedStyleId}
+              disabled={stylesLoading}
+            >
+              <SelectTrigger id="style-select" className="w-[280px]">
+                <SelectValue placeholder={stylesLoading ? "Loading..." : "Select a style"} />
+              </SelectTrigger>
+              <SelectContent>
+                {styles?.map((style) => (
+                  <SelectItem key={style.id} value={style.id}>
+                    {style.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Editor Panel */}

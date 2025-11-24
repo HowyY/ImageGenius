@@ -111,12 +111,14 @@ export default function Home() {
   const onSubmit = (data: GenerateRequest) => {
     const userReferenceImages = getUserReferenceImages();
     
-    // Load custom template from localStorage if exists
+    // Load style-specific custom template from localStorage if exists
     let customTemplate = undefined;
     try {
-      const savedTemplate = localStorage.getItem("customPromptTemplate");
+      const storageKey = `promptTemplate_${data.styleId}`;
+      const savedTemplate = localStorage.getItem(storageKey);
       if (savedTemplate) {
         customTemplate = JSON.parse(savedTemplate);
+        console.log(`Using custom template for style: ${data.styleId}`);
       }
     } catch (e) {
       console.error("Failed to load custom template:", e);

@@ -496,6 +496,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hasUserReference = !!(userReferenceImages && userReferenceImages.length > 0);
+      
+      // Use customTemplate if provided, otherwise use default
       const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, customTemplate);
 
       // Build image URLs array with priority order:
