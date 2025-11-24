@@ -38,6 +38,7 @@ export class MemStorage implements IStorage {
         referenceImageUrl: data.referenceImageUrl,
         generatedImageUrl: data.generatedImageUrl,
         userReferenceUrls: data.userReferenceUrls,
+        allReferenceImageUrls: data.allReferenceImageUrls,
       })
       .returning();
     return result;

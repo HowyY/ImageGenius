@@ -722,6 +722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           finalPrompt,
           referenceImageUrl: selectedStyle.referenceImageUrl,
           userReferenceUrls: userReferenceImages || undefined,
+          allReferenceImageUrls: imageUrls.length > 0 ? imageUrls : undefined,
           generatedImageUrl: imageUrl,
         });
         historyId = savedHistory.id;

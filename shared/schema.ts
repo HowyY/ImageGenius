@@ -12,6 +12,7 @@ export const generationHistory = pgTable("generation_history", {
   referenceImageUrl: text("reference_image_url").notNull(),
   generatedImageUrl: text("generated_image_url").notNull(),
   userReferenceUrls: text("user_reference_urls").array(),
+  allReferenceImageUrls: text("all_reference_image_urls").array(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -26,6 +27,7 @@ export const insertGenerationHistorySchema = z.object({
   referenceImageUrl: z.string().url(),
   generatedImageUrl: z.string().url(),
   userReferenceUrls: z.array(z.string().url()).max(3).optional(),
+  allReferenceImageUrls: z.array(z.string().url()).optional(),
 });
 
 export type InsertGenerationHistory = z.infer<typeof insertGenerationHistorySchema>;

@@ -4,17 +4,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Sparkles, Image as ImageIcon, Plus, Check, Copy } from "lucide-react";
+import { Clock, Sparkles, Image as ImageIcon, Plus, Check, Copy, Info } from "lucide-react";
 import type { SelectGenerationHistory } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { addUserReferenceImage, getUserReferenceImages } from "@/lib/generationState";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function History() {
   const [userRefCount, setUserRefCount] = useState(0);
   const [userRefUrls, setUserRefUrls] = useState<Set<string>>(new Set());
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<SelectGenerationHistory | null>(null);
   const { toast } = useToast();
   
   const { data: history, isLoading } = useQuery<SelectGenerationHistory[]>({
@@ -61,6 +71,11 @@ export default function History() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleViewDetails = (item: SelectGenerationHistory) => {
+    setSelectedItem(item);
+    setDetailsOpen(true);
   };
 
   return (
@@ -177,6 +192,15 @@ export default function History() {
                       Copy Prompt
                     </Button>
                     <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleViewDetails(item)}
+                      data-testid={`button-view-details-${item.id}`}
+                    >
+                      <Info className="w-4 h-4 mr-2" />
+                      View Request Details
+                    </Button>
+                    <Button
                       variant="ghost"
                       size="sm"
                       asChild
@@ -198,6 +222,100 @@ export default function History() {
           </div>
         )}
       </div>
+
+      {/* Request Details Dialog */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>KIE API Request Details</DialogTitle>
+            <DialogDescription>
+              Complete information sent to KIE for this generation
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedItem && (
+            <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
+              <div className="space-y-6">
+                {/* Basic Info */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">GENERATION INFO</h3>
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-md">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Engine</p>
+                      <p className="font-medium">{selectedItem.engine}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Style</p>
+                      <p className="font-medium">{selectedItem.styleLabel}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs text-muted-foreground">User Prompt</p>
+                      <p className="font-medium">{selectedItem.prompt}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reference Images Sent to KIE */}
+                {selectedItem.allReferenceImageUrls && selectedItem.allReferenceImageUrls.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm text-muted-foreground">
+                      REFERENCE IMAGES SENT TO KIE ({selectedItem.allReferenceImageUrls.length} total)
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {selectedItem.allReferenceImageUrls.map((url, idx) => (
+                        <div key={idx} className="space-y-2">
+                          <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
+                            <ImageWithFallback
+                              src={url}
+                              alt={`Reference ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              fallbackText="Failed to load"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium">Reference #{idx + 1}</p>
+                            <p className="text-xs text-muted-foreground break-all line-clamp-2">
+                              {url}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Full Prompt Sent to KIE */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">FULL PROMPT SENT TO KIE</h3>
+                  <div className="p-4 bg-muted/50 rounded-md">
+                    <pre className="text-xs whitespace-pre-wrap font-mono">
+                      {selectedItem.finalPrompt}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* Generated Result */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">GENERATED RESULT</h3>
+                  <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
+                    <ImageWithFallback
+                      src={selectedItem.generatedImageUrl}
+                      alt="Generated result"
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                      fallbackText="Failed to load"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground break-all">
+                    {selectedItem.generatedImageUrl}
+                  </p>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
