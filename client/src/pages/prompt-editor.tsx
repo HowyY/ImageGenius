@@ -135,7 +135,10 @@ export default function PromptEditor() {
 
   useEffect(() => {
     // Load saved template for selected style
-    if (selectedStyleId) {
+    if (selectedStyleId && styles) {
+      // Find the selected style to get its label
+      const selectedStyle = styles.find(s => s.id === selectedStyleId);
+      
       const storageKey = `promptTemplate_${selectedStyleId}`;
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -145,16 +148,25 @@ export default function PromptEditor() {
           setReferenceImages(loadedTemplate.referenceImages || []);
         } catch (e) {
           console.error("Failed to load saved template:", e);
-          setTemplate(DEFAULT_TEMPLATE);
+          // Set default template with style label as name
+          setTemplate({
+            ...DEFAULT_TEMPLATE,
+            name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
+          });
           setReferenceImages([]);
         }
       } else {
-        setTemplate(DEFAULT_TEMPLATE);
-        // Load local reference images from public folder
+        // Set default template with style label as name
+        setTemplate({
+          ...DEFAULT_TEMPLATE,
+          name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
+        });
+        // Clear existing reference images first, then load local ones
+        setReferenceImages([]);
         loadLocalReferenceImages(selectedStyleId);
       }
     }
-  }, [selectedStyleId]);
+  }, [selectedStyleId, styles]);
 
   const loadLocalReferenceImages = async (styleId: string) => {
     try {
@@ -400,7 +412,15 @@ export default function PromptEditor() {
   };
 
   const handleReset = () => {
-    setTemplate(DEFAULT_TEMPLATE);
+    // Find the selected style to get its label
+    const selectedStyle = styles?.find(s => s.id === selectedStyleId);
+    
+    // Reset to default template with style-specific name
+    setTemplate({
+      ...DEFAULT_TEMPLATE,
+      name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
+    });
+    
     toast({
       title: "Template reset",
       description: "Template has been reset to default values.",
