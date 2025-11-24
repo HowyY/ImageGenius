@@ -20,6 +20,26 @@ The project's ambition is to provide a user-friendly and powerful tool for creat
 
 ## Recent Changes
 
+### November 24, 2025 - Template Storage Migration to PostgreSQL Database
+-   **Issue**: Template data stored in browser localStorage caused cross-domain sync issues
+    -   Templates saved on replit.dev domain couldn't be accessed from external URLs
+    -   Different browser sessions had isolated template storage
+    -   No centralized template management for admin users
+-   **Root Cause**: localStorage is domain-specific and browser-specific, preventing cross-domain template sharing
+-   **Solution**: Migrated template storage from localStorage to PostgreSQL database
+    -   Created `prompt_templates` table with jsonb storage for template configurations
+    -   Added `getTemplate(styleId)` and `saveTemplate(styleId, data)` methods to storage interface
+    -   Implemented API endpoints: GET/POST `/api/templates/:styleId`
+    -   Updated Prompt Editor frontend to use React Query (useQuery/useMutation) instead of localStorage
+    -   Created seed script (`server/seed-templates.ts`) to populate default templates
+    -   Added template merging logic to ensure all required fields exist when loading from database
+    -   Added loading state to prevent rendering before template data is loaded
+-   **Result**: Templates now persist across domains and browser sessions
+    -   All users see the same templates regardless of access URL
+    -   Template changes sync immediately across all sessions
+    -   Admin can manage templates centrally via database
+    -   Backward compatible: defaults to DEFAULT_TEMPLATE if no saved template exists
+
 ### November 24, 2025 - On-Demand Reference Image Upload
 -   **Issue**: All images in `client/public/reference-images/` were uploaded to KIE at server startup, including deleted images
     -   User deleted images in Prompt Editor but files remained in file system
@@ -75,9 +95,18 @@ The backend is an **Express.js** application running on **Node.js** with **TypeS
 
 ### Data Storage Solutions
 
--   **Active Database**: **PostgreSQL** (Neon) stores generation history, defined by Drizzle ORM schemas.
--   **Client-Side Persistence**: **localStorage** is used for user preferences like style lock status, user-selected reference images, and the last generated image URL.
--   **Reference Image Storage**: The **KIE File Upload API** is used to store reference images, uploading them from `client/public/reference-images/` at server startup and providing temporary URLs.
+-   **Active Database**: **PostgreSQL** (Neon) stores:
+    -   Generation history (images, prompts, reference URLs)
+    -   Prompt templates (template configurations and reference image paths)
+    -   All data defined by Drizzle ORM schemas in `shared/schema.ts`
+-   **Client-Side Persistence**: **localStorage** is used for user preferences like:
+    -   Style lock status
+    -   Last generated image URL
+    -   Note: Template data is now stored in PostgreSQL instead of localStorage
+-   **Reference Image Storage**: The **KIE File Upload API** is used to store reference images:
+    -   Images uploaded on-demand only when used in generation
+    -   Provides temporary URLs for API requests
+    -   Promise-based caching prevents duplicate uploads
 
 ### Authentication and Authorization
 
