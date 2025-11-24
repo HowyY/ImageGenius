@@ -150,42 +150,10 @@ export default function PromptEditor() {
         }
       } else {
         setTemplate(DEFAULT_TEMPLATE);
-        // Load local reference images from public folder
-        loadLocalReferenceImages(selectedStyleId);
+        setReferenceImages([]);
       }
     }
   }, [selectedStyleId]);
-
-  const loadLocalReferenceImages = async (styleId: string) => {
-    try {
-      const basePath = `/reference-images/${styleId}`;
-      const imageExtensions = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
-      const localImages: string[] = [];
-      
-      // Try to load images with common naming patterns (1.png, 2.png, etc.)
-      for (let i = 1; i <= 10; i++) {
-        for (const ext of imageExtensions) {
-          const imagePath = `${basePath}/${i}.${ext}`;
-          try {
-            const response = await fetch(imagePath, { method: 'HEAD' });
-            if (response.ok) {
-              localImages.push(imagePath);
-              break; // Found this number, move to next
-            }
-          } catch {
-            // Image doesn't exist, continue
-          }
-        }
-      }
-      
-      if (localImages.length > 0) {
-        setReferenceImages(localImages);
-        console.log(`Loaded ${localImages.length} local reference images for ${styleId}`);
-      }
-    } catch (error) {
-      console.error("Failed to load local reference images:", error);
-    }
-  };
 
   useEffect(() => {
     // Generate preview
