@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { z } from "zod";
 import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
 import { storage } from "./storage";
-import { uploadReferenceImages, type StyleImageMapping } from "./services/fileUpload";
+import { uploadReferenceImages, uploadFileToKIE, type StyleImageMapping } from "./services/fileUpload";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -591,6 +591,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to fetch generation history",
+      });
+    }
+  });
+
+  app.post("/api/upload-reference-image", async (req, res) => {
+    try {
+      const { styleId, imageBase64, fileName } = req.body;
+
+      if (!styleId || !imageBase64 || !fileName) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "styleId, imageBase64, and fileName are required",
+        });
+      }
+
+      // Validate styleId exists
+      const styleExists = STYLE_PRESETS.some((s) => s.id === styleId);
+      if (!styleExists) {
+        return res.status(400).json({
+          error: "Invalid styleId",
+          message: `Style '${styleId}' does not exist`,
+        });
+      }
+
+      // Create directory if it doesn't exist
+      const { mkdirSync, writeFileSync, existsSync } = await import("fs");
+      const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
+      
+      if (!existsSync(styleDir)) {
+        mkdirSync(styleDir, { recursive: true });
+      }
+
+      // Convert base64 to buffer and save
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+      const filePath = join(styleDir, fileName);
+      writeFileSync(filePath, buffer);
+
+      // Upload to KIE
+      const uploaded = await uploadFileToKIE(filePath, `reference-images/${styleId}`, fileName);
+
+      // Update uploadedReferenceImages cache
+      const existingStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
+      if (existingStyle) {
+        existingStyle.imageUrls.push(uploaded.fileUrl);
+      } else {
+        uploadedReferenceImages.push({
+          styleId,
+          imageUrls: [uploaded.fileUrl],
+        });
+      }
+
+      // Update style preset reference URL if it's the first image
+      const preset = STYLE_PRESETS.find((p) => p.id === styleId);
+      if (preset && preset.referenceImageUrl === DEFAULT_REFERENCE_IMAGE) {
+        preset.referenceImageUrl = uploaded.fileUrl;
+      }
+
+      console.log(`✓ Saved and uploaded reference image: ${styleId}/${fileName}`);
+
+      res.json({
+        success: true,
+        localPath: `/reference-images/${styleId}/${fileName}`,
+        kieUrl: uploaded.fileUrl,
+      });
+    } catch (error) {
+      console.error("Error uploading reference image:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to upload reference image",
       });
     }
   });

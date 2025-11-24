@@ -241,18 +241,70 @@ export default function PromptEditor() {
     setPreviewPrompt(prompt);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const imageUrl = event.target?.result as string;
-        setReferenceImages((prev) => [...prev, imageUrl]);
-      };
-      reader.readAsDataURL(file);
+    if (!selectedStyleId) {
+      toast({
+        title: "No style selected",
+        description: "Please select a style before uploading images.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const uploadPromises = Array.from(files).map(async (file) => {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const imageBase64 = event.target?.result as string;
+          
+          try {
+            // Upload to server
+            const response = await fetch("/api/upload-reference-image", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                styleId: selectedStyleId,
+                imageBase64,
+                fileName: file.name,
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error("Failed to upload image");
+            }
+
+            const result = await response.json();
+            resolve(result.localPath); // Return local path like /reference-images/cyan_sketchline_vector/1.png
+          } catch (error) {
+            console.error("Upload error:", error);
+            reject(error);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     });
+
+    try {
+      const uploadedPaths = await Promise.all(uploadPromises);
+      setReferenceImages((prev) => [...prev, ...uploadedPaths]);
+      
+      toast({
+        title: "Images uploaded",
+        description: `Successfully uploaded ${uploadedPaths.length} image(s) to ${selectedStyleId}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload one or more images",
+        variant: "destructive",
+      });
+    }
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
