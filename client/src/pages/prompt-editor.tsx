@@ -1,7 +1,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,6 +156,20 @@ export default function PromptEditor() {
     queryKey: ["/api/styles"],
   });
 
+  // Load template from database
+  const { data: savedTemplate, isLoading: templateLoading } = useQuery<{
+    id: number;
+    styleId: string;
+    templateData: any;
+    referenceImages: string[];
+    createdAt: Date;
+    updatedAt: Date;
+  } | null>({
+    queryKey: ["/api/templates", selectedStyleId],
+    enabled: !!selectedStyleId,
+    retry: false,
+  });
+
   useEffect(() => {
     // Load the first style by default
     if (styles && styles.length > 0 && !selectedStyleId) {
@@ -163,24 +178,19 @@ export default function PromptEditor() {
   }, [styles, selectedStyleId]);
 
   useEffect(() => {
-    // Load saved template for selected style
-    if (selectedStyleId && styles) {
+    // Load template when selectedStyleId changes or template data arrives
+    if (selectedStyleId && styles && !templateLoading) {
       // Find the selected style to get its label
       const selectedStyle = styles.find(s => s.id === selectedStyleId);
       
-      const storageKey = `promptTemplate_${selectedStyleId}`;
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
+      if (savedTemplate && savedTemplate.templateData) {
         try {
-          const loadedTemplate = JSON.parse(saved);
+          const loadedTemplate = savedTemplate.templateData;
           // Normalize template to clean up any legacy empty customColors
           setTemplate(normalizeTemplateColors(loadedTemplate));
-          // Convert old string array to ImageReference array for backward compatibility
-          const images = (loadedTemplate.referenceImages || []).map((item: any) => {
-            if (typeof item === 'string') {
-              return { id: crypto.randomUUID(), url: item };
-            }
-            return item;
+          // Convert reference image paths to ImageReference array
+          const images = (savedTemplate.referenceImages || []).map((path: string) => {
+            return { id: crypto.randomUUID(), url: path };
           });
           setReferenceImages(images);
         } catch (e) {
@@ -193,7 +203,7 @@ export default function PromptEditor() {
           setReferenceImages([]);
         }
       } else {
-        // Set default template with style label as name
+        // No saved template, use default and load local reference images
         setTemplate(normalizeTemplateColors({
           ...DEFAULT_TEMPLATE,
           name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
@@ -203,7 +213,7 @@ export default function PromptEditor() {
         loadLocalReferenceImages(selectedStyleId);
       }
     }
-  }, [selectedStyleId, styles]);
+  }, [selectedStyleId, styles, savedTemplate, templateLoading]);
 
   const loadLocalReferenceImages = async (styleId: string) => {
     setIsLoadingImages(true);
@@ -581,6 +591,32 @@ export default function PromptEditor() {
     isDraggingTouch.current = false;
   };
 
+  // Mutation for saving template
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (data: { styleId: string; templateData: any; referenceImages: string[] }) => {
+      return apiRequest("POST", `/api/templates/${data.styleId}`, {
+        templateData: data.templateData,
+        referenceImages: data.referenceImages,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates", selectedStyleId] });
+      const selectedStyle = styles?.find(s => s.id === selectedStyleId);
+      toast({
+        title: "Template saved",
+        description: `Template for ${selectedStyle?.label || selectedStyleId} has been saved with ${referenceImages.length} reference images.`,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to save template:", error);
+      toast({
+        title: "Save failed",
+        description: "Failed to save template. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSave = () => {
     if (!selectedStyleId) {
       toast({
@@ -591,18 +627,13 @@ export default function PromptEditor() {
       return;
     }
     
-    const templateToSave = {
-      ...normalizeTemplateColors(template),
-      referenceImages,
-    };
+    const templateDataToSave = normalizeTemplateColors(template);
+    const referenceImagePaths = referenceImages.map(img => img.url);
     
-    const storageKey = `promptTemplate_${selectedStyleId}`;
-    localStorage.setItem(storageKey, JSON.stringify(templateToSave));
-    
-    const selectedStyle = styles?.find(s => s.id === selectedStyleId);
-    toast({
-      title: "Template saved",
-      description: `Template for ${selectedStyle?.label || selectedStyleId} has been saved with ${referenceImages.length} reference images.`,
+    saveTemplateMutation.mutate({
+      styleId: selectedStyleId,
+      templateData: templateDataToSave,
+      referenceImages: referenceImagePaths,
     });
   };
 
