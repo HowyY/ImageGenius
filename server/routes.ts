@@ -101,6 +101,24 @@ const STYLE_PRESETS: Array<
       "minimalist abstract art, geometric shapes, limited color palette, clean composition, negative space, modern art, simple forms",
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
+  {
+    id: "simple_cyan_test",
+    label: "Simple Cyan (Test)",
+    description: "Test style using simple concatenation template - same cyan vector look with minimal prompt structure",
+    engines: ["nanobanana", "seedream"],
+    basePrompt:
+      "clean sketch-style vector line art, hand-drawn navy outlines on bright white space, subtle cyan-to-blue gradients, financial illustration vibe, minimalist details, flat color, high quality",
+    defaultColors: {
+      name: "Cyan & Navy Palette",
+      colors: [
+        { name: "Navy Blue", hex: "#1E3A8A", role: "outlines" },
+        { name: "Cyan", hex: "#06B6D4", role: "fills" },
+        { name: "Light Cyan", hex: "#22D3EE", role: "highlights" },
+        { name: "White", hex: "#FFFFFF", role: "background" },
+      ],
+    },
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+  },
 ];
 
 const KIE_BASE_URL = "https://api.kie.ai/api/v1";
@@ -177,12 +195,38 @@ function buildPrompt(
 ${NEGATIVE_PROMPT}`.trim();
 }
 
+// Simple concatenation template builder
+function buildSimplePrompt(
+  userPrompt: string,
+  style: StylePreset & { basePrompt: string },
+  hasUserReference: boolean,
+  template: any
+): string {
+  const suffix = template.suffix || "white background, 8k resolution";
+  
+  // Simple concatenation: scene, style basePrompt, suffix
+  let prompt = `${userPrompt}, ${style.basePrompt}, ${suffix}`;
+  
+  // Add character lock instruction if user provided reference images
+  if (hasUserReference) {
+    prompt += "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**";
+  }
+  
+  return prompt;
+}
+
 function buildPromptFromTemplate(
   userPrompt: string,
   style: StylePreset & { basePrompt: string },
   hasUserReference: boolean,
   template: any
 ) {
+  // Check if this is a simple template
+  if (template.templateType === "simple") {
+    return buildSimplePrompt(userPrompt, style, hasUserReference, template);
+  }
+  
+  // Structured template (default)
   const characterInstruction = hasUserReference 
     ? "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**\n"
     : "";
@@ -590,8 +634,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hasUserReference = !!(userReferenceImages && userReferenceImages.length > 0);
       
-      // Use customTemplate if provided, otherwise use default
-      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, customTemplate);
+      // Try to load template from database if no customTemplate provided
+      let templateToUse: any = customTemplate;
+      let dbTemplateReferenceImages: string[] = [];
+      
+      if (!templateToUse) {
+        try {
+          const dbTemplate = await storage.getTemplate(styleId);
+          if (dbTemplate && dbTemplate.templateData) {
+            // Cast from jsonb object to any for template processing
+            templateToUse = dbTemplate.templateData as any;
+            dbTemplateReferenceImages = dbTemplate.referenceImages || [];
+            console.log(`Loaded template from database for style: ${styleId}`);
+          }
+        } catch (error) {
+          console.log(`No saved template found for style: ${styleId}, using default`);
+        }
+      }
+      
+      // Use the template (from request, database, or default)
+      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, templateToUse);
 
       // Build image URLs array with priority order:
       // 1. User-selected reference images (highest priority)
@@ -603,10 +665,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls.push(...userReferenceImages);
       }
       
-      // Add template reference images if exists (upload on-demand)
-      if (templateReferenceImages && templateReferenceImages.length > 0) {
-        console.log(`Uploading ${templateReferenceImages.length} template reference images on-demand...`);
-        const uploadPromises = templateReferenceImages.map(async (path) => {
+      // Add template reference images if exists (from request or database)
+      const allTemplateReferenceImages = templateReferenceImages?.length 
+        ? templateReferenceImages 
+        : dbTemplateReferenceImages;
+        
+      if (allTemplateReferenceImages && allTemplateReferenceImages.length > 0) {
+        console.log(`Uploading ${allTemplateReferenceImages.length} template reference images on-demand...`);
+        const uploadPromises = allTemplateReferenceImages.map(async (path) => {
           try {
             // Upload image on-demand (uses cache if already uploaded)
             return await uploadImageOnDemand(path, styleId);

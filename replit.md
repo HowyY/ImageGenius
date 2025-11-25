@@ -20,6 +20,25 @@ The project's ambition is to provide a user-friendly and powerful tool for creat
 
 ## Recent Changes
 
+### November 25, 2025 - Simple Concatenation Template (A/B Testing)
+-   **Purpose**: Added third template type for comparing simple vs structured prompt approaches
+-   **Implementation**:
+    -   Added `templateType` field to schema: "simple" vs "structured" (default)
+    -   Created `simpleTemplateSchema` with just `name`, `templateType`, and `suffix` fields
+    -   Added `buildSimplePrompt()` function: `{userPrompt}, {basePrompt}, {suffix}`
+    -   Created new style preset "Simple Cyan (Test)" using simple template
+    -   Updated `anyTemplateSchema` union type for request validation
+-   **Backend Changes**:
+    -   `/api/generate` now auto-loads templates from PostgreSQL database
+    -   No longer requires `customTemplate` in request body
+    -   Database templates and reference images used automatically per style
+-   **Frontend Changes**:
+    -   Prompt Editor shows different UI for simple vs structured templates
+    -   Simple template: Sparkles icon, suffix input only
+    -   Structured template: Full tabs (Camera, Environment, Character, Colors)
+    -   Preview correctly shows simple format when templateType is "simple"
+-   **Result**: Can A/B test simple concatenation (`{scene}, {style}, white background, 8k`) vs structured prompt format
+
 ### November 25, 2025 - Prompt Editor Preview Sync with Backend
 -   **Issue**: Editor preview showed raw template placeholders instead of actual values sent to KIE API
     -   Preview displayed `{userPrompt}`, `[Scene description]`, `match style tone` etc.

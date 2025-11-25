@@ -17,7 +17,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon, Maximize2 } from "lucide-react";
+import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon, Maximize2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -186,38 +186,45 @@ export default function PromptEditor() {
       if (savedTemplate && savedTemplate.templateData) {
         try {
           const loadedTemplate = savedTemplate.templateData;
-          // Merge with DEFAULT_TEMPLATE to ensure all fields exist
-          const mergedTemplate = {
-            ...DEFAULT_TEMPLATE,
-            ...loadedTemplate,
-            // Merge nested objects properly
-            cameraComposition: {
-              ...DEFAULT_TEMPLATE.cameraComposition,
-              ...(loadedTemplate.cameraComposition || {}),
-            },
-            environment: {
-              ...DEFAULT_TEMPLATE.environment,
-              ...(loadedTemplate.environment || {}),
-            },
-            mainCharacter: {
-              ...DEFAULT_TEMPLATE.mainCharacter,
-              ...(loadedTemplate.mainCharacter || {}),
-            },
-            secondaryObjects: {
-              ...DEFAULT_TEMPLATE.secondaryObjects,
-              ...(loadedTemplate.secondaryObjects || {}),
-            },
-            styleEnforcement: {
-              ...DEFAULT_TEMPLATE.styleEnforcement,
-              ...(loadedTemplate.styleEnforcement || {}),
-            },
-            negativePrompt: {
-              ...DEFAULT_TEMPLATE.negativePrompt,
-              ...(loadedTemplate.negativePrompt || {}),
-            },
-          };
-          // Normalize template to clean up any legacy empty customColors
-          setTemplate(normalizeTemplateColors(mergedTemplate));
+          
+          // Check if this is a simple template - don't merge with structured defaults
+          if (loadedTemplate.templateType === "simple") {
+            // Simple template - preserve its structure as-is
+            setTemplate(loadedTemplate);
+          } else {
+            // Structured template - merge with DEFAULT_TEMPLATE to ensure all fields exist
+            const mergedTemplate = {
+              ...DEFAULT_TEMPLATE,
+              ...loadedTemplate,
+              // Merge nested objects properly
+              cameraComposition: {
+                ...DEFAULT_TEMPLATE.cameraComposition,
+                ...(loadedTemplate.cameraComposition || {}),
+              },
+              environment: {
+                ...DEFAULT_TEMPLATE.environment,
+                ...(loadedTemplate.environment || {}),
+              },
+              mainCharacter: {
+                ...DEFAULT_TEMPLATE.mainCharacter,
+                ...(loadedTemplate.mainCharacter || {}),
+              },
+              secondaryObjects: {
+                ...DEFAULT_TEMPLATE.secondaryObjects,
+                ...(loadedTemplate.secondaryObjects || {}),
+              },
+              styleEnforcement: {
+                ...DEFAULT_TEMPLATE.styleEnforcement,
+                ...(loadedTemplate.styleEnforcement || {}),
+              },
+              negativePrompt: {
+                ...DEFAULT_TEMPLATE.negativePrompt,
+                ...(loadedTemplate.negativePrompt || {}),
+              },
+            };
+            // Normalize template to clean up any legacy empty customColors
+            setTemplate(normalizeTemplateColors(mergedTemplate));
+          }
           // Convert reference image paths to ImageReference array
           const images = (savedTemplate.referenceImages || []).map((path: string) => {
             return { id: crypto.randomUUID(), url: path };
@@ -319,6 +326,15 @@ export default function PromptEditor() {
     // Example user prompt for preview
     const exampleUserPrompt = "{userPrompt}";
     
+    // Check if this is a simple template
+    if ((template as any).templateType === "simple") {
+      const suffix = (template as any).suffix || "white background, 8k resolution";
+      const prompt = `${exampleUserPrompt}, ${styleBasePrompt}, ${suffix}`;
+      setPreviewPrompt(prompt);
+      return;
+    }
+    
+    // Structured template (default)
     let prompt = `PROMPT TEMPLATE\n\n[SCENE — ${exampleUserPrompt}]\n\n`;
 
     if (template.cameraComposition.enabled) {
@@ -916,6 +932,32 @@ export default function PromptEditor() {
 
               <Separator />
 
+              {/* Simple Template UI - only show suffix editor */}
+              {(template as any).templateType === "simple" && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-md">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">Simple Concatenation Template</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    This template uses a simple format: <code className="bg-muted px-1 py-0.5 rounded">{"{scene}, {style}, {suffix}"}</code>
+                  </p>
+                  <div>
+                    <Label>Suffix Keywords</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Added at the end of the prompt (e.g., "white background, 8k resolution")
+                    </p>
+                    <Input
+                      value={(template as any).suffix || "white background, 8k resolution"}
+                      onChange={(e) => setTemplate({ ...template, suffix: e.target.value } as any)}
+                      placeholder="white background, 8k resolution"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Structured Template UI - show full tabs */}
+              {(template as any).templateType !== "simple" && (
               <Tabs defaultValue="camera" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
                   <TabsTrigger value="camera" className="text-xs sm:text-sm">Camera</TabsTrigger>
@@ -1257,6 +1299,7 @@ export default function PromptEditor() {
                   </div>
                 </TabsContent>
               </Tabs>
+              )}
 
               <Separator />
 

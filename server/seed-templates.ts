@@ -141,6 +141,19 @@ const defaultTemplates = [
       "/reference-images/warm_orange_flat/3.png",
     ],
   },
+  {
+    styleId: "simple_cyan_test",
+    templateData: {
+      name: "Simple Cyan (Test)",
+      templateType: "simple",
+      suffix: "white background, 8k resolution",
+    },
+    referenceImages: [
+      "/reference-images/cyan_sketchline_vector/1.png",
+      "/reference-images/cyan_sketchline_vector/2.png",
+      "/reference-images/cyan_sketchline_vector/3.png",
+    ],
+  },
 ];
 
 async function seedTemplates() {

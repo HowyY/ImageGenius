@@ -71,8 +71,16 @@ export const stylePresetSchema = z.object({
   defaultColors: colorPaletteSchema.optional(),
 });
 
+// Simple template schema for concatenation-style prompts
+export const simpleTemplateSchema = z.object({
+  name: z.string(),
+  templateType: z.literal("simple"),
+  suffix: z.string().optional().default("white background, 8k resolution"),
+});
+
 export const promptTemplateSchema = z.object({
   name: z.string(),
+  templateType: z.literal("structured").optional().default("structured"),
   colorMode: z.enum(["default", "custom"]).optional().default("default"),
   customColors: colorPaletteSchema.optional(),
   cameraComposition: z.object({
@@ -114,6 +122,9 @@ export const promptTemplateSchema = z.object({
   }),
 });
 
+// Union of template types for request validation
+export const anyTemplateSchema = z.union([simpleTemplateSchema, promptTemplateSchema]);
+
 export const generateRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
   styleId: z.string().min(1, "Style is required"),
@@ -121,7 +132,7 @@ export const generateRequestSchema = z.object({
     errorMap: () => ({ message: "Engine must be either 'nanobanana' or 'seedream'" }),
   }),
   userReferenceImages: z.array(z.string().url()).max(3).optional(),
-  customTemplate: promptTemplateSchema.optional(),
+  customTemplate: anyTemplateSchema.optional(),
   templateReferenceImages: z.array(z.string()).optional(),
 });
 
@@ -133,6 +144,8 @@ export const generateResponseSchema = z.object({
 export type Color = z.infer<typeof colorSchema>;
 export type ColorPalette = z.infer<typeof colorPaletteSchema>;
 export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
+export type SimpleTemplate = z.infer<typeof simpleTemplateSchema>;
+export type AnyTemplate = PromptTemplate | SimpleTemplate;
 export type StylePreset = z.infer<typeof stylePresetSchema>;
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;
 export type GenerateResponse = z.infer<typeof generateResponseSchema>;
