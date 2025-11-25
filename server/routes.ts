@@ -717,7 +717,7 @@ async function seedBuiltInStyles() {
 }
 
 // Helper function to get style by ID (from database or fallback to static)
-async function getStyleById(styleId: string) {
+async function getStyleById(styleId: string): Promise<(StylePreset & { basePrompt: string; referenceImageUrl: string; isBuiltIn?: boolean }) | undefined> {
   // Try database first
   const dbStyle = await storage.getStyle(styleId);
   if (dbStyle) {
@@ -727,7 +727,7 @@ async function getStyleById(styleId: string) {
       description: dbStyle.description,
       engines: dbStyle.engines,
       basePrompt: dbStyle.basePrompt,
-      defaultColors: dbStyle.defaultColors,
+      defaultColors: dbStyle.defaultColors as StylePreset["defaultColors"],
       referenceImageUrl: dbStyle.referenceImageUrl,
       isBuiltIn: dbStyle.isBuiltIn,
     };

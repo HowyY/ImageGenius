@@ -16,8 +16,21 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogDescription,
+  DialogHeader,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon, Maximize2, Sparkles } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon, Maximize2, Sparkles, Plus, Trash2, ClipboardCopy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -188,8 +201,117 @@ export default function PromptEditor() {
   const isInitialRender = useRef<boolean>(true);
   const { toast } = useToast();
 
-  const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
+  // Extend StylePreset type with isBuiltIn
+  interface ExtendedStylePreset extends StylePreset {
+    isBuiltIn?: boolean;
+  }
+
+  const { data: styles, isLoading: stylesLoading } = useQuery<ExtendedStylePreset[]>({
     queryKey: ["/api/styles"],
+  });
+
+  // Style management state
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showNewStyleDialog, setShowNewStyleDialog] = useState(false);
+  const [cloneNewLabel, setCloneNewLabel] = useState("");
+  const [newStyleLabel, setNewStyleLabel] = useState("");
+  const [newStyleDescription, setNewStyleDescription] = useState("");
+
+  // Get current selected style
+  const selectedStyle = styles?.find(s => s.id === selectedStyleId);
+  const isBuiltInStyle = selectedStyle?.isBuiltIn !== false;
+
+  // Clone style mutation
+  const cloneStyleMutation = useMutation({
+    mutationFn: async ({ sourceId, newLabel }: { sourceId: string; newLabel: string }) => {
+      const newId = newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      return await apiRequest("POST", `/api/styles/${sourceId}/clone`, {
+        newId,
+        newLabel,
+      });
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      const result = await data.json();
+      setSelectedStyleId(result.id);
+      setShowCloneDialog(false);
+      setCloneNewLabel("");
+      toast({
+        title: "Style cloned",
+        description: "New style created successfully. You can now modify it.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Clone failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete style mutation
+  const deleteStyleMutation = useMutation({
+    mutationFn: async (styleId: string) => {
+      return await apiRequest("DELETE", `/api/styles/${styleId}`);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      // Select first available style after deletion
+      if (styles && styles.length > 1) {
+        const firstStyle = styles.find(s => s.id !== selectedStyleId);
+        if (firstStyle) {
+          setSelectedStyleId(firstStyle.id);
+        }
+      }
+      setShowDeleteDialog(false);
+      toast({
+        title: "Style deleted",
+        description: "The style has been deleted successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create new style mutation
+  const createStyleMutation = useMutation({
+    mutationFn: async ({ label, description }: { label: string; description: string }) => {
+      const id = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      return await apiRequest("POST", "/api/styles", {
+        id,
+        label,
+        description,
+        engines: ["nanobanana", "seedream"],
+        basePrompt: "clean vector art style",
+        referenceImageUrl: "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png",
+      });
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      const result = await data.json();
+      setSelectedStyleId(result.id);
+      setShowNewStyleDialog(false);
+      setNewStyleLabel("");
+      setNewStyleDescription("");
+      toast({
+        title: "Style created",
+        description: "New style created successfully. Configure its template now.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Creation failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Load template from database
@@ -891,9 +1013,9 @@ ${negativePrompt}`;
         </div>
 
         <Card className="p-6 mb-6">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <Palette className="w-5 h-5 text-primary" />
-            <div className="flex-1">
+            <div className="flex-1 min-w-[200px]">
               <Label htmlFor="style-select" className="text-base font-semibold">
                 Select Style to Edit
               </Label>
@@ -901,21 +1023,64 @@ ${negativePrompt}`;
                 Each style can have its own custom template
               </p>
             </div>
-            <Select
-              value={selectedStyleId}
-              onValueChange={setSelectedStyleId}
-            >
-              <SelectTrigger id="style-select" className="w-[280px]">
-                <SelectValue placeholder={stylesLoading ? "Loading..." : "Select a style"} />
-              </SelectTrigger>
-              <SelectContent>
-                {styles?.map((style) => (
-                  <SelectItem key={style.id} value={style.id}>
-                    {style.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={selectedStyleId}
+                onValueChange={setSelectedStyleId}
+              >
+                <SelectTrigger id="style-select" className="w-[240px]" data-testid="select-style">
+                  <SelectValue placeholder={stylesLoading ? "Loading..." : "Select a style"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {styles?.map((style) => (
+                    <SelectItem key={style.id} value={style.id} data-testid={`select-style-${style.id}`}>
+                      <div className="flex items-center gap-2">
+                        <span>{style.label}</span>
+                        {style.isBuiltIn === false && (
+                          <span className="text-xs text-muted-foreground">(custom)</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {/* Style management buttons */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowNewStyleDialog(true)}
+                title="Create new style"
+                data-testid="button-new-style"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  setCloneNewLabel(selectedStyle?.label ? `${selectedStyle.label} Copy` : "");
+                  setShowCloneDialog(true);
+                }}
+                disabled={!selectedStyleId}
+                title="Clone this style"
+                data-testid="button-clone-style"
+              >
+                <ClipboardCopy className="w-4 h-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={!selectedStyleId || isBuiltInStyle}
+                title={isBuiltInStyle ? "Cannot delete built-in styles" : "Delete this style"}
+                data-testid="button-delete-style"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -1686,6 +1851,111 @@ ${negativePrompt}`;
               />
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Clone Style Dialog */}
+      <Dialog open={showCloneDialog} onOpenChange={setShowCloneDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clone Style</DialogTitle>
+            <DialogDescription>
+              Create a copy of "{selectedStyle?.label}" that you can modify independently.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="clone-label">New Style Name</Label>
+              <Input
+                id="clone-label"
+                value={cloneNewLabel}
+                onChange={(e) => setCloneNewLabel(e.target.value)}
+                placeholder="Enter name for the cloned style"
+                data-testid="input-clone-label"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCloneDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => cloneStyleMutation.mutate({ sourceId: selectedStyleId, newLabel: cloneNewLabel })}
+              disabled={!cloneNewLabel.trim() || cloneStyleMutation.isPending}
+              data-testid="button-confirm-clone"
+            >
+              {cloneStyleMutation.isPending ? "Cloning..." : "Clone Style"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Style Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Style</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedStyle?.label}"? This will also delete all associated template settings. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteStyleMutation.mutate(selectedStyleId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteStyleMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteStyleMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* New Style Dialog */}
+      <Dialog open={showNewStyleDialog} onOpenChange={setShowNewStyleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Style</DialogTitle>
+            <DialogDescription>
+              Create a new custom style preset with default settings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="new-style-label">Style Name</Label>
+              <Input
+                id="new-style-label"
+                value={newStyleLabel}
+                onChange={(e) => setNewStyleLabel(e.target.value)}
+                placeholder="My Custom Style"
+                data-testid="input-new-style-label"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-style-description">Description</Label>
+              <Input
+                id="new-style-description"
+                value={newStyleDescription}
+                onChange={(e) => setNewStyleDescription(e.target.value)}
+                placeholder="Brief description of the style"
+                data-testid="input-new-style-description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewStyleDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createStyleMutation.mutate({ label: newStyleLabel, description: newStyleDescription || newStyleLabel })}
+              disabled={!newStyleLabel.trim() || createStyleMutation.isPending}
+              data-testid="button-confirm-create"
+            >
+              {createStyleMutation.isPending ? "Creating..." : "Create Style"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
