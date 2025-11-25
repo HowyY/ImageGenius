@@ -196,6 +196,12 @@ export default function PromptEditor() {
     }
   }, [styles, selectedStyleId]);
 
+  // Helper function to generate preview for simple templates immediately
+  const generateSimplePreview = (simpleTemplate: SimpleTemplate, basePrompt: string) => {
+    const suffix = simpleTemplate.suffix || "white background, 8k resolution";
+    return `{userPrompt}, ${basePrompt}, ${suffix}`;
+  };
+
   useEffect(() => {
     // Load template when selectedStyleId changes or template data arrives
     if (selectedStyleId && styles && !templateLoading) {
@@ -210,6 +216,9 @@ export default function PromptEditor() {
           if (loadedTemplate.templateType === "simple") {
             // Simple template - preserve its structure as-is
             setTemplate(loadedTemplate);
+            // Immediately generate simple preview to avoid race condition
+            const basePrompt = selectedStyle?.basePrompt || "style base prompt";
+            setPreviewPrompt(generateSimplePreview(loadedTemplate as SimpleTemplate, basePrompt));
           } else {
             // Structured template - merge with DEFAULT_TEMPLATE to ensure all fields exist
             const mergedTemplate = {
