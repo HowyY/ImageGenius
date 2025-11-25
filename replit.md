@@ -20,6 +20,20 @@ The project's ambition is to provide a user-friendly and powerful tool for creat
 
 ## Recent Changes
 
+### November 25, 2025 - Prompt Editor Preview Sync with Backend
+-   **Issue**: Editor preview showed raw template placeholders instead of actual values sent to KIE API
+    -   Preview displayed `{userPrompt}`, `[Scene description]`, `match style tone` etc.
+    -   Actual KIE request had these replaced with concrete style info
+-   **Solution**: Updated `generatePreview` in prompt-editor.tsx to simulate backend replacement logic
+    -   Added `(styleLabel inspiration)` to composition layout
+    -   Replace `[Scene description]` with userPrompt placeholder
+    -   Replace `match style tone` with `match styleLabel (styleDescription) tone`
+    -   Replace style references with actual basePrompt values
+    -   Added `Apply basePrompt` line in style enforcement section
+    -   Synced color palette handling logic with backend
+    -   Exposed `basePrompt` field via `/api/styles` endpoint
+-   **Result**: Editor preview now accurately reflects what will be sent to KIE API
+
 ### November 24, 2025 - Cross-Domain State Consistency Fix
 -   **Issue**: Dev webview and browser showed different data due to localStorage domain isolation
     -   Style Preset not auto-selecting in dev webview
