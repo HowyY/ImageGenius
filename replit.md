@@ -19,6 +19,25 @@ The frontend is a React 18+ and TypeScript single-page application, built with V
 
 The backend is an Express.js application on Node.js with TypeScript, providing a RESTful API for styles, image generation, and history. All incoming requests are validated using Zod schemas. It supports custom request logging and serves static files. A robust Style Preset System centrally defines visual styles, AI engines, and associated reference images.
 
+### Template System Architecture
+
+The application supports three template types for flexible prompt generation:
+
+1. **Structured Templates** (Default): Complex multi-section templates with Camera & Composition, Environment, Main Character, Secondary Objects, Style Enforcement sections.
+
+2. **Simple Templates**: Basic concatenation templates with a suffix string.
+
+3. **Universal Templates** (V2): Simplified architecture with standardized format:
+   - `styleKeywords`: Core visual descriptors
+   - `defaultPalette`: Default color array
+   - `rules`: Universal style constraints
+   - `negativePrompt`: Elements to avoid
+   - `referenceImages`: Style reference images
+
+The Universal prompt format follows: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
+
+Palette fallback hierarchy: User override → Template default → Style default colors
+
 ### Data Storage Solutions
 
 -   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs) and prompt templates. All data is defined by Drizzle ORM schemas.
