@@ -36,8 +36,9 @@ interface ImageReference {
   url: string;
 }
 
-interface PromptTemplate {
+interface StructuredTemplate {
   name: string;
+  templateType?: "structured";
   referenceImages?: ImageReference[];
   colorMode?: "default" | "custom";
   customColors?: {
@@ -83,8 +84,26 @@ interface PromptTemplate {
   };
 }
 
-const DEFAULT_TEMPLATE: PromptTemplate = {
+interface SimpleTemplate {
+  name: string;
+  templateType: "simple";
+  suffix: string;
+  referenceImages?: ImageReference[];
+}
+
+type PromptTemplate = StructuredTemplate | SimpleTemplate;
+
+function isSimpleTemplate(template: PromptTemplate): template is SimpleTemplate {
+  return (template as SimpleTemplate).templateType === "simple";
+}
+
+function isStructuredTemplate(template: PromptTemplate): template is StructuredTemplate {
+  return !isSimpleTemplate(template);
+}
+
+const DEFAULT_TEMPLATE: StructuredTemplate = {
   name: "Default Template",
+  templateType: "structured",
   colorMode: "default",
   customColors: undefined,
   cameraComposition: {
@@ -326,76 +345,68 @@ export default function PromptEditor() {
     // Example user prompt for preview
     const exampleUserPrompt = "{userPrompt}";
     
-    // Check if this is a simple template
-    if ((template as any).templateType === "simple") {
-      const suffix = (template as any).suffix || "white background, 8k resolution";
+    // Check if this is a simple template using type guard
+    if (isSimpleTemplate(template)) {
+      const suffix = template.suffix || "white background, 8k resolution";
       const prompt = `${exampleUserPrompt}, ${styleBasePrompt}, ${suffix}`;
       setPreviewPrompt(prompt);
       return;
     }
     
-    // Structured template (default)
+    // Structured template - TypeScript now knows template is StructuredTemplate
+    const structuredTemplate = template;
     let prompt = `PROMPT TEMPLATE\n\n[SCENE — ${exampleUserPrompt}]\n\n`;
 
-    if (template.cameraComposition.enabled) {
+    if (structuredTemplate.cameraComposition.enabled) {
       prompt += "1. CAMERA & COMPOSITION\n";
-      prompt += `- Camera angle: ${template.cameraComposition.cameraAngle}\n`;
-      prompt += `- Composition layout: ${template.cameraComposition.compositionLayout} (${styleLabel} inspiration)\n`;
-      prompt += `- Framing: ${template.cameraComposition.framing}\n`;
-      prompt += `- Depth arrangement: ${template.cameraComposition.depthArrangement}\n\n`;
+      prompt += `- Camera angle: ${structuredTemplate.cameraComposition.cameraAngle}\n`;
+      prompt += `- Composition layout: ${structuredTemplate.cameraComposition.compositionLayout} (${styleLabel} inspiration)\n`;
+      prompt += `- Framing: ${structuredTemplate.cameraComposition.framing}\n`;
+      prompt += `- Depth arrangement: ${structuredTemplate.cameraComposition.depthArrangement}\n\n`;
     }
 
-    if (template.environment.enabled) {
+    if (structuredTemplate.environment.enabled) {
       prompt += "2. ENVIRONMENT\n";
-      // Replace placeholder with example
-      const setting = template.environment.setting.replace("[Scene description]", exampleUserPrompt);
+      const setting = structuredTemplate.environment.setting.replace("[Scene description]", exampleUserPrompt);
       prompt += `- Setting: ${setting}\n`;
-      prompt += `- Lighting: ${template.environment.lighting}\n`;
-      // Replace style tone placeholder
-      const atmosphere = template.environment.atmosphere.replace("match style tone", `match ${styleLabel} (${styleDescription}) tone`);
+      prompt += `- Lighting: ${structuredTemplate.environment.lighting}\n`;
+      const atmosphere = structuredTemplate.environment.atmosphere.replace("match style tone", `match ${styleLabel} (${styleDescription}) tone`);
       prompt += `- Atmosphere: ${atmosphere}\n`;
-      prompt += `- Background complexity: ${template.environment.backgroundComplexity}\n\n`;
+      prompt += `- Background complexity: ${structuredTemplate.environment.backgroundComplexity}\n\n`;
     }
 
-    if (template.mainCharacter.enabled) {
+    if (structuredTemplate.mainCharacter.enabled) {
       prompt += "3. MAIN CHARACTER\n";
-      prompt += `- Pose: ${template.mainCharacter.pose}\n`;
-      prompt += `- Expression: ${template.mainCharacter.expression}\n`;
-      prompt += `- Interaction: ${template.mainCharacter.interaction}\n`;
-      // Replace style placeholder
-      const clothing = template.mainCharacter.clothing.replace("match character lock and respect style", `match character lock and respect ${styleBasePrompt}`);
+      prompt += `- Pose: ${structuredTemplate.mainCharacter.pose}\n`;
+      prompt += `- Expression: ${structuredTemplate.mainCharacter.expression}\n`;
+      prompt += `- Interaction: ${structuredTemplate.mainCharacter.interaction}\n`;
+      const clothing = structuredTemplate.mainCharacter.clothing.replace("match character lock and respect style", `match character lock and respect ${styleBasePrompt}`);
       prompt += `- Clothing: ${clothing}\n\n`;
     }
 
-    if (template.secondaryObjects.enabled) {
+    if (structuredTemplate.secondaryObjects.enabled) {
       prompt += "4. SECONDARY OBJECTS & ACTION\n";
-      // Replace style preset placeholder
-      const objects = template.secondaryObjects.objects.replace("follow the same stylization rules as the style preset", `follow the same stylization rules as ${styleLabel}`);
+      const objects = structuredTemplate.secondaryObjects.objects.replace("follow the same stylization rules as the style preset", `follow the same stylization rules as ${styleLabel}`);
       prompt += `- Objects: ${objects}\n`;
-      prompt += `- Motion cues: ${template.secondaryObjects.motionCues}\n`;
-      prompt += `- Scale rules: ${template.secondaryObjects.scaleRules}\n\n`;
+      prompt += `- Motion cues: ${structuredTemplate.secondaryObjects.motionCues}\n`;
+      prompt += `- Scale rules: ${structuredTemplate.secondaryObjects.scaleRules}\n\n`;
     }
 
-    if (template.styleEnforcement.enabled) {
+    if (structuredTemplate.styleEnforcement.enabled) {
       prompt += "5. STYLE ENFORCEMENT\n";
-      // Add Apply line like backend does
       prompt += `- Apply ${styleBasePrompt}\n`;
-      prompt += `- ${template.styleEnforcement.styleRules}\n`;
+      prompt += `- ${structuredTemplate.styleEnforcement.styleRules}\n`;
       
-      // Handle color palette based on mode - match backend logic exactly
-      if (template.colorMode === "default") {
+      if (structuredTemplate.colorMode === "default") {
         // Explicit default mode: Do not specify colors, let AI learn from reference images
-        // Skip color palette entirely - no color definitions in prompt
-      } else if (template.customColors?.colors && template.customColors.colors.length > 0) {
-        // Custom color palette - descriptive format matching backend
+      } else if (structuredTemplate.customColors?.colors && structuredTemplate.customColors.colors.length > 0) {
         prompt += "- Color palette:\n";
-        template.customColors.colors.forEach((color) => {
+        structuredTemplate.customColors.colors.forEach((color) => {
           const usage = color.role ? ` (primarily for ${color.role})` : '';
           prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
         });
         prompt += "  • Maintain consistent use of these colors throughout the image\n";
       } else if (currentStyle?.defaultColors?.colors) {
-        // Style default colors - matching backend format
         prompt += "- Color palette:\n";
         currentStyle.defaultColors.colors.forEach((color) => {
           const usage = color.role ? ` (primarily for ${color.role})` : '';
@@ -403,16 +414,15 @@ export default function PromptEditor() {
         });
         prompt += "  • Maintain consistent use of these colors throughout the image\n";
       } else {
-        // Fallback to text description
-        prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+        prompt += `- Color palette: ${structuredTemplate.styleEnforcement.colorPalette}\n`;
       }
       
-      prompt += `- Texture density: ${template.styleEnforcement.textureDensity}\n\n`;
+      prompt += `- Texture density: ${structuredTemplate.styleEnforcement.textureDensity}\n\n`;
     }
 
-    if (template.negativePrompt.enabled) {
+    if (structuredTemplate.negativePrompt.enabled) {
       prompt += "6. NEGATIVE PROMPT\n";
-      prompt += template.negativePrompt.items;
+      prompt += structuredTemplate.negativePrompt.items;
     }
 
     setPreviewPrompt(prompt);
@@ -686,7 +696,10 @@ export default function PromptEditor() {
       return;
     }
     
-    const templateDataToSave = normalizeTemplateColors(template);
+    // Only normalize colors for structured templates
+    const templateDataToSave = isStructuredTemplate(template) 
+      ? normalizeTemplateColors(template)
+      : template;
     const referenceImagePaths = referenceImages.map(img => img.url);
     
     saveTemplateMutation.mutate({
@@ -933,7 +946,7 @@ export default function PromptEditor() {
               <Separator />
 
               {/* Simple Template UI - only show suffix editor */}
-              {(template as any).templateType === "simple" && (
+              {isSimpleTemplate(template) && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-md">
                     <Sparkles className="w-4 h-4 text-primary" />
@@ -948,8 +961,8 @@ export default function PromptEditor() {
                       Added at the end of the prompt (e.g., "white background, 8k resolution")
                     </p>
                     <Input
-                      value={(template as any).suffix || "white background, 8k resolution"}
-                      onChange={(e) => setTemplate({ ...template, suffix: e.target.value } as any)}
+                      value={template.suffix || "white background, 8k resolution"}
+                      onChange={(e) => setTemplate({ ...template, suffix: e.target.value })}
                       placeholder="white background, 8k resolution"
                     />
                   </div>
@@ -957,7 +970,7 @@ export default function PromptEditor() {
               )}
 
               {/* Structured Template UI - show full tabs */}
-              {(template as any).templateType !== "simple" && (
+              {isStructuredTemplate(template) && (
               <Tabs defaultValue="camera" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
                   <TabsTrigger value="camera" className="text-xs sm:text-sm">Camera</TabsTrigger>
@@ -1301,40 +1314,44 @@ export default function PromptEditor() {
               </Tabs>
               )}
 
-              <Separator />
+              {/* Negative Prompt - only for structured templates */}
+              {isStructuredTemplate(template) && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="negative-enabled">Enable Negative Prompt</Label>
+                      <Switch
+                        id="negative-enabled"
+                        checked={template.negativePrompt.enabled}
+                        onCheckedChange={(checked) =>
+                          setTemplate({
+                            ...template,
+                            negativePrompt: { ...template.negativePrompt, enabled: checked },
+                          })
+                        }
+                      />
+                    </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="negative-enabled">Enable Negative Prompt</Label>
-                  <Switch
-                    id="negative-enabled"
-                    checked={template.negativePrompt.enabled}
-                    onCheckedChange={(checked) =>
-                      setTemplate({
-                        ...template,
-                        negativePrompt: { ...template.negativePrompt, enabled: checked },
-                      })
-                    }
-                  />
-                </div>
-
-                {template.negativePrompt.enabled && (
-                  <div>
-                    <Label>Negative Prompt Items</Label>
-                    <Textarea
-                      value={template.negativePrompt.items}
-                      onChange={(e) =>
-                        setTemplate({
-                          ...template,
-                          negativePrompt: { ...template.negativePrompt, items: e.target.value },
-                        })
-                      }
-                      rows={8}
-                      className="font-mono text-sm"
-                    />
+                    {template.negativePrompt.enabled && (
+                      <div>
+                        <Label>Negative Prompt Items</Label>
+                        <Textarea
+                          value={template.negativePrompt.items}
+                          onChange={(e) =>
+                            setTemplate({
+                              ...template,
+                              negativePrompt: { ...template.negativePrompt, items: e.target.value },
+                            })
+                          }
+                          rows={8}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button onClick={handleSave} className="flex-1">
