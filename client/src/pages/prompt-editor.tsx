@@ -95,7 +95,10 @@ interface UniversalTemplate {
   name: string;
   templateType: "universal";
   styleKeywords: string;
-  defaultPalette: string[];
+  paletteMode?: "loose" | "strict";
+  loosePalette?: string;
+  strictPalette?: string[];
+  defaultPalette?: string[];
   rules: string;
   negativePrompt: string;
   referenceImages?: ImageReference[];
@@ -221,7 +224,7 @@ export default function PromptEditor() {
     const styleKeywords = universalTemplate.styleKeywords || "";
     const rules = universalTemplate.rules || "";
     const negativePrompt = universalTemplate.negativePrompt || "";
-    const paletteColors = (universalTemplate.defaultPalette || []).join(", ");
+    const paletteMode = universalTemplate.paletteMode || "loose";
     
     let prompt = `[SCENE]
 {userPrompt}
@@ -233,13 +236,32 @@ Medium shot, balanced composition
 In ${styleName} style:
 ${styleKeywords}`;
 
-    if (paletteColors) {
+    // Add color section based on palette mode
+    if (paletteMode === "loose" && universalTemplate.loosePalette) {
+      // Loose mode with description
       prompt += `
 
 [COLORS]
+${universalTemplate.loosePalette}`;
+    } else {
+      // Strict mode OR loose mode without description (fallback to HEX)
+      const palette = universalTemplate.strictPalette || universalTemplate.defaultPalette || [];
+      if (palette.length > 0) {
+        const paletteColors = palette.join(", ");
+        const modeNote = paletteMode === "loose" ? " (fallback - add Color Description above)" : "";
+        prompt += `
+
+[COLORS]${modeNote}
 Use the following palette:
 ${paletteColors}.
 Follow the palette's saturation and contrast.`;
+      } else if (paletteMode === "loose") {
+        // Loose mode but no palette at all
+        prompt += `
+
+[COLORS]
+(No color description set - add one above)`;
+      }
     }
 
     if (rules) {
@@ -277,11 +299,27 @@ ${negativePrompt}`;
             const basePrompt = selectedStyle?.basePrompt || "style base prompt";
             setPreviewPrompt(generateSimplePreview(loadedTemplate as SimpleTemplate, basePrompt));
           } else if (loadedTemplate.templateType === "universal") {
-            // Universal template (v2) - preserve its structure as-is
-            setTemplate(loadedTemplate);
+            // Universal template (v2) - handle legacy compatibility
+            let normalizedTemplate = { ...loadedTemplate };
+            
+            // Legacy compatibility: if paletteMode not set but defaultPalette has values,
+            // auto-set to "strict" mode and copy defaultPalette to strictPalette
+            if (!normalizedTemplate.paletteMode) {
+              if (normalizedTemplate.defaultPalette && normalizedTemplate.defaultPalette.length > 0) {
+                normalizedTemplate.paletteMode = "strict";
+                normalizedTemplate.strictPalette = normalizedTemplate.defaultPalette;
+              } else if (normalizedTemplate.loosePalette) {
+                normalizedTemplate.paletteMode = "loose";
+              } else {
+                // Default to loose mode for new templates
+                normalizedTemplate.paletteMode = "loose";
+              }
+            }
+            
+            setTemplate(normalizedTemplate);
             // Generate universal preview immediately
-            const styleName = loadedTemplate.name || selectedStyle?.label || "Style";
-            setPreviewPrompt(generateUniversalPreview(loadedTemplate as UniversalTemplate, styleName));
+            const styleName = normalizedTemplate.name || selectedStyle?.label || "Style";
+            setPreviewPrompt(generateUniversalPreview(normalizedTemplate as UniversalTemplate, styleName));
           } else {
             // Structured template - merge with DEFAULT_TEMPLATE to ensure all fields exist
             const mergedTemplate = {
@@ -1074,44 +1112,106 @@ ${negativePrompt}`;
                   <div>
                     <Label>Style Keywords</Label>
                     <p className="text-xs text-muted-foreground mb-2">
-                      10-20 descriptive words defining the visual style
+                      Descriptive words defining the visual style
                     </p>
                     <Textarea
                       value={template.styleKeywords}
                       onChange={(e) => setTemplate({ ...template, styleKeywords: e.target.value })}
                       placeholder="simple clean line art, flat 2D shapes, thin outlines, minimal shading, vector style"
                       rows={3}
+                      data-testid="input-style-keywords"
                     />
                   </div>
 
-                  {/* Default Color Palette */}
-                  <div>
-                    <Label>Default Color Palette</Label>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      HEX colors separated by commas (e.g., #00AEEF, #E6F7FF, #003B73)
-                    </p>
-                    <Input
-                      value={(template.defaultPalette || []).join(", ")}
-                      onChange={(e) => {
-                        const colors = e.target.value
-                          .split(",")
-                          .map(c => c.trim())
-                          .filter(c => c.length > 0);
-                        setTemplate({ ...template, defaultPalette: colors });
-                      }}
-                      placeholder="#00AEEF, #E6F7FF, #003B73, #FFFFFF"
-                    />
-                    {/* Color preview swatches */}
-                    {template.defaultPalette && template.defaultPalette.length > 0 && (
-                      <div className="flex gap-2 mt-2 flex-wrap">
-                        {template.defaultPalette.map((color, idx) => (
-                          <div
-                            key={idx}
-                            className="w-8 h-8 rounded-md border border-border"
-                            style={{ backgroundColor: color }}
-                            title={color}
-                          />
-                        ))}
+                  {/* Palette Mode Toggle */}
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Color Palette Mode</Label>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Choose how colors are specified in the prompt
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={template.paletteMode === "loose" || !template.paletteMode ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setTemplate({ ...template, paletteMode: "loose" })}
+                          data-testid="button-palette-mode-loose"
+                        >
+                          <Palette className="w-4 h-4 mr-2" />
+                          Loose (Recommended)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={template.paletteMode === "strict" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setTemplate({ ...template, paletteMode: "strict" })}
+                          data-testid="button-palette-mode-strict"
+                        >
+                          Strict (HEX)
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Loose Palette - Text Description */}
+                    {(template.paletteMode === "loose" || !template.paletteMode) && (
+                      <div>
+                        <Label>Color Description</Label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Describe colors in natural language for better gradient behavior
+                        </p>
+                        <Textarea
+                          value={template.loosePalette || ""}
+                          onChange={(e) => setTemplate({ ...template, loosePalette: e.target.value })}
+                          placeholder="Use a deep-blue line palette with soft cyan and blue accents. Apply gentle cyan-to-blue gradient fills on clothing and major objects."
+                          rows={4}
+                          data-testid="input-loose-palette"
+                        />
+                        {/* Show hint when loosePalette is empty but strictPalette/defaultPalette exists */}
+                        {!template.loosePalette && (template.strictPalette || template.defaultPalette) && (
+                          <div className="mt-2 p-2 bg-amber-500/10 rounded-md">
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                              <Palette className="w-3 h-3 inline mr-1" />
+                              HEX palette available: {(template.strictPalette || template.defaultPalette || []).join(", ")}. 
+                              Add a color description above, or switch to Strict mode to use HEX values.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Strict Palette - HEX Colors */}
+                    {template.paletteMode === "strict" && (
+                      <div>
+                        <Label>HEX Color Palette</Label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          HEX colors separated by commas (for brand color requirements)
+                        </p>
+                        <Input
+                          value={(template.strictPalette || template.defaultPalette || []).join(", ")}
+                          onChange={(e) => {
+                            const colors = e.target.value
+                              .split(",")
+                              .map(c => c.trim())
+                              .filter(c => c.length > 0);
+                            setTemplate({ ...template, strictPalette: colors });
+                          }}
+                          placeholder="#002B5C, #00AEEF, #0084D7, #FFFFFF"
+                          data-testid="input-strict-palette"
+                        />
+                        {/* Color preview swatches */}
+                        {(template.strictPalette || template.defaultPalette || []).length > 0 && (
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {(template.strictPalette || template.defaultPalette || []).map((color, idx) => (
+                              <div
+                                key={idx}
+                                className="w-8 h-8 rounded-md border border-border"
+                                style={{ backgroundColor: color }}
+                                title={color}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1127,6 +1227,7 @@ ${negativePrompt}`;
                       onChange={(e) => setTemplate({ ...template, rules: e.target.value })}
                       placeholder="Consistent proportions, natural posture, correct scale, clean minimal background, no text, no watermark."
                       rows={3}
+                      data-testid="input-rules"
                     />
                   </div>
 
@@ -1141,6 +1242,7 @@ ${negativePrompt}`;
                       onChange={(e) => setTemplate({ ...template, negativePrompt: e.target.value })}
                       placeholder="bad proportions, distorted limbs, extra faces, blurry, noisy, cluttered background"
                       rows={3}
+                      data-testid="input-negative-prompt"
                     />
                   </div>
                 </div>
