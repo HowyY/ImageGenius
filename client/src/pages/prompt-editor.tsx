@@ -226,17 +226,17 @@ export default function PromptEditor() {
   const cloneStyleMutation = useMutation({
     mutationFn: async ({ sourceId, newLabel }: { sourceId: string; newLabel: string }) => {
       const newId = newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-      return await apiRequest("POST", `/api/styles/${sourceId}/clone`, {
+      const response = await apiRequest("POST", `/api/styles/${sourceId}/clone`, {
         newId,
         newLabel,
       });
+      return await response.json() as ExtendedStylePreset;
     },
-    onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
-      const result = await data.json();
+    onSuccess: async (result) => {
       setSelectedStyleId(result.id);
       setShowCloneDialog(false);
       setCloneNewLabel("");
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
       toast({
         title: "Style cloned",
         description: "New style created successfully. You can now modify it.",
@@ -254,18 +254,22 @@ export default function PromptEditor() {
   // Delete style mutation
   const deleteStyleMutation = useMutation({
     mutationFn: async (styleId: string) => {
-      return await apiRequest("DELETE", `/api/styles/${styleId}`);
+      await apiRequest("DELETE", `/api/styles/${styleId}`);
+      return styleId;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
-      // Select first available style after deletion
-      if (styles && styles.length > 1) {
-        const firstStyle = styles.find(s => s.id !== selectedStyleId);
-        if (firstStyle) {
-          setSelectedStyleId(firstStyle.id);
-        }
-      }
+    onSuccess: async (deletedStyleId) => {
+      // Find next style to select before invalidating cache
+      const nextStyle = styles?.find(s => s.id !== deletedStyleId);
+      const nextStyleId = nextStyle?.id || "";
+      
       setShowDeleteDialog(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      
+      // Set the next style after cache is updated
+      if (nextStyleId) {
+        setSelectedStyleId(nextStyleId);
+      }
+      
       toast({
         title: "Style deleted",
         description: "The style has been deleted successfully.",
@@ -284,7 +288,7 @@ export default function PromptEditor() {
   const createStyleMutation = useMutation({
     mutationFn: async ({ label, description }: { label: string; description: string }) => {
       const id = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-      return await apiRequest("POST", "/api/styles", {
+      const response = await apiRequest("POST", "/api/styles", {
         id,
         label,
         description,
@@ -292,14 +296,14 @@ export default function PromptEditor() {
         basePrompt: "clean vector art style",
         referenceImageUrl: "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png",
       });
+      return await response.json() as ExtendedStylePreset;
     },
-    onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
-      const result = await data.json();
+    onSuccess: async (result) => {
       setSelectedStyleId(result.id);
       setShowNewStyleDialog(false);
       setNewStyleLabel("");
       setNewStyleDescription("");
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
       toast({
         title: "Style created",
         description: "New style created successfully. Configure its template now.",
