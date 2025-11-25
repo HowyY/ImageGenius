@@ -310,21 +310,34 @@ export default function PromptEditor() {
   };
 
   const generatePreview = useCallback(() => {
-    let prompt = "PROMPT TEMPLATE\n\n[SCENE — {userPrompt}]\n\n";
+    // Get current style info for realistic preview
+    const currentStyle = styles?.find(s => s.id === selectedStyleId);
+    const styleLabel = currentStyle?.label || "Style Preset";
+    const styleDescription = currentStyle?.description || "style description";
+    const styleBasePrompt = currentStyle?.basePrompt || "style base prompt";
+    
+    // Example user prompt for preview
+    const exampleUserPrompt = "{userPrompt}";
+    
+    let prompt = `PROMPT TEMPLATE\n\n[SCENE — ${exampleUserPrompt}]\n\n`;
 
     if (template.cameraComposition.enabled) {
       prompt += "1. CAMERA & COMPOSITION\n";
       prompt += `- Camera angle: ${template.cameraComposition.cameraAngle}\n`;
-      prompt += `- Composition layout: ${template.cameraComposition.compositionLayout}\n`;
+      prompt += `- Composition layout: ${template.cameraComposition.compositionLayout} (${styleLabel} inspiration)\n`;
       prompt += `- Framing: ${template.cameraComposition.framing}\n`;
       prompt += `- Depth arrangement: ${template.cameraComposition.depthArrangement}\n\n`;
     }
 
     if (template.environment.enabled) {
       prompt += "2. ENVIRONMENT\n";
-      prompt += `- Setting: ${template.environment.setting}\n`;
+      // Replace placeholder with example
+      const setting = template.environment.setting.replace("[Scene description]", exampleUserPrompt);
+      prompt += `- Setting: ${setting}\n`;
       prompt += `- Lighting: ${template.environment.lighting}\n`;
-      prompt += `- Atmosphere: ${template.environment.atmosphere}\n`;
+      // Replace style tone placeholder
+      const atmosphere = template.environment.atmosphere.replace("match style tone", `match ${styleLabel} (${styleDescription}) tone`);
+      prompt += `- Atmosphere: ${atmosphere}\n`;
       prompt += `- Background complexity: ${template.environment.backgroundComplexity}\n\n`;
     }
 
@@ -333,46 +346,46 @@ export default function PromptEditor() {
       prompt += `- Pose: ${template.mainCharacter.pose}\n`;
       prompt += `- Expression: ${template.mainCharacter.expression}\n`;
       prompt += `- Interaction: ${template.mainCharacter.interaction}\n`;
-      prompt += `- Clothing: ${template.mainCharacter.clothing}\n\n`;
+      // Replace style placeholder
+      const clothing = template.mainCharacter.clothing.replace("match character lock and respect style", `match character lock and respect ${styleBasePrompt}`);
+      prompt += `- Clothing: ${clothing}\n\n`;
     }
 
     if (template.secondaryObjects.enabled) {
       prompt += "4. SECONDARY OBJECTS & ACTION\n";
-      prompt += `- Objects: ${template.secondaryObjects.objects}\n`;
+      // Replace style preset placeholder
+      const objects = template.secondaryObjects.objects.replace("follow the same stylization rules as the style preset", `follow the same stylization rules as ${styleLabel}`);
+      prompt += `- Objects: ${objects}\n`;
       prompt += `- Motion cues: ${template.secondaryObjects.motionCues}\n`;
       prompt += `- Scale rules: ${template.secondaryObjects.scaleRules}\n\n`;
     }
 
     if (template.styleEnforcement.enabled) {
       prompt += "5. STYLE ENFORCEMENT\n";
+      // Add Apply line like backend does
+      prompt += `- Apply ${styleBasePrompt}\n`;
       prompt += `- ${template.styleEnforcement.styleRules}\n`;
       
-      // Handle color palette based on mode
-      if (template.colorMode === "custom" && template.customColors?.colors && template.customColors.colors.length > 0) {
-        // Custom color palette - structured format with hex codes
-        prompt += "- COLOR PALETTE (STRICT):\n";
-        const totalColors = template.customColors.colors.length;
-        const percentages = [60, 30, 10]; // Default percentages for first 3 colors
-        template.customColors.colors.forEach((color, index) => {
-          const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
-          const role = color.role ? ` for ${color.role}` : '';
-          prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
+      // Handle color palette based on mode - match backend logic exactly
+      if (template.colorMode === "default") {
+        // Explicit default mode: Do not specify colors, let AI learn from reference images
+        // Skip color palette entirely - no color definitions in prompt
+      } else if (template.customColors?.colors && template.customColors.colors.length > 0) {
+        // Custom color palette - descriptive format matching backend
+        prompt += "- Color palette:\n";
+        template.customColors.colors.forEach((color) => {
+          const usage = color.role ? ` (primarily for ${color.role})` : '';
+          prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
         });
-        prompt += "  • Use ONLY these colors, no other colors allowed\n";
-      } else if (styles?.find(s => s.id === selectedStyleId)?.defaultColors?.colors) {
-        // Style default colors - structured format
-        const defaultColors = styles.find(s => s.id === selectedStyleId)?.defaultColors;
-        if (defaultColors) {
-          prompt += "- COLOR PALETTE (STRICT):\n";
-          const totalColors = defaultColors.colors.length;
-          const percentages = [60, 30, 10];
-          defaultColors.colors.forEach((color, index) => {
-            const percentage = index < 3 ? percentages[index] : Math.floor(100 / totalColors);
-            const role = color.role ? ` for ${color.role}` : '';
-            prompt += `  • ${color.hex.toUpperCase()} (${color.name}) - ${percentage}%${role}\n`;
-          });
-          prompt += "  • Use ONLY these colors, no other colors allowed\n";
-        }
+        prompt += "  • Maintain consistent use of these colors throughout the image\n";
+      } else if (currentStyle?.defaultColors?.colors) {
+        // Style default colors - matching backend format
+        prompt += "- Color palette:\n";
+        currentStyle.defaultColors.colors.forEach((color) => {
+          const usage = color.role ? ` (primarily for ${color.role})` : '';
+          prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
+        });
+        prompt += "  • Maintain consistent use of these colors throughout the image\n";
       } else {
         // Fallback to text description
         prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
@@ -387,7 +400,7 @@ export default function PromptEditor() {
     }
 
     setPreviewPrompt(prompt);
-  }, [template]);
+  }, [template, styles, selectedStyleId]);
 
   useEffect(() => {
     // Generate preview immediately on initial render

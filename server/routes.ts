@@ -542,12 +542,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/styles - Return available style presets
   // This endpoint provides the list of style options for the frontend dropdown
   app.get("/api/styles", (req, res) => {
-    // Only return the fields needed for the frontend (exclude basePrompt)
-    const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines }) => ({
+    // Return fields needed for the frontend including basePrompt for accurate preview
+    const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
       id,
       label,
       description,
       engines,
+      basePrompt,
+      defaultColors,
     }));
 
     res.json(stylesForFrontend);

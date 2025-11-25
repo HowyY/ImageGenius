@@ -67,6 +67,7 @@ export const stylePresetSchema = z.object({
   label: z.string(),
   description: z.string(),
   engines: z.array(z.string()),
+  basePrompt: z.string().optional(),
   defaultColors: colorPaletteSchema.optional(),
 });
 
