@@ -23,6 +23,7 @@ export interface IStorage {
   saveGenerationHistory(data: InsertGenerationHistory): Promise<SelectGenerationHistory>;
   getGenerationHistory(limit?: number): Promise<SelectGenerationHistory[]>;
   getTemplate(styleId: string): Promise<SelectPromptTemplate | null>;
+  getAllTemplates(): Promise<SelectPromptTemplate[]>;
   saveTemplate(styleId: string, templateData: any, referenceImages?: string[]): Promise<SelectPromptTemplate>;
 }
 
@@ -73,6 +74,17 @@ export class MemStorage implements IStorage {
       .limit(1);
 
     return results[0] || null;
+  }
+
+  async getAllTemplates(): Promise<SelectPromptTemplate[]> {
+    if (!db) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(promptTemplates)
+      .orderBy(promptTemplates.styleId);
   }
 
   async saveTemplate(styleId: string, templateData: any, referenceImages: string[] = []): Promise<SelectPromptTemplate> {

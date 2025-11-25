@@ -4,6 +4,7 @@ import { z } from "zod";
 import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
 import { storage } from "./storage";
 import { uploadReferenceImages, uploadFileToKIE, type StyleImageMapping } from "./services/fileUpload";
+import { DEFAULT_TEMPLATES, getDefaultTemplate, getAllDefaultTemplateIds } from "./default-templates";
 import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
 import { readdirSync, existsSync, statSync } from "fs";
@@ -885,6 +886,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to save template",
+      });
+    }
+  });
+
+  app.get("/api/templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching all templates:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch templates",
+      });
+    }
+  });
+
+  app.get("/api/default-templates", (req, res) => {
+    res.json(DEFAULT_TEMPLATES);
+  });
+
+  app.get("/api/default-templates/:styleId", (req, res) => {
+    const { styleId } = req.params;
+    const defaultTemplate = getDefaultTemplate(styleId);
+    
+    if (!defaultTemplate) {
+      return res.status(404).json({
+        error: "Default template not found",
+        message: `No default template found for style '${styleId}'`,
+      });
+    }
+    
+    res.json(defaultTemplate);
+  });
+
+  app.post("/api/templates/:styleId/reset", async (req, res) => {
+    try {
+      const { styleId } = req.params;
+      const defaultTemplate = getDefaultTemplate(styleId);
+      
+      if (!defaultTemplate) {
+        return res.status(404).json({
+          error: "Default template not found",
+          message: `No default template found for style '${styleId}'`,
+        });
+      }
+      
+      const saved = await storage.saveTemplate(
+        defaultTemplate.styleId,
+        defaultTemplate.templateData,
+        defaultTemplate.referenceImages
+      );
+      
+      console.log(`✓ Reset template for style: ${styleId}`);
+      res.json(saved);
+    } catch (error) {
+      console.error("Error resetting template:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reset template",
+      });
+    }
+  });
+
+  app.post("/api/templates/reset-all", async (req, res) => {
+    try {
+      const results = [];
+      
+      for (const template of DEFAULT_TEMPLATES) {
+        try {
+          const saved = await storage.saveTemplate(
+            template.styleId,
+            template.templateData,
+            template.referenceImages
+          );
+          results.push({ styleId: template.styleId, success: true, template: saved });
+          console.log(`✓ Reset template for style: ${template.styleId}`);
+        } catch (error) {
+          results.push({ styleId: template.styleId, success: false, error: String(error) });
+          console.error(`✗ Failed to reset template for ${template.styleId}:`, error);
+        }
+      }
+      
+      res.json({
+        message: "Templates reset complete",
+        results,
+      });
+    } catch (error) {
+      console.error("Error resetting all templates:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reset all templates",
       });
     }
   });
