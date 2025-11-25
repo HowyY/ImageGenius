@@ -81,8 +81,17 @@ Shared Zod schemas and TypeScript types are centralized in the `shared/` directo
 
 **KIE AI Services** (https://api.kie.ai):
 
--   **Nano Banana Edit API**: Integrated for AI image generation, supporting multi-image references, custom prompts, and specific output configurations.
--   **Seedream V4 Edit API**: Integrated for AI image generation with optimized reference image handling and extended polling.
+-   **Nano Banana Edit API** (`google/nano-banana-edit`): Integrated for AI image generation, supporting multi-image references (via `image_urls`), custom prompts, and specific output configurations.
+-   **Seedream V4 Edit API** (`bytedance/seedream-v4-edit`): Integrated for AI image generation with optimized reference image handling and extended polling.
+-   **Nano Pro API** (`nano-banana-pro`): High-quality 2K/4K image generation with different parameter mapping (`image_input` instead of `image_urls`, `aspect_ratio` instead of `image_size`, supports `resolution` setting).
 -   **File Upload API**: Used for uploading local reference images and obtaining temporary URLs.
+
+**Engine Parameter Differences**:
+| Parameter | NanoBanana/SeeDream | Nano Pro |
+|-----------|---------------------|----------|
+| Image refs | `image_urls` array | `image_input` array |
+| Size | `image_size` (e.g., "1024x1024") | `aspect_ratio` (e.g., "1:1") |
+| Resolution | N/A | `resolution` ("1K", "2K", "4K") |
+| Max images | 3 | 8 |
 
 API Key Management is handled via the `KIE_API_KEY` environment variable.
