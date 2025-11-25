@@ -28,7 +28,20 @@ import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unl
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
-import { getStyleLock, setStyleLock, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
+import { 
+  getStyleLock, 
+  setStyleLock, 
+  getUserReferenceImages, 
+  addUserReferenceImage,
+  getPrompt,
+  setPrompt,
+  getEngine,
+  setEngine,
+  getSelectedStyleId,
+  setSelectedStyleId,
+  getLastGeneratedImage,
+  setLastGeneratedImage
+} from "@/lib/generationState";
 import type { SelectGenerationHistory } from "@shared/schema";
 import { normalizeTemplateColors } from "@/lib/templateUtils";
 import { useToast } from "@/hooks/use-toast";
@@ -46,12 +59,18 @@ export default function Home() {
   const { toast, dismiss } = useToast();
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Restore persisted state on mount
+  const savedPrompt = getPrompt();
+  const savedEngine = getEngine();
+  const savedStyleId = getSelectedStyleId();
+  const savedImage = getLastGeneratedImage();
+  
   const form = useForm<GenerateRequest>({
     resolver: zodResolver(generateRequestSchema),
     defaultValues: {
-      prompt: "",
-      styleId: "",
-      engine: "nanobanana",
+      prompt: savedPrompt,
+      styleId: savedStyleId || "",
+      engine: savedEngine as "nanobanana" | "seedream",
     },
   });
 
@@ -65,21 +84,32 @@ export default function Home() {
   });
 
   useEffect(() => {
-    const { locked, styleId } = getStyleLock();
+    const { locked, styleId: lockedStyleId } = getStyleLock();
     const userRefs = getUserReferenceImages();
     
     setStyleLocked(locked);
     setUserRefCount(userRefs.length);
     
-    // Use latest history image if no generated image in current session
-    if (!generatedImage && historyData && historyData.length > 0) {
-      setGeneratedImage(historyData[0].generatedImageUrl);
+    // Restore saved image from localStorage first, then fall back to history
+    if (!generatedImage) {
+      if (savedImage) {
+        setGeneratedImage(savedImage);
+      } else if (historyData && historyData.length > 0) {
+        setGeneratedImage(historyData[0].generatedImageUrl);
+      }
     }
     
-    if (locked && styleId && styles) {
-      form.setValue("styleId", styleId);
-      const style = styles.find((s) => s.id === styleId);
+    // Restore style: locked style takes priority, then saved style, then first available
+    if (locked && lockedStyleId && styles) {
+      form.setValue("styleId", lockedStyleId);
+      const style = styles.find((s) => s.id === lockedStyleId);
       setSelectedStyleDescription(style?.description || "");
+    } else if (savedStyleId && styles) {
+      const style = styles.find((s) => s.id === savedStyleId);
+      if (style) {
+        form.setValue("styleId", savedStyleId);
+        setSelectedStyleDescription(style.description || "");
+      }
     } else if (!locked && styles && styles.length > 0) {
       // Auto-select first style if not locked and no style selected
       const currentStyleId = form.getValues("styleId");
@@ -88,7 +118,19 @@ export default function Home() {
         setSelectedStyleDescription(styles[0].description || "");
       }
     }
-  }, [styles, historyData, generatedImage]);
+  }, [styles, historyData]);
+
+  // Watch and persist prompt changes
+  const watchedPrompt = form.watch("prompt");
+  useEffect(() => {
+    setPrompt(watchedPrompt);
+  }, [watchedPrompt]);
+
+  // Watch and persist engine changes
+  const watchedEngine = form.watch("engine");
+  useEffect(() => {
+    setEngine(watchedEngine);
+  }, [watchedEngine]);
 
   const generateMutation = useMutation({
     mutationFn: async (data: GenerateRequest) => {
@@ -103,6 +145,8 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setGeneratedImage(data.imageUrl);
+      // Persist generated image to localStorage
+      setLastGeneratedImage(data.imageUrl);
       queryClient.invalidateQueries({ queryKey: ["/api/history"] });
       const { id } = toast({
         title: "Image generated successfully!",
@@ -116,6 +160,8 @@ export default function Home() {
     onChange(value);
     const style = styles?.find((s) => s.id === value);
     setSelectedStyleDescription(style?.description || "");
+    // Persist selected style
+    setSelectedStyleId(value);
   };
 
   const toggleStyleLock = () => {
