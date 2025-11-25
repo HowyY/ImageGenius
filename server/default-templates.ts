@@ -160,6 +160,22 @@ export const DEFAULT_TEMPLATES: DefaultTemplateConfig[] = [
       "/reference-images/cyan_sketchline_vector/3.png",
     ],
   },
+  {
+    styleId: "cyan_sketchline_vector_v2",
+    templateData: {
+      name: "Cyan Sketchline Vector V2",
+      templateType: "universal",
+      styleKeywords: "simple clean line art, flat 2D shapes, thin cyan outlines, minimal shading, vector style, geometric forms, modern illustration, white fill, smooth curves",
+      defaultPalette: ["#00AEEF", "#E6F7FF", "#003B73", "#FFFFFF"],
+      rules: "Consistent proportions, natural posture, correct scale between character and environment, clean minimal background, no text, no watermark, maintain style consistency across all elements.",
+      negativePrompt: "bad proportions, distorted limbs, extra faces, inconsistent character identity, blurry, noisy, cluttered background, text, watermark, signature, multiple art styles",
+    },
+    referenceImages: [
+      "/reference-images/cyan_sketchline_vector/1.png",
+      "/reference-images/cyan_sketchline_vector/2.png",
+      "/reference-images/cyan_sketchline_vector/3.png",
+    ],
+  },
 ];
 
 export function getDefaultTemplate(styleId: string): DefaultTemplateConfig | undefined {

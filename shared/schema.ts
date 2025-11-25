@@ -78,6 +78,17 @@ export const simpleTemplateSchema = z.object({
   suffix: z.string().optional().default("white background, 8k resolution"),
 });
 
+// V2 Universal template schema - simplified admin-only configuration
+// Following the new architecture: Admin edits style, User edits scene
+export const universalTemplateSchema = z.object({
+  name: z.string(),
+  templateType: z.literal("universal"),
+  styleKeywords: z.string(), // 10-20 descriptive words for the style
+  defaultPalette: z.array(z.string().regex(/^#[0-9A-Fa-f]{6}$/)), // HEX colors
+  rules: z.string(), // Universal drawing rules
+  negativePrompt: z.string(), // Negative prompt keywords
+});
+
 export const promptTemplateSchema = z.object({
   name: z.string(),
   templateType: z.literal("structured").optional().default("structured"),
@@ -123,7 +134,7 @@ export const promptTemplateSchema = z.object({
 });
 
 // Union of template types for request validation
-export const anyTemplateSchema = z.union([simpleTemplateSchema, promptTemplateSchema]);
+export const anyTemplateSchema = z.union([simpleTemplateSchema, promptTemplateSchema, universalTemplateSchema]);
 
 export const generateRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
@@ -145,7 +156,8 @@ export type Color = z.infer<typeof colorSchema>;
 export type ColorPalette = z.infer<typeof colorPaletteSchema>;
 export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 export type SimpleTemplate = z.infer<typeof simpleTemplateSchema>;
-export type AnyTemplate = PromptTemplate | SimpleTemplate;
+export type UniversalTemplate = z.infer<typeof universalTemplateSchema>;
+export type AnyTemplate = PromptTemplate | SimpleTemplate | UniversalTemplate;
 export type StylePreset = z.infer<typeof stylePresetSchema>;
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;
 export type GenerateResponse = z.infer<typeof generateResponseSchema>;

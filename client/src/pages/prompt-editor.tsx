@@ -91,14 +91,28 @@ interface SimpleTemplate {
   referenceImages?: ImageReference[];
 }
 
-type PromptTemplate = StructuredTemplate | SimpleTemplate;
+interface UniversalTemplate {
+  name: string;
+  templateType: "universal";
+  styleKeywords: string;
+  defaultPalette: string[];
+  rules: string;
+  negativePrompt: string;
+  referenceImages?: ImageReference[];
+}
+
+type PromptTemplate = StructuredTemplate | SimpleTemplate | UniversalTemplate;
 
 function isSimpleTemplate(template: PromptTemplate): template is SimpleTemplate {
   return (template as SimpleTemplate).templateType === "simple";
 }
 
+function isUniversalTemplate(template: PromptTemplate): template is UniversalTemplate {
+  return (template as UniversalTemplate).templateType === "universal";
+}
+
 function isStructuredTemplate(template: PromptTemplate): template is StructuredTemplate {
-  return !isSimpleTemplate(template);
+  return !isSimpleTemplate(template) && !isUniversalTemplate(template);
 }
 
 const DEFAULT_TEMPLATE: StructuredTemplate = {
@@ -202,6 +216,49 @@ export default function PromptEditor() {
     return `{userPrompt}, ${basePrompt}, ${suffix}`;
   };
 
+  // Helper function to generate preview for universal templates immediately
+  const generateUniversalPreview = (universalTemplate: UniversalTemplate, styleName: string) => {
+    const styleKeywords = universalTemplate.styleKeywords || "";
+    const rules = universalTemplate.rules || "";
+    const negativePrompt = universalTemplate.negativePrompt || "";
+    const paletteColors = (universalTemplate.defaultPalette || []).join(", ");
+    
+    let prompt = `[SCENE]
+{userPrompt}
+
+[FRAMING]
+Medium shot, balanced composition
+
+[STYLE]
+In ${styleName} style:
+${styleKeywords}`;
+
+    if (paletteColors) {
+      prompt += `
+
+[COLORS]
+Use the following palette:
+${paletteColors}.
+Follow the palette's saturation and contrast.`;
+    }
+
+    if (rules) {
+      prompt += `
+
+[RULES]
+${rules}`;
+    }
+
+    if (negativePrompt) {
+      prompt += `
+
+[NEGATIVE]
+${negativePrompt}`;
+    }
+
+    return prompt;
+  };
+
   useEffect(() => {
     // Load template when selectedStyleId changes or template data arrives
     if (selectedStyleId && styles && !templateLoading) {
@@ -219,6 +276,12 @@ export default function PromptEditor() {
             // Immediately generate simple preview to avoid race condition
             const basePrompt = selectedStyle?.basePrompt || "style base prompt";
             setPreviewPrompt(generateSimplePreview(loadedTemplate as SimpleTemplate, basePrompt));
+          } else if (loadedTemplate.templateType === "universal") {
+            // Universal template (v2) - preserve its structure as-is
+            setTemplate(loadedTemplate);
+            // Generate universal preview immediately
+            const styleName = loadedTemplate.name || selectedStyle?.label || "Style";
+            setPreviewPrompt(generateUniversalPreview(loadedTemplate as UniversalTemplate, styleName));
           } else {
             // Structured template - merge with DEFAULT_TEMPLATE to ensure all fields exist
             const mergedTemplate = {
@@ -362,8 +425,14 @@ export default function PromptEditor() {
       return;
     }
     
+    // Check if this is a universal template
+    if (isUniversalTemplate(template)) {
+      setPreviewPrompt(generateUniversalPreview(template, template.name || styleLabel));
+      return;
+    }
+    
     // Structured template - TypeScript now knows template is StructuredTemplate
-    const structuredTemplate = template;
+    const structuredTemplate = template as StructuredTemplate;
     let prompt = `PROMPT TEMPLATE\n\n[SCENE — ${exampleUserPrompt}]\n\n`;
 
     if (structuredTemplate.cameraComposition.enabled) {
@@ -985,6 +1054,93 @@ export default function PromptEditor() {
                       value={template.suffix || "white background, 8k resolution"}
                       onChange={(e) => setTemplate({ ...template, suffix: e.target.value })}
                       placeholder="white background, 8k resolution"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Universal Template UI (V2) - simplified admin editor */}
+              {isUniversalTemplate(template) && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-md">
+                    <Sparkles className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium">Universal Template (V2)</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Simplified prompt structure: [SCENE] + [FRAMING] + [STYLE] + [COLORS] + [RULES] + [NEGATIVE]
+                  </p>
+
+                  {/* Style Keywords */}
+                  <div>
+                    <Label>Style Keywords</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      10-20 descriptive words defining the visual style
+                    </p>
+                    <Textarea
+                      value={template.styleKeywords}
+                      onChange={(e) => setTemplate({ ...template, styleKeywords: e.target.value })}
+                      placeholder="simple clean line art, flat 2D shapes, thin outlines, minimal shading, vector style"
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Default Color Palette */}
+                  <div>
+                    <Label>Default Color Palette</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      HEX colors separated by commas (e.g., #00AEEF, #E6F7FF, #003B73)
+                    </p>
+                    <Input
+                      value={(template.defaultPalette || []).join(", ")}
+                      onChange={(e) => {
+                        const colors = e.target.value
+                          .split(",")
+                          .map(c => c.trim())
+                          .filter(c => c.length > 0);
+                        setTemplate({ ...template, defaultPalette: colors });
+                      }}
+                      placeholder="#00AEEF, #E6F7FF, #003B73, #FFFFFF"
+                    />
+                    {/* Color preview swatches */}
+                    {template.defaultPalette && template.defaultPalette.length > 0 && (
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {template.defaultPalette.map((color, idx) => (
+                          <div
+                            key={idx}
+                            className="w-8 h-8 rounded-md border border-border"
+                            style={{ backgroundColor: color }}
+                            title={color}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Universal Rules */}
+                  <div>
+                    <Label>Universal Rules</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Drawing rules that apply to all generations
+                    </p>
+                    <Textarea
+                      value={template.rules}
+                      onChange={(e) => setTemplate({ ...template, rules: e.target.value })}
+                      placeholder="Consistent proportions, natural posture, correct scale, clean minimal background, no text, no watermark."
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Negative Prompt */}
+                  <div>
+                    <Label>Negative Prompt</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Keywords to avoid in generation
+                    </p>
+                    <Textarea
+                      value={template.negativePrompt}
+                      onChange={(e) => setTemplate({ ...template, negativePrompt: e.target.value })}
+                      placeholder="bad proportions, distorted limbs, extra faces, blurry, noisy, cluttered background"
+                      rows={3}
                     />
                   </div>
                 </div>

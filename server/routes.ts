@@ -120,6 +120,24 @@ const STYLE_PRESETS: Array<
     },
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
+  {
+    id: "cyan_sketchline_vector_v2",
+    label: "Cyan Sketchline V2 (Universal)",
+    description: "V2 architecture test - simplified prompt structure with universal template format",
+    engines: ["nanobanana", "seedream"],
+    basePrompt:
+      "simple clean line art, flat 2D shapes, thin cyan outlines, minimal shading, vector style",
+    defaultColors: {
+      name: "Cyan Vector Palette",
+      colors: [
+        { name: "Primary Cyan", hex: "#00AEEF", role: "main elements" },
+        { name: "Light Cyan", hex: "#E6F7FF", role: "backgrounds" },
+        { name: "Deep Blue", hex: "#003B73", role: "accents" },
+        { name: "White", hex: "#FFFFFF", role: "fill" },
+      ],
+    },
+    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+  },
 ];
 
 const KIE_BASE_URL = "https://api.kie.ai/api/v1";
@@ -216,6 +234,81 @@ function buildSimplePrompt(
   return prompt;
 }
 
+// V2 Universal template builder - simplified, structured prompt format
+// Following the new architecture: short, structured prompt (40-70 words)
+function buildUniversalPrompt(
+  userPrompt: string,
+  style: StylePreset & { basePrompt: string },
+  hasUserReference: boolean,
+  template: any,
+  paletteOverride?: string[]
+): string {
+  const styleName = template.name || style.label;
+  // Use template styleKeywords, but also incorporate style.basePrompt for context
+  const styleKeywords = template.styleKeywords || style.basePrompt || "";
+  const rules = template.rules || "";
+  const negativePrompt = template.negativePrompt || "";
+  
+  // Determine which palette to use: override > template default > style default colors
+  let palette: string[] = [];
+  if (paletteOverride && paletteOverride.length > 0) {
+    palette = paletteOverride;
+  } else if (template.defaultPalette && template.defaultPalette.length > 0) {
+    palette = template.defaultPalette;
+  } else if (style.defaultColors?.colors) {
+    // Fallback to style's default colors
+    palette = style.defaultColors.colors.map((c: any) => c.hex);
+  }
+  
+  // Convert palette array to comma-separated string
+  const paletteColors = palette.join(", ");
+  
+  // Build framing instruction (can be enhanced with user framing selection later)
+  const framing = hasUserReference 
+    ? "Medium shot, balanced composition, keep exact character appearance from reference"
+    : "Medium shot, balanced composition";
+  
+  // Assemble the final prompt following the universal structure
+  let prompt = `[SCENE]
+${userPrompt}
+
+[FRAMING]
+${framing}
+
+[STYLE]
+In ${styleName} style:
+${styleKeywords}`;
+
+  // Add color palette section
+  if (paletteColors) {
+    prompt += `
+
+[COLORS]
+Use the following palette:
+${paletteColors}.
+Follow the palette's saturation and contrast.`;
+  }
+
+  // Add rules section
+  if (rules) {
+    prompt += `
+
+[RULES]
+${rules}`;
+  }
+
+  // Note: Negative prompt is handled separately in the API call
+  // but we can include it in the prompt for reference
+  if (negativePrompt) {
+    prompt += `
+
+[NEGATIVE]
+${negativePrompt}`;
+  }
+
+  return prompt.trim();
+}
+
 function buildPromptFromTemplate(
   userPrompt: string,
   style: StylePreset & { basePrompt: string },
@@ -227,7 +320,12 @@ function buildPromptFromTemplate(
     return buildSimplePrompt(userPrompt, style, hasUserReference, template);
   }
   
-  // Structured template (default)
+  // Check if this is a universal (v2) template
+  if (template.templateType === "universal") {
+    return buildUniversalPrompt(userPrompt, style, hasUserReference, template);
+  }
+  
+  // Structured template (default/legacy)
   const characterInstruction = hasUserReference 
     ? "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**\n"
     : "";
