@@ -400,19 +400,31 @@ export default function PromptEditor() {
       if (structuredTemplate.colorMode === "default") {
         // Explicit default mode: Do not specify colors, let AI learn from reference images
       } else if (structuredTemplate.customColors?.colors && structuredTemplate.customColors.colors.length > 0) {
-        prompt += "- Color palette:\n";
-        structuredTemplate.customColors.colors.forEach((color) => {
-          const usage = color.role ? ` (primarily for ${color.role})` : '';
-          prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
-        });
-        prompt += "  • Maintain consistent use of these colors throughout the image\n";
+        // Filter out colors with missing hex or name values
+        const validColors = structuredTemplate.customColors.colors.filter(
+          (color) => color.hex && color.name
+        );
+        if (validColors.length > 0) {
+          prompt += "- Color palette:\n";
+          validColors.forEach((color) => {
+            const usage = color.role ? ` (primarily for ${color.role})` : '';
+            prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
+          });
+          prompt += "  • Maintain consistent use of these colors throughout the image\n";
+        }
       } else if (currentStyle?.defaultColors?.colors) {
-        prompt += "- Color palette:\n";
-        currentStyle.defaultColors.colors.forEach((color) => {
-          const usage = color.role ? ` (primarily for ${color.role})` : '';
-          prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
-        });
-        prompt += "  • Maintain consistent use of these colors throughout the image\n";
+        // Filter out colors with missing hex or name values
+        const validColors = currentStyle.defaultColors.colors.filter(
+          (color) => color.hex && color.name
+        );
+        if (validColors.length > 0) {
+          prompt += "- Color palette:\n";
+          validColors.forEach((color) => {
+            const usage = color.role ? ` (primarily for ${color.role})` : '';
+            prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
+          });
+          prompt += "  • Maintain consistent use of these colors throughout the image\n";
+        }
       } else {
         prompt += `- Color palette: ${structuredTemplate.styleEnforcement.colorPalette}\n`;
       }
