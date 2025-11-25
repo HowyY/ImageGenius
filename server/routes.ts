@@ -696,21 +696,202 @@ async function initializeReferenceImages() {
   console.log("=======================================\n");
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
-  // GET /api/styles - Return available style presets
-  // This endpoint provides the list of style options for the frontend dropdown
-  app.get("/api/styles", (req, res) => {
-    // Return fields needed for the frontend including basePrompt for accurate preview
-    const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+// Helper function to seed built-in styles to database
+async function seedBuiltInStyles() {
+  try {
+    const builtInStyles = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => ({
       id,
       label,
       description,
       engines,
       basePrompt,
       defaultColors,
+      referenceImageUrl,
+      isBuiltIn: true,
     }));
+    await storage.seedBuiltInStyles(builtInStyles);
+    console.log("Built-in styles seeded to database");
+  } catch (error) {
+    console.error("Failed to seed built-in styles:", error);
+  }
+}
 
-    res.json(stylesForFrontend);
+// Helper function to get style by ID (from database or fallback to static)
+async function getStyleById(styleId: string) {
+  // Try database first
+  const dbStyle = await storage.getStyle(styleId);
+  if (dbStyle) {
+    return {
+      id: dbStyle.id,
+      label: dbStyle.label,
+      description: dbStyle.description,
+      engines: dbStyle.engines,
+      basePrompt: dbStyle.basePrompt,
+      defaultColors: dbStyle.defaultColors,
+      referenceImageUrl: dbStyle.referenceImageUrl,
+      isBuiltIn: dbStyle.isBuiltIn,
+    };
+  }
+  // Fallback to static array for backward compatibility
+  return STYLE_PRESETS.find(s => s.id === styleId);
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Seed built-in styles to database on startup
+  await seedBuiltInStyles();
+
+  // GET /api/styles - Return available style presets (from database)
+  // This endpoint provides the list of style options for the frontend dropdown
+  app.get("/api/styles", async (req, res) => {
+    try {
+      // Get styles from database
+      const dbStyles = await storage.getAllStyles();
+      
+      if (dbStyles.length > 0) {
+        // Return database styles with isBuiltIn flag
+        const stylesForFrontend = dbStyles.map(({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn }) => ({
+          id,
+          label,
+          description,
+          engines,
+          basePrompt,
+          defaultColors,
+          isBuiltIn,
+        }));
+        return res.json(stylesForFrontend);
+      }
+      
+      // Fallback to static styles if database is empty
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+        id,
+        label,
+        description,
+        engines,
+        basePrompt,
+        defaultColors,
+        isBuiltIn: true,
+      }));
+      res.json(stylesForFrontend);
+    } catch (error) {
+      console.error("Error fetching styles:", error);
+      // Fallback to static styles on error
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+        id,
+        label,
+        description,
+        engines,
+        basePrompt,
+        defaultColors,
+        isBuiltIn: true,
+      }));
+      res.json(stylesForFrontend);
+    }
+  });
+
+  // POST /api/styles - Create a new custom style
+  app.post("/api/styles", async (req, res) => {
+    try {
+      const { id, label, description, engines, basePrompt, defaultColors, referenceImageUrl } = req.body;
+      
+      if (!id || !label || !description || !engines || !basePrompt) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      // Check if style ID already exists
+      const existing = await storage.getStyle(id);
+      if (existing) {
+        return res.status(409).json({ error: "Style ID already exists" });
+      }
+      
+      const newStyle = await storage.createStyle({
+        id,
+        label,
+        description,
+        engines,
+        basePrompt,
+        defaultColors,
+        referenceImageUrl: referenceImageUrl || DEFAULT_REFERENCE_IMAGE,
+        isBuiltIn: false,
+      });
+      
+      res.status(201).json(newStyle);
+    } catch (error) {
+      console.error("Error creating style:", error);
+      res.status(500).json({ error: "Failed to create style" });
+    }
+  });
+
+  // POST /api/styles/:id/clone - Clone an existing style
+  app.post("/api/styles/:id/clone", async (req, res) => {
+    try {
+      const sourceId = req.params.id;
+      const { newId, newLabel } = req.body;
+      
+      if (!newId || !newLabel) {
+        return res.status(400).json({ error: "newId and newLabel are required" });
+      }
+      
+      // Check if new ID already exists
+      const existingNew = await storage.getStyle(newId);
+      if (existingNew) {
+        return res.status(409).json({ error: "New style ID already exists" });
+      }
+      
+      // Get source style
+      const sourceStyle = await getStyleById(sourceId);
+      if (!sourceStyle) {
+        return res.status(404).json({ error: "Source style not found" });
+      }
+      
+      // Create cloned style
+      const clonedStyle = await storage.createStyle({
+        id: newId,
+        label: newLabel,
+        description: sourceStyle.description,
+        engines: sourceStyle.engines,
+        basePrompt: sourceStyle.basePrompt,
+        defaultColors: sourceStyle.defaultColors,
+        referenceImageUrl: sourceStyle.referenceImageUrl,
+        isBuiltIn: false,
+      });
+      
+      // Clone template if exists
+      const sourceTemplate = await storage.getTemplate(sourceId);
+      if (sourceTemplate) {
+        await storage.saveTemplate(
+          newId,
+          sourceTemplate.templateData,
+          sourceTemplate.referenceImages || []
+        );
+      }
+      
+      res.status(201).json(clonedStyle);
+    } catch (error) {
+      console.error("Error cloning style:", error);
+      res.status(500).json({ error: "Failed to clone style" });
+    }
+  });
+
+  // DELETE /api/styles/:id - Delete a custom style (only non-built-in)
+  app.delete("/api/styles/:id", async (req, res) => {
+    try {
+      const styleId = req.params.id;
+      
+      const style = await storage.getStyle(styleId);
+      if (!style) {
+        return res.status(404).json({ error: "Style not found" });
+      }
+      
+      if (style.isBuiltIn) {
+        return res.status(403).json({ error: "Cannot delete built-in styles" });
+      }
+      
+      await storage.deleteStyle(styleId);
+      res.status(200).json({ success: true, message: "Style deleted" });
+    } catch (error) {
+      console.error("Error deleting style:", error);
+      res.status(500).json({ error: "Failed to delete style" });
+    }
   });
 
   // POST /api/generate - Generate an image based on prompt, style, and engine
@@ -730,7 +911,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages } = validationResult.data;
-      const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
+      
+      // Get style from database (or fallback to static)
+      const selectedStyle = await getStyleById(styleId);
 
       if (!selectedStyle) {
         return res.status(400).json({
