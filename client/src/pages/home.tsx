@@ -70,7 +70,7 @@ export default function Home() {
     defaultValues: {
       prompt: savedPrompt,
       styleId: savedStyleId || "",
-      engine: savedEngine as "nanobanana" | "seedream",
+      engine: savedEngine as "nanobanana" | "seedream" | "nanopro",
     },
   });
 
@@ -390,26 +390,39 @@ export default function Home() {
                     <FormItem>
                       <FormLabel data-testid="label-engine">Engine</FormLabel>
                       <FormControl>
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             type="button"
                             variant={field.value === "nanobanana" ? "default" : "outline"}
                             onClick={() => field.onChange("nanobanana")}
                             disabled={isGenerating}
-                            className="flex-1"
+                            className="flex-1 min-w-[100px]"
                             data-testid="button-engine-nanobanana"
                           >
-                            Nanobanana
+                            NanoBanana
                           </Button>
                           <Button
                             type="button"
                             variant={field.value === "seedream" ? "default" : "outline"}
                             onClick={() => field.onChange("seedream")}
                             disabled={isGenerating}
-                            className="flex-1"
+                            className="flex-1 min-w-[100px]"
                             data-testid="button-engine-seedream"
                           >
-                            Seedream
+                            SeeDream
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === "nanopro" ? "default" : "outline"}
+                            onClick={() => field.onChange("nanopro")}
+                            disabled={isGenerating}
+                            className="flex-1 min-w-[100px]"
+                            data-testid="button-engine-nanopro"
+                          >
+                            <span className="flex items-center gap-1">
+                              Nano Pro
+                              <Badge variant="secondary" className="text-xs px-1 py-0">2K</Badge>
+                            </span>
                           </Button>
                         </div>
                       </FormControl>

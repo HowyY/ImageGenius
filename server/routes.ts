@@ -25,7 +25,7 @@ const STYLE_PRESETS: Array<
     label: "Cyan Sketchline Vector",
     description:
       "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
-    engines: ["nanobanana", "seedream"],
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
       "clean sketch-style vector line art, white negative space, minimalist details, modern financial illustration tone",
     defaultColors: {
@@ -43,7 +43,7 @@ const STYLE_PRESETS: Array<
     id: "warm_orange_flat",
     label: "Warm Orange Flat Illustration",
     description: "Warm orange/red flat illustration with strong contrast and almost white background",
-    engines: ["nanobanana", "seedream"],
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
@@ -52,7 +52,7 @@ const STYLE_PRESETS: Array<
     id: "simple_cyan_test",
     label: "Simple Cyan (Test)",
     description: "Test style using simple concatenation template - same cyan vector look with minimal prompt structure",
-    engines: ["nanobanana", "seedream"],
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
       "clean sketch-style vector line art, hand-drawn navy outlines on bright white space, subtle cyan-to-blue gradients, financial illustration vibe, minimalist details, flat color, high quality",
     defaultColors: {
@@ -70,7 +70,7 @@ const STYLE_PRESETS: Array<
     id: "cyan_sketchline_vector_v2",
     label: "Sketchline Vector V2 (Universal)",
     description: "Deep-blue outlines with cyan accents, flat 2D illustration, simple dot eyes, clean vector style",
-    engines: ["nanobanana", "seedream"],
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
       "clean deep-blue line art, flat 2D illustration, soft cyan-to-blue gradient fills, simple facial features, no textures, no shadows",
     defaultColors: {
