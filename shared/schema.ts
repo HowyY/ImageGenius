@@ -1,6 +1,20 @@
-import { pgTable, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Styles table for custom and built-in style presets
+export const styles = pgTable("styles", {
+  id: text("id").primaryKey(), // e.g., "cyan_sketchline_vector"
+  label: text("label").notNull(),
+  description: text("description").notNull(),
+  engines: text("engines").array().notNull(),
+  basePrompt: text("base_prompt").notNull(),
+  defaultColors: jsonb("default_colors"), // ColorPalette object
+  referenceImageUrl: text("reference_image_url").notNull(),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 export const generationHistory = pgTable("generation_history", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -50,6 +64,21 @@ export const insertPromptTemplateSchema = z.object({
 
 export type InsertPromptTemplate = z.infer<typeof insertPromptTemplateSchema>;
 export type SelectPromptTemplate = typeof promptTemplates.$inferSelect;
+
+// Insert schema for styles
+export const insertStyleSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().min(1),
+  engines: z.array(z.string()),
+  basePrompt: z.string().min(1),
+  defaultColors: z.any().optional(),
+  referenceImageUrl: z.string().url(),
+  isBuiltIn: z.boolean().optional().default(false),
+});
+
+export type InsertStyle = z.infer<typeof insertStyleSchema>;
+export type SelectStyle = typeof styles.$inferSelect;
 
 const colorSchema = z.object({
   name: z.string(),
