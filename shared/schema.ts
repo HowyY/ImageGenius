@@ -80,11 +80,17 @@ export const simpleTemplateSchema = z.object({
 
 // V2 Universal template schema - simplified admin-only configuration
 // Following the new architecture: Admin edits style, User edits scene
+// Supports two palette modes:
+// - strict: Uses HEX array (strictPalette) - for brand color requirements
+// - loose: Uses color description (loosePalette) - recommended for better gradient behavior
 export const universalTemplateSchema = z.object({
   name: z.string(),
   templateType: z.literal("universal"),
-  styleKeywords: z.string(), // 10-20 descriptive words for the style
-  defaultPalette: z.array(z.string().regex(/^#[0-9A-Fa-f]{6}$/)), // HEX colors
+  styleKeywords: z.string(), // Descriptive words for the style
+  paletteMode: z.enum(["strict", "loose"]).optional().default("loose"), // Color mode
+  strictPalette: z.array(z.string().regex(/^#[0-9A-Fa-f]{6}$/)).optional(), // HEX colors for strict mode
+  loosePalette: z.string().optional(), // Color description for loose mode (recommended)
+  defaultPalette: z.array(z.string().regex(/^#[0-9A-Fa-f]{6}$/)).optional(), // Legacy: kept for backward compatibility
   rules: z.string(), // Universal drawing rules
   negativePrompt: z.string(), // Negative prompt keywords
 });

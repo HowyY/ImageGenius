@@ -122,18 +122,18 @@ const STYLE_PRESETS: Array<
   },
   {
     id: "cyan_sketchline_vector_v2",
-    label: "Cyan Sketchline V2 (Universal)",
-    description: "V2 architecture test - simplified prompt structure with universal template format",
+    label: "Sketchline Vector V2 (Universal)",
+    description: "Deep-blue outlines with cyan accents, flat 2D illustration, simple dot eyes, clean vector style",
     engines: ["nanobanana", "seedream"],
     basePrompt:
-      "simple clean line art, flat 2D shapes, thin cyan outlines, minimal shading, vector style",
+      "clean deep-blue line art, flat 2D illustration, soft cyan-to-blue gradient fills, simple facial features, no textures, no shadows",
     defaultColors: {
-      name: "Cyan Vector Palette",
+      name: "Deep Blue & Cyan Palette",
       colors: [
-        { name: "Primary Cyan", hex: "#00AEEF", role: "main elements" },
-        { name: "Light Cyan", hex: "#E6F7FF", role: "backgrounds" },
-        { name: "Deep Blue", hex: "#003B73", role: "accents" },
-        { name: "White", hex: "#FFFFFF", role: "fill" },
+        { name: "Deep Blue", hex: "#002B5C", role: "outlines" },
+        { name: "Cyan", hex: "#00AEEF", role: "accents" },
+        { name: "Medium Blue", hex: "#0084D7", role: "gradients" },
+        { name: "White", hex: "#FFFFFF", role: "background" },
       ],
     },
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
@@ -236,6 +236,9 @@ function buildSimplePrompt(
 
 // V2 Universal template builder - simplified, structured prompt format
 // Following the new architecture: short, structured prompt (40-70 words)
+// Supports two palette modes:
+// - loose: Uses descriptive text (loosePalette) - recommended for better gradient behavior
+// - strict: Uses HEX array (strictPalette) - for brand color requirements
 function buildUniversalPrompt(
   userPrompt: string,
   style: StylePreset & { basePrompt: string },
@@ -249,19 +252,8 @@ function buildUniversalPrompt(
   const rules = template.rules || "";
   const negativePrompt = template.negativePrompt || "";
   
-  // Determine which palette to use: override > template default > style default colors
-  let palette: string[] = [];
-  if (paletteOverride && paletteOverride.length > 0) {
-    palette = paletteOverride;
-  } else if (template.defaultPalette && template.defaultPalette.length > 0) {
-    palette = template.defaultPalette;
-  } else if (style.defaultColors?.colors) {
-    // Fallback to style's default colors
-    palette = style.defaultColors.colors.map((c: any) => c.hex);
-  }
-  
-  // Convert palette array to comma-separated string
-  const paletteColors = palette.join(", ");
+  // Determine palette mode: default to "loose" for better results
+  const paletteMode = template.paletteMode || "loose";
   
   // Build framing instruction (can be enhanced with user framing selection later)
   const framing = hasUserReference 
@@ -279,14 +271,37 @@ ${framing}
 In ${styleName} style:
 ${styleKeywords}`;
 
-  // Add color palette section
-  if (paletteColors) {
+  // Add color palette section based on palette mode
+  if (paletteMode === "loose" && template.loosePalette) {
+    // Loose mode: Use descriptive color text (recommended for better gradient behavior)
     prompt += `
+
+[COLORS]
+${template.loosePalette}`;
+  } else {
+    // Strict mode or fallback: Use HEX palette
+    let palette: string[] = [];
+    if (paletteOverride && paletteOverride.length > 0) {
+      palette = paletteOverride;
+    } else if (template.strictPalette && template.strictPalette.length > 0) {
+      palette = template.strictPalette;
+    } else if (template.defaultPalette && template.defaultPalette.length > 0) {
+      // Legacy support: use defaultPalette if strictPalette not defined
+      palette = template.defaultPalette;
+    } else if (style.defaultColors?.colors) {
+      // Fallback to style's default colors
+      palette = style.defaultColors.colors.map((c: any) => c.hex);
+    }
+    
+    if (palette.length > 0) {
+      const paletteColors = palette.join(", ");
+      prompt += `
 
 [COLORS]
 Use the following palette:
 ${paletteColors}.
 Follow the palette's saturation and contrast.`;
+    }
   }
 
   // Add rules section

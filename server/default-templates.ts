@@ -163,12 +163,26 @@ export const DEFAULT_TEMPLATES: DefaultTemplateConfig[] = [
   {
     styleId: "cyan_sketchline_vector_v2",
     templateData: {
-      name: "Cyan Sketchline Vector V2",
+      name: "Sketchline Vector V2",
       templateType: "universal",
-      styleKeywords: "simple clean line art, flat 2D shapes, thin cyan outlines, minimal shading, vector style, geometric forms, modern illustration, white fill, smooth curves",
-      defaultPalette: ["#00AEEF", "#E6F7FF", "#003B73", "#FFFFFF"],
-      rules: "Consistent proportions, natural posture, correct scale between character and environment, clean minimal background, no text, no watermark, maintain style consistency across all elements.",
-      negativePrompt: "bad proportions, distorted limbs, extra faces, inconsistent character identity, blurry, noisy, cluttered background, text, watermark, signature, multiple art styles",
+      // Updated styleKeywords per user feedback:
+      // - Deep-blue outlines for characters AND background
+      // - Cyan only for small accents
+      // - Simple facial features (dot eyes, small curved mouth)
+      styleKeywords: "clean deep-blue (#002B5C) line art with consistent medium line weight and smooth rounded strokes, simple dot eyes and small curved mouth, no nose, flat white face area with no shading, flat 2D illustration with most background outlines also in deep-blue for a unified clean look, soft cyan-to-blue gradient fills on clothing and main objects, solid deep-blue hair fill, only small accent marks in cyan (#00AEEF), no textures, no shadows, simplified anatomy and correct proportions",
+      // Palette mode: "loose" recommended for better gradient behavior
+      paletteMode: "loose",
+      // Loose palette description (recommended - generates results most similar to reference)
+      loosePalette: "Use a deep-blue line palette with soft cyan and blue accents. Apply gentle cyan-to-blue gradient fills on clothing and major objects. Keep background outlines mostly in deep blue with minimal cyan highlights. Avoid introducing any colors outside the blue-cyan family.",
+      // Strict palette (optional - for brand color requirements)
+      strictPalette: ["#002B5C", "#00AEEF", "#0084D7", "#FFFFFF"],
+      // Updated rules per user feedback:
+      // - Deep-blue outlines for both characters and background
+      // - Restrict cyan to small accents
+      rules: "Use deep-blue outlines for both characters and background to maintain consistency. Restrict cyan to small accent marks or object fills. Avoid using cyan for large background lines. Keep backgrounds simple and clean without clutter. Avoid shading and textures. Preserve flat 2D aesthetic and keep all colors inside the blue-cyan family on a white background. No text, no watermarks, no extra characters.",
+      // Updated negativePrompt per user feedback:
+      // Added "excessive cyan outlines, cyan background lines"
+      negativePrompt: "excessive cyan outlines, cyan background lines, bad proportions, distorted limbs, extra faces, inconsistent character identity, blurry, noisy, cluttered background, text, watermark, logo, signature, mixed art styles, heavy shadows",
     },
     referenceImages: [
       "/reference-images/cyan_sketchline_vector/1.png",
