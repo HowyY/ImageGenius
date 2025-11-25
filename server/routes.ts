@@ -560,6 +560,110 @@ async function pollSeedreamResult(taskId: string) {
   throw new Error("Seedream task timed out");
 }
 
+// Nano Banana Pro API - Higher quality with 2K/4K resolution support
+async function callNanoProEdit(prompt: string, imageUrls: string[]) {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
+  }
+
+  // Nano Pro supports up to 8 reference images
+  if (imageUrls.length > 8) {
+    console.warn(`[NanoPro] Truncating ${imageUrls.length} images to 8 (API limit)`);
+  }
+  const limitedImageUrls = imageUrls.slice(0, 8);
+
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "nano-banana-pro",
+      input: {
+        prompt,
+        image_input: limitedImageUrls,
+        aspect_ratio: "16:9",
+        resolution: "2K",
+        output_format: "png",
+      },
+    }),
+  });
+
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`NanoPro failed to create task: ${createResponse.status} ${createJson.msg ?? ""}`);
+  }
+
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("NanoPro response missing taskId");
+  }
+
+  return await pollNanoProResult(taskId);
+}
+
+async function pollNanoProResult(taskId: string) {
+  // Nano Pro may take longer due to higher quality processing
+  const maxAttempts = 60;
+  const delayMs = 3000;
+
+  console.log(`[NanoPro] Starting to poll task ${taskId} (max ${maxAttempts} attempts, ${delayMs}ms delay)`);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+    const resultResponse = await fetch(`${KIE_BASE_URL}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${KIE_API_KEY}`,
+      },
+    });
+
+    const resultJson = await resultResponse.json();
+
+    if (!resultResponse.ok || resultJson.code !== 200) {
+      throw new Error(`NanoPro failed to query task: ${resultResponse.status} ${resultJson.msg ?? ""}`);
+    }
+
+    const state = resultJson.data?.state;
+    console.log(`[NanoPro] Polling attempt ${attempt + 1}/${maxAttempts}: state="${state}"`);
+
+    // Continue polling for any in-progress states
+    if (state === "waiting" || state === "queuing" || state === "queued" || state === "generating" || state === "processing") {
+      continue;
+    }
+
+    if (state === "fail") {
+      const failMsg = resultJson.data?.failMsg || "NanoPro task failed";
+      console.error(`[NanoPro] Task failed: ${failMsg}`);
+      throw new Error(failMsg);
+    }
+
+    if (state === "success") {
+      const resultField = resultJson.data?.resultJson;
+      if (!resultField) {
+        throw new Error("NanoPro result missing resultJson");
+      }
+
+      const parsed = JSON.parse(resultField);
+      const url = parsed.resultUrls?.[0];
+      if (!url) {
+        throw new Error("NanoPro result missing result URL");
+      }
+      console.log(`[NanoPro] Task completed successfully: ${url}`);
+      return url;
+    }
+
+    // Handle unknown states - log and continue polling
+    console.warn(`[NanoPro] Unknown state '${state}', continuing to poll...`);
+  }
+
+  console.error(`[NanoPro] Task timed out after ${maxAttempts * delayMs / 1000} seconds`);
+  throw new Error("NanoPro task timed out");
+}
+
 // Get all reference image file paths for a style from the file system
 function getStyleReferenceImagePaths(styleId: string): string[] {
   const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
@@ -1016,10 +1120,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
 
-      const imageUrl =
-        engine === "nanobanana"
-          ? await callNanoBananaEdit(finalPrompt, imageUrls)
-          : await callSeedreamEdit(finalPrompt, imageUrls);
+      // Route to appropriate engine
+      let imageUrl: string;
+      if (engine === "nanobanana") {
+        imageUrl = await callNanoBananaEdit(finalPrompt, imageUrls);
+      } else if (engine === "nanopro") {
+        imageUrl = await callNanoProEdit(finalPrompt, imageUrls);
+      } else {
+        imageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
+      }
 
       let historyId: number | undefined;
       try {
