@@ -90,14 +90,20 @@ export default function Storyboard() {
     },
   });
 
-  const handleFieldChange = useCallback((sceneId: number, field: keyof EditingState, value: string) => {
-    setEditingScenes(prev => ({
-      ...prev,
-      [sceneId]: {
-        ...prev[sceneId],
-        [field]: value,
-      }
-    }));
+  const handleFieldChange = useCallback((sceneId: number, field: keyof EditingState, value: string, scene: SelectStoryboardScene) => {
+    setEditingScenes(prev => {
+      const existing = prev[sceneId] || {
+        voiceOver: scene.voiceOver || "",
+        visualDescription: scene.visualDescription || "",
+      };
+      return {
+        ...prev,
+        [sceneId]: {
+          ...existing,
+          [field]: value,
+        }
+      };
+    });
   }, []);
 
   const handleFieldBlur = useCallback((scene: SelectStoryboardScene, field: keyof EditingState) => {
@@ -291,7 +297,7 @@ export default function Storyboard() {
                     <Textarea
                       placeholder="Enter voice over text..."
                       value={getFieldValue(scene, "voiceOver")}
-                      onChange={(e) => handleFieldChange(scene.id, "voiceOver", e.target.value)}
+                      onChange={(e) => handleFieldChange(scene.id, "voiceOver", e.target.value, scene)}
                       onFocus={() => initializeEditing(scene)}
                       onBlur={() => handleFieldBlur(scene, "voiceOver")}
                       className="min-h-[60px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
@@ -306,7 +312,7 @@ export default function Storyboard() {
                     <Textarea
                       placeholder="Enter visual description for image generation..."
                       value={getFieldValue(scene, "visualDescription")}
-                      onChange={(e) => handleFieldChange(scene.id, "visualDescription", e.target.value)}
+                      onChange={(e) => handleFieldChange(scene.id, "visualDescription", e.target.value, scene)}
                       onFocus={() => initializeEditing(scene)}
                       onBlur={() => handleFieldBlur(scene, "visualDescription")}
                       className="min-h-[80px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
