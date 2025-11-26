@@ -48,14 +48,14 @@ export function Navigation() {
               </Link>
             </Button>
             <Button
-              variant={location === "/prompt-editor" ? "default" : "ghost"}
+              variant={location === "/style-editor" ? "default" : "ghost"}
               size="sm"
               asChild
-              data-testid="button-nav-prompt-editor"
+              data-testid="button-nav-style-editor"
             >
-              <Link href="/prompt-editor">
+              <Link href="/style-editor">
                 <Sparkles className="w-4 h-4 mr-2" />
-                Prompt Editor
+                Style Editor
               </Link>
             </Button>
           </nav>
