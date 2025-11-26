@@ -646,7 +646,7 @@ export class MemStorage implements IStorage {
       throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
     }
     return await db.select().from(characters).orderBy(desc(characters.createdAt));
-  },
+  }
 
   async getCharacter(id: string) {
     if (!db) {
@@ -654,7 +654,7 @@ export class MemStorage implements IStorage {
     }
     const result = await db.select().from(characters).where(eq(characters.id, id));
     return result[0] || null;
-  },
+  }
 
   async createCharacter(data: InsertCharacter) {
     if (!db) {
@@ -662,7 +662,7 @@ export class MemStorage implements IStorage {
     }
     const result = await db.insert(characters).values(data).returning();
     return result[0];
-  },
+  }
 
   async updateCharacter(id: string, data: UpdateCharacter) {
     if (!db) {
@@ -674,7 +674,7 @@ export class MemStorage implements IStorage {
       .where(eq(characters.id, id))
       .returning();
     return result[0] || null;
-  },
+  }
 
   async deleteCharacter(id: string) {
     if (!db) {
@@ -682,7 +682,7 @@ export class MemStorage implements IStorage {
     }
     const result = await db.delete(characters).where(eq(characters.id, id)).returning();
     return result.length > 0;
-  },
+  }
 
 
   // Get scenes by storyboard ID

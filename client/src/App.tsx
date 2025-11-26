@@ -19,7 +19,7 @@ function Router() {
       <Route path="/history" component={History} />
       <Route path="/storyboard" component={Storyboard} />
       <Route path="/style-editor" component={StyleEditor} />
-      <Route path="/characters" element={<CharacterEditor />} />
+      <Route path="/characters" component={CharacterEditor} />
       <Route path="/prompt-editor" component={PromptEditor} />
       <Route component={NotFound} />
     </Switch>
