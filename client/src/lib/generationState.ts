@@ -2,12 +2,18 @@ const STYLE_LOCK_KEY = 'ai_generator_style_lock';
 const LOCKED_STYLE_ID_KEY = 'ai_generator_locked_style_id';
 const LAST_GENERATED_IMAGE_KEY = 'ai_generator_last_generated_image';
 const USER_REFERENCE_IMAGES_KEY = 'ai_generator_user_reference_images';
+const PROMPT_KEY = 'ai_generator_prompt';
+const ENGINE_KEY = 'ai_generator_engine';
+const SELECTED_STYLE_KEY = 'ai_generator_selected_style';
 
 export interface GenerationState {
   styleLocked: boolean;
   lockedStyleId: string | null;
   lastGeneratedImage: string | null;
   userReferenceImages: string[];
+  prompt: string;
+  engine: string;
+  selectedStyleId: string | null;
 }
 
 export function getStyleLock(): { locked: boolean; styleId: string | null } {
@@ -87,14 +93,55 @@ export function clearUserReferenceImages(): void {
   localStorage.removeItem(USER_REFERENCE_IMAGES_KEY);
 }
 
+// Prompt persistence
+export function getPrompt(): string {
+  return localStorage.getItem(PROMPT_KEY) || '';
+}
+
+export function setPrompt(prompt: string): void {
+  localStorage.setItem(PROMPT_KEY, prompt);
+}
+
+export function clearPrompt(): void {
+  localStorage.removeItem(PROMPT_KEY);
+}
+
+// Engine persistence
+export function getEngine(): string {
+  return localStorage.getItem(ENGINE_KEY) || 'nanobanana';
+}
+
+export function setEngine(engine: string): void {
+  localStorage.setItem(ENGINE_KEY, engine);
+}
+
+// Selected style persistence (separate from locked style)
+export function getSelectedStyleId(): string | null {
+  return localStorage.getItem(SELECTED_STYLE_KEY);
+}
+
+export function setSelectedStyleId(styleId: string | null): void {
+  if (styleId) {
+    localStorage.setItem(SELECTED_STYLE_KEY, styleId);
+  } else {
+    localStorage.removeItem(SELECTED_STYLE_KEY);
+  }
+}
+
 export function getGenerationState(): GenerationState {
   const { locked, styleId } = getStyleLock();
   const lastGeneratedImage = getLastGeneratedImage();
   const userReferenceImages = getUserReferenceImages();
+  const prompt = getPrompt();
+  const engine = getEngine();
+  const selectedStyleId = getSelectedStyleId();
   return {
     styleLocked: locked,
     lockedStyleId: styleId,
     lastGeneratedImage,
     userReferenceImages,
+    prompt,
+    engine,
+    selectedStyleId,
   };
 }

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Template Manager</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0;
+      color: #1a1a1a;
+    }
+    .back-link {
+      color: #0066cc;
+      text-decoration: none;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+    .container {
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #0052a3;
+    }
+    button.secondary {
+      background: #6b7280;
+    }
+    button.secondary:hover {
+      background: #4b5563;
+    }
+    button.danger {
+      background: #dc2626;
+    }
+    button.danger:hover {
+      background: #b91c1c;
+    }
+    button.success {
+      background: #10b981;
+    }
+    button.success:hover {
+      background: #059669;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 16px;
+    }
+    .template-card {
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .template-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: #1a1a1a;
+    }
+    .template-card .style-id {
+      color: #6b7280;
+      font-size: 12px;
+      font-family: monospace;
+      margin-bottom: 12px;
+    }
+    .template-card .template-type {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+    .template-type.structured {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .template-type.simple {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .template-card .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .template-card button {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    .message {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 16px 0;
+      display: none;
+    }
+    .message.success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #10b981;
+    }
+    .message.error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #dc2626;
+    }
+    .message.info {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #3b82f6;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #6b7280;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e5e5e5;
+      border-top-color: #0066cc;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    pre {
+      background: #1a1a1a;
+      color: #e5e5e5;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .tab {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: #6b7280;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tab:hover {
+      color: #1a1a1a;
+    }
+    .tab.active {
+      color: #0066cc;
+      border-bottom-color: #0066cc;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .compare-view {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .compare-column h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #6b7280;
+    }
+    @media (max-width: 768px) {
+      .compare-view {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Template Manager</h1>
+    <a href="/prompt-editor" class="back-link">Back to Prompt Editor</a>
+  </div>
+
+  <div class="container">
+    <h2 class="section-title">Quick Actions</h2>
+    <div class="button-group">
+      <button onclick="resetAllTemplates()" class="danger">Reset All Templates to Default</button>
+      <button onclick="exportAllTemplates()" class="secondary">Export All Templates (JSON)</button>
+      <button onclick="refreshTemplates()">Refresh View</button>
+    </div>
+    <div id="globalMessage" class="message"></div>
+  </div>
+
+  <div class="container">
+    <h2 class="section-title">Current Templates in Database</h2>
+    <div id="templatesLoading" class="loading">
+      <div class="spinner"></div>
+      <span>Loading templates...</span>
+    </div>
+    <div id="templatesGrid" class="template-grid" style="display: none;"></div>
+    <div id="templatesEmpty" style="display: none; color: #6b7280; padding: 20px; text-align: center;">
+      No templates found in database. Click "Reset All Templates" to initialize.
+    </div>
+  </div>
+
+  <div class="container">
+    <h2 class="section-title">Default Templates (Read-Only)</h2>
+    <p style="color: #6b7280; margin-bottom: 16px;">These are the built-in default configurations. Use "Reset" to restore a template to these values.</p>
+    <div id="defaultTemplatesLoading" class="loading">
+      <div class="spinner"></div>
+      <span>Loading default templates...</span>
+    </div>
+    <div id="defaultTemplatesGrid" class="template-grid" style="display: none;"></div>
+  </div>
+
+  <div class="container">
+    <h2 class="section-title">Template Details</h2>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('current')">Current Templates</button>
+      <button class="tab" onclick="switchTab('default')">Default Templates</button>
+      <button class="tab" onclick="switchTab('compare')">Compare</button>
+    </div>
+    <div id="tab-current" class="tab-content active">
+      <div id="currentTemplatesJson">
+        <p style="color: #6b7280;">Select a template above or click "Refresh View" to see details.</p>
+      </div>
+    </div>
+    <div id="tab-default" class="tab-content">
+      <div id="defaultTemplatesJson">
+        <p style="color: #6b7280;">Loading...</p>
+      </div>
+    </div>
+    <div id="tab-compare" class="tab-content">
+      <div class="compare-view">
+        <div class="compare-column">
+          <h4>Current (Database)</h4>
+          <pre id="compareCurrentJson">Loading...</pre>
+        </div>
+        <div class="compare-column">
+          <h4>Default (Built-in)</h4>
+          <pre id="compareDefaultJson">Loading...</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentTemplates = [];
+    let defaultTemplates = [];
+
+    async function fetchTemplates() {
+      try {
+        const response = await fetch('/api/templates');
+        if (!response.ok) throw new Error('Failed to fetch templates');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching templates:', error);
+        return [];
+      }
+    }
+
+    async function fetchDefaultTemplates() {
+      try {
+        const response = await fetch('/api/default-templates');
+        if (!response.ok) throw new Error('Failed to fetch default templates');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching default templates:', error);
+        return [];
+      }
+    }
+
+    function getTemplateType(template) {
+      const data = template.templateData || template;
+      return data.templateType === 'simple' ? 'simple' : 'structured';
+    }
+
+    function getTemplateName(template) {
+      const data = template.templateData || template;
+      return data.name || template.styleId || 'Unnamed Template';
+    }
+
+    function renderTemplateCard(template, isDefault = false) {
+      const styleId = template.styleId;
+      const name = getTemplateName(template);
+      const type = getTemplateType(template);
+      
+      const actionsHtml = isDefault ? '' : `
+        <div class="card-actions">
+          <button onclick="resetTemplate('${styleId}')" class="danger">Reset to Default</button>
+          <button onclick="viewTemplate('${styleId}')" class="secondary">View JSON</button>
+          <button onclick="exportTemplate('${styleId}')">Export</button>
+        </div>
+      `;
+
+      return `
+        <div class="template-card">
+          <h3>${name}</h3>
+          <div class="style-id">${styleId}</div>
+          <span class="template-type ${type}">${type.toUpperCase()}</span>
+          ${actionsHtml}
+        </div>
+      `;
+    }
+
+    async function loadTemplates() {
+      const loadingEl = document.getElementById('templatesLoading');
+      const gridEl = document.getElementById('templatesGrid');
+      const emptyEl = document.getElementById('templatesEmpty');
+
+      loadingEl.style.display = 'flex';
+      gridEl.style.display = 'none';
+      emptyEl.style.display = 'none';
+
+      currentTemplates = await fetchTemplates();
+
+      loadingEl.style.display = 'none';
+
+      if (currentTemplates.length === 0) {
+        emptyEl.style.display = 'block';
+      } else {
+        gridEl.innerHTML = currentTemplates.map(t => renderTemplateCard(t, false)).join('');
+        gridEl.style.display = 'grid';
+      }
+
+      document.getElementById('currentTemplatesJson').innerHTML = 
+        `<pre>${JSON.stringify(currentTemplates, null, 2)}</pre>`;
+      document.getElementById('compareCurrentJson').textContent = 
+        JSON.stringify(currentTemplates, null, 2);
+    }
+
+    async function loadDefaultTemplates() {
+      const loadingEl = document.getElementById('defaultTemplatesLoading');
+      const gridEl = document.getElementById('defaultTemplatesGrid');
+
+      loadingEl.style.display = 'flex';
+      gridEl.style.display = 'none';
+
+      defaultTemplates = await fetchDefaultTemplates();
+
+      loadingEl.style.display = 'none';
+      gridEl.innerHTML = defaultTemplates.map(t => renderTemplateCard(t, true)).join('');
+      gridEl.style.display = 'grid';
+
+      document.getElementById('defaultTemplatesJson').innerHTML = 
+        `<pre>${JSON.stringify(defaultTemplates, null, 2)}</pre>`;
+      document.getElementById('compareDefaultJson').textContent = 
+        JSON.stringify(defaultTemplates, null, 2);
+    }
+
+    function showMessage(elementId, type, message, duration = 5000) {
+      const el = document.getElementById(elementId);
+      el.className = `message ${type}`;
+      el.textContent = message;
+      el.style.display = 'block';
+      
+      if (duration > 0) {
+        setTimeout(() => {
+          el.style.display = 'none';
+        }, duration);
+      }
+    }
+
+    async function resetTemplate(styleId) {
+      if (!confirm(`Are you sure you want to reset "${styleId}" to its default configuration? This will overwrite any custom changes.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/templates/${styleId}/reset`, {
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to reset template');
+        }
+
+        showMessage('globalMessage', 'success', `Template "${styleId}" has been reset to default.`);
+        await loadTemplates();
+      } catch (error) {
+        showMessage('globalMessage', 'error', `Error: ${error.message}`);
+      }
+    }
+
+    async function resetAllTemplates() {
+      if (!confirm('Are you sure you want to reset ALL templates to their default configurations? This will overwrite any custom changes.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/templates/reset-all', {
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to reset templates');
+        }
+
+        const result = await response.json();
+        const successCount = result.results.filter(r => r.success).length;
+        showMessage('globalMessage', 'success', `All ${successCount} templates have been reset to default.`);
+        await loadTemplates();
+      } catch (error) {
+        showMessage('globalMessage', 'error', `Error: ${error.message}`);
+      }
+    }
+
+    function viewTemplate(styleId) {
+      const template = currentTemplates.find(t => t.styleId === styleId);
+      if (template) {
+        switchTab('current');
+        document.getElementById('currentTemplatesJson').innerHTML = 
+          `<h4>Template: ${styleId}</h4><pre>${JSON.stringify(template, null, 2)}</pre>`;
+      }
+    }
+
+    function exportTemplate(styleId) {
+      const template = currentTemplates.find(t => t.styleId === styleId);
+      if (template) {
+        downloadJson(template, `template-${styleId}.json`);
+      }
+    }
+
+    function exportAllTemplates() {
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        templates: currentTemplates,
+      };
+      downloadJson(exportData, `templates-backup-${Date.now()}.json`);
+      showMessage('globalMessage', 'success', 'Templates exported successfully.');
+    }
+
+    function downloadJson(data, filename) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      
+      document.querySelector(`.tab[onclick*="${tabId}"]`).classList.add('active');
+      document.getElementById(`tab-${tabId}`).classList.add('active');
+    }
+
+    async function refreshTemplates() {
+      await Promise.all([loadTemplates(), loadDefaultTemplates()]);
+      showMessage('globalMessage', 'info', 'Templates refreshed.');
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await Promise.all([loadTemplates(), loadDefaultTemplates()]);
+    });
+  </script>
+</body>
+</html>

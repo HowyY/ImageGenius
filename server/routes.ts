@@ -4,9 +4,10 @@ import { z } from "zod";
 import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
 import { storage } from "./storage";
 import { uploadReferenceImages, uploadFileToKIE, type StyleImageMapping } from "./services/fileUpload";
-import { join } from "path";
+import { DEFAULT_TEMPLATES, getDefaultTemplate, getAllDefaultTemplateIds } from "./default-templates";
+import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
-import { dirname } from "path";
+import { readdirSync, existsSync, statSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,72 +25,63 @@ const STYLE_PRESETS: Array<
     label: "Cyan Sketchline Vector",
     description:
       "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
-    engines: ["nanobanana", "seedream"],
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
-      "clean sketch-style vector line art, navy blue outlines, white negative space, subtle cyan to blue gradients for fills, minimalist details, modern financial illustration tone",
+      "clean sketch-style vector line art, white negative space, minimalist details, modern financial illustration tone",
+    defaultColors: {
+      name: "Cyan & Navy Palette",
+      colors: [
+        { name: "Navy Blue", hex: "#1E3A8A", role: "outlines" },
+        { name: "Cyan", hex: "#06B6D4", role: "fills" },
+        { name: "Light Cyan", hex: "#22D3EE", role: "highlights" },
+        { name: "White", hex: "#FFFFFF", role: "background" },
+      ],
+    },
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
     id: "warm_orange_flat",
     label: "Warm Orange Flat Illustration",
     description: "Warm orange/red flat illustration with strong contrast and almost white background",
-    engines: ["nanobanana", "seedream"],
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
-    id: "photorealistic",
-    label: "Photorealistic",
-    description: "Hyper-realistic photography style with natural lighting and fine details",
-    engines: ["nanobanana", "seedream"],
+    id: "simple_cyan_test",
+    label: "Simple Cyan (Test)",
+    description: "Test style using simple concatenation template - same cyan vector look with minimal prompt structure",
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
-      "photorealistic, highly detailed, natural lighting, professional photography, sharp focus, high resolution, 8k quality, realistic textures",
+      "clean sketch-style vector line art, hand-drawn navy outlines on bright white space, subtle cyan-to-blue gradients, financial illustration vibe, minimalist details, flat color, high quality",
+    defaultColors: {
+      name: "Cyan & Navy Palette",
+      colors: [
+        { name: "Navy Blue", hex: "#1E3A8A", role: "outlines" },
+        { name: "Cyan", hex: "#06B6D4", role: "fills" },
+        { name: "Light Cyan", hex: "#22D3EE", role: "highlights" },
+        { name: "White", hex: "#FFFFFF", role: "background" },
+      ],
+    },
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
   {
-    id: "watercolor_painting",
-    label: "Watercolor Painting",
-    description: "Soft watercolor art with flowing colors and artistic brush strokes",
-    engines: ["nanobanana", "seedream"],
+    id: "cyan_sketchline_vector_v2",
+    label: "Sketchline Vector V2 (Universal)",
+    description: "Deep-blue outlines with cyan accents, flat 2D illustration, simple dot eyes, clean vector style",
+    engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
-      "watercolor painting style, soft edges, flowing colors, artistic brush strokes, paper texture, delicate washes, traditional art medium",
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
-  },
-  {
-    id: "pixel_art",
-    label: "Pixel Art",
-    description: "Retro 8-bit or 16-bit pixel art style with vibrant colors",
-    engines: ["nanobanana", "seedream"],
-    basePrompt:
-      "pixel art style, 16-bit graphics, retro gaming aesthetic, vibrant colors, sharp pixels, nostalgic feel, limited color palette",
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
-  },
-  {
-    id: "anime_style",
-    label: "Anime Style",
-    description: "Japanese anime art with bold lines, expressive characters, and vibrant colors",
-    engines: ["nanobanana", "seedream"],
-    basePrompt:
-      "anime art style, manga inspired, bold clean lines, expressive eyes, vibrant colors, cel shading, Japanese animation aesthetic",
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
-  },
-  {
-    id: "oil_painting",
-    label: "Oil Painting",
-    description: "Classic oil painting with rich textures and brushwork like the old masters",
-    engines: ["nanobanana", "seedream"],
-    basePrompt:
-      "oil painting style, thick brush strokes, rich textures, canvas texture visible, classical art, impressionist techniques, museum quality",
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
-  },
-  {
-    id: "minimalist_abstract",
-    label: "Minimalist Abstract",
-    description: "Simple geometric shapes with minimal colors and clean composition",
-    engines: ["nanobanana", "seedream"],
-    basePrompt:
-      "minimalist abstract art, geometric shapes, limited color palette, clean composition, negative space, modern art, simple forms",
+      "clean deep-blue line art, flat 2D illustration, soft cyan-to-blue gradient fills, simple facial features, no textures, no shadows",
+    defaultColors: {
+      name: "Deep Blue & Cyan Palette",
+      colors: [
+        { name: "Deep Blue", hex: "#002B5C", role: "outlines" },
+        { name: "Cyan", hex: "#00AEEF", role: "accents" },
+        { name: "Medium Blue", hex: "#0084D7", role: "gradients" },
+        { name: "White", hex: "#FFFFFF", role: "background" },
+      ],
+    },
     referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
   },
 ];
@@ -168,12 +160,133 @@ function buildPrompt(
 ${NEGATIVE_PROMPT}`.trim();
 }
 
+// Simple concatenation template builder
+function buildSimplePrompt(
+  userPrompt: string,
+  style: StylePreset & { basePrompt: string },
+  hasUserReference: boolean,
+  template: any
+): string {
+  const suffix = template.suffix || "white background, 8k resolution";
+  
+  // Simple concatenation: scene, style basePrompt, suffix
+  let prompt = `${userPrompt}, ${style.basePrompt}, ${suffix}`;
+  
+  // Add character lock instruction if user provided reference images
+  if (hasUserReference) {
+    prompt += "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**";
+  }
+  
+  return prompt;
+}
+
+// V2 Universal template builder - simplified, structured prompt format
+// Following the new architecture: short, structured prompt (40-70 words)
+// Supports two palette modes:
+// - loose: Uses descriptive text (loosePalette) - recommended for better gradient behavior
+// - strict: Uses HEX array (strictPalette) - for brand color requirements
+function buildUniversalPrompt(
+  userPrompt: string,
+  style: StylePreset & { basePrompt: string },
+  hasUserReference: boolean,
+  template: any,
+  paletteOverride?: string[]
+): string {
+  const styleName = template.name || style.label;
+  // Use template styleKeywords, but also incorporate style.basePrompt for context
+  const styleKeywords = template.styleKeywords || style.basePrompt || "";
+  const rules = template.rules || "";
+  const negativePrompt = template.negativePrompt || "";
+  
+  // Determine palette mode: default to "loose" for better results
+  const paletteMode = template.paletteMode || "loose";
+  
+  // Build framing instruction (can be enhanced with user framing selection later)
+  const framing = hasUserReference 
+    ? "Medium shot, balanced composition, keep exact character appearance from reference"
+    : "Medium shot, balanced composition";
+  
+  // Assemble the final prompt following the universal structure
+  let prompt = `[SCENE]
+${userPrompt}
+
+[FRAMING]
+${framing}
+
+[STYLE]
+In ${styleName} style:
+${styleKeywords}`;
+
+  // Add color palette section based on palette mode
+  if (paletteMode === "loose" && template.loosePalette) {
+    // Loose mode: Use descriptive color text (recommended for better gradient behavior)
+    prompt += `
+
+[COLORS]
+${template.loosePalette}`;
+  } else {
+    // Strict mode or fallback: Use HEX palette
+    let palette: string[] = [];
+    if (paletteOverride && paletteOverride.length > 0) {
+      palette = paletteOverride;
+    } else if (template.strictPalette && template.strictPalette.length > 0) {
+      palette = template.strictPalette;
+    } else if (template.defaultPalette && template.defaultPalette.length > 0) {
+      // Legacy support: use defaultPalette if strictPalette not defined
+      palette = template.defaultPalette;
+    } else if (style.defaultColors?.colors) {
+      // Fallback to style's default colors
+      palette = style.defaultColors.colors.map((c: any) => c.hex);
+    }
+    
+    if (palette.length > 0) {
+      const paletteColors = palette.join(", ");
+      prompt += `
+
+[COLORS]
+Use the following palette:
+${paletteColors}.
+Follow the palette's saturation and contrast.`;
+    }
+  }
+
+  // Add rules section
+  if (rules) {
+    prompt += `
+
+[RULES]
+${rules}`;
+  }
+
+  // Note: Negative prompt is handled separately in the API call
+  // but we can include it in the prompt for reference
+  if (negativePrompt) {
+    prompt += `
+
+[NEGATIVE]
+${negativePrompt}`;
+  }
+
+  return prompt.trim();
+}
+
 function buildPromptFromTemplate(
   userPrompt: string,
   style: StylePreset & { basePrompt: string },
   hasUserReference: boolean,
   template: any
 ) {
+  // Check if this is a simple template
+  if (template.templateType === "simple") {
+    return buildSimplePrompt(userPrompt, style, hasUserReference, template);
+  }
+  
+  // Check if this is a universal (v2) template
+  if (template.templateType === "universal") {
+    return buildUniversalPrompt(userPrompt, style, hasUserReference, template);
+  }
+  
+  // Structured template (default/legacy)
   const characterInstruction = hasUserReference 
     ? "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**\n"
     : "";
@@ -219,7 +332,33 @@ function buildPromptFromTemplate(
     prompt += "5. STYLE ENFORCEMENT\n";
     prompt += `- Apply ${style.basePrompt}\n`;
     prompt += `- ${template.styleEnforcement.styleRules}\n`;
-    prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+    
+    // Handle color palette based on mode
+    if (template.colorMode === "default") {
+      // Explicit default mode: Do not specify colors, let AI learn from reference images
+      // Skip color palette entirely - no color definitions in prompt
+    } else if (template.customColors?.colors && template.customColors.colors.length > 0) {
+      // Custom color palette (explicit or legacy templates with customColors but no colorMode)
+      // Descriptive format with usage guidance
+      prompt += "- Color palette:\n";
+      template.customColors.colors.forEach((color: any, index: number) => {
+        const usage = color.role ? ` (primarily for ${color.role})` : '';
+        prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
+      });
+      prompt += "  • Maintain consistent use of these colors throughout the image\n";
+    } else if (style.defaultColors?.colors) {
+      // Style default colors (when template has no custom colors and colorMode not set to default)
+      prompt += "- Color palette:\n";
+      style.defaultColors.colors.forEach((color: any, index: number) => {
+        const usage = color.role ? ` (primarily for ${color.role})` : '';
+        prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
+      });
+      prompt += "  • Maintain consistent use of these colors throughout the image\n";
+    } else {
+      // Fallback to text description
+      prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
+    }
+    
     prompt += `- Texture density: ${template.styleEnforcement.textureDensity}\n\n`;
   }
 
@@ -268,7 +407,7 @@ async function callNanoBananaEdit(prompt: string, imageUrls: string[]) {
 }
 
 async function pollNanoBananaResult(taskId: string) {
-  const maxAttempts = 10;
+  const maxAttempts = 40;
   const delayMs = 3000;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -288,12 +427,17 @@ async function pollNanoBananaResult(taskId: string) {
     }
 
     const state = resultJson.data?.state;
-    if (state === "waiting" || state === "queuing" || state === "generating") {
+    console.log(`[NanoBanana] Attempt ${attempt + 1}/${maxAttempts}, state: ${state}`);
+    
+    // Continue polling for any in-progress states
+    if (state === "waiting" || state === "queuing" || state === "queued" || state === "generating" || state === "processing") {
       continue;
     }
 
     if (state === "fail") {
-      throw new Error(resultJson.data?.failMsg || "NanoBanana task failed");
+      const failMsg = resultJson.data?.failMsg || "NanoBanana task failed";
+      console.error(`[NanoBanana] Task failed: ${failMsg}`);
+      throw new Error(failMsg);
     }
 
     if (state === "success") {
@@ -307,10 +451,15 @@ async function pollNanoBananaResult(taskId: string) {
       if (!url) {
         throw new Error("NanoBanana result missing result URL");
       }
+      console.log(`[NanoBanana] Task completed successfully: ${url}`);
       return url;
     }
+    
+    // Handle unknown states - log and continue polling rather than failing immediately
+    console.warn(`[NanoBanana] Unknown state '${state}', continuing to poll...`);
   }
 
+  console.error(`[NanoBanana] Task timed out after ${maxAttempts * delayMs / 1000} seconds`);
   throw new Error("NanoBanana task timed out");
 }
 
@@ -411,59 +560,388 @@ async function pollSeedreamResult(taskId: string) {
   throw new Error("Seedream task timed out");
 }
 
-function getReferenceImageUrl(styleId: string): string {
-  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
-  if (uploadedStyle && uploadedStyle.imageUrls.length > 0) {
-    return uploadedStyle.imageUrls[0];
+// Nano Banana Pro API - Higher quality with 2K/4K resolution support
+async function callNanoProEdit(prompt: string, imageUrls: string[]) {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
   }
-  return DEFAULT_REFERENCE_IMAGE;
+
+  // Nano Pro supports up to 8 reference images
+  if (imageUrls.length > 8) {
+    console.warn(`[NanoPro] Truncating ${imageUrls.length} images to 8 (API limit)`);
+  }
+  const limitedImageUrls = imageUrls.slice(0, 8);
+
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "nano-banana-pro",
+      input: {
+        prompt,
+        image_input: limitedImageUrls,
+        aspect_ratio: "16:9",
+        resolution: "2K",
+        output_format: "png",
+      },
+    }),
+  });
+
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`NanoPro failed to create task: ${createResponse.status} ${createJson.msg ?? ""}`);
+  }
+
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("NanoPro response missing taskId");
+  }
+
+  return await pollNanoProResult(taskId);
 }
 
-function getAllReferenceImageUrls(styleId: string): string[] {
-  const uploadedStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
-  if (uploadedStyle && uploadedStyle.imageUrls.length > 0) {
-    return uploadedStyle.imageUrls;
+async function pollNanoProResult(taskId: string) {
+  // Nano Pro may take longer due to higher quality processing
+  const maxAttempts = 60;
+  const delayMs = 3000;
+
+  console.log(`[NanoPro] Starting to poll task ${taskId} (max ${maxAttempts} attempts, ${delayMs}ms delay)`);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+    const resultResponse = await fetch(`${KIE_BASE_URL}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${KIE_API_KEY}`,
+      },
+    });
+
+    const resultJson = await resultResponse.json();
+
+    if (!resultResponse.ok || resultJson.code !== 200) {
+      throw new Error(`NanoPro failed to query task: ${resultResponse.status} ${resultJson.msg ?? ""}`);
+    }
+
+    const state = resultJson.data?.state;
+    console.log(`[NanoPro] Polling attempt ${attempt + 1}/${maxAttempts}: state="${state}"`);
+
+    // Continue polling for any in-progress states
+    if (state === "waiting" || state === "queuing" || state === "queued" || state === "generating" || state === "processing") {
+      continue;
+    }
+
+    if (state === "fail") {
+      const failMsg = resultJson.data?.failMsg || "NanoPro task failed";
+      console.error(`[NanoPro] Task failed: ${failMsg}`);
+      throw new Error(failMsg);
+    }
+
+    if (state === "success") {
+      const resultField = resultJson.data?.resultJson;
+      if (!resultField) {
+        throw new Error("NanoPro result missing resultJson");
+      }
+
+      const parsed = JSON.parse(resultField);
+      const url = parsed.resultUrls?.[0];
+      if (!url) {
+        throw new Error("NanoPro result missing result URL");
+      }
+      console.log(`[NanoPro] Task completed successfully: ${url}`);
+      return url;
+    }
+
+    // Handle unknown states - log and continue polling
+    console.warn(`[NanoPro] Unknown state '${state}', continuing to poll...`);
   }
-  return [DEFAULT_REFERENCE_IMAGE];
+
+  console.error(`[NanoPro] Task timed out after ${maxAttempts * delayMs / 1000} seconds`);
+  throw new Error("NanoPro task timed out");
+}
+
+// Get all reference image file paths for a style from the file system
+function getStyleReferenceImagePaths(styleId: string): string[] {
+  const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
+  
+  if (!existsSync(styleDir) || !statSync(styleDir).isDirectory()) {
+    return [];
+  }
+
+  try {
+    const files = readdirSync(styleDir);
+    const imagePaths = files
+      .filter((file) => {
+        const ext = extname(file).toLowerCase();
+        return [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext);
+      })
+      .map((file) => `/reference-images/${styleId}/${file}`);
+    
+    return imagePaths;
+  } catch (error) {
+    console.error(`Error reading style directory ${styleId}:`, error);
+    return [];
+  }
+}
+
+// In-memory cache for uploaded image URLs to avoid re-uploading
+// Store promises to handle concurrent requests for the same image
+const uploadCache = new Map<string, Promise<string>>();
+
+async function uploadImageOnDemand(relativePath: string, styleId: string): Promise<string> {
+  // If the path is already an HTTPS URL (from previously uploaded images), return it directly
+  if (relativePath.startsWith('https://') || relativePath.startsWith('http://')) {
+    console.log(`Using existing uploaded URL: ${relativePath}`);
+    return relativePath;
+  }
+  
+  const cacheKey = `${styleId}:${relativePath}`;
+  
+  // Check if upload is already in progress or completed
+  if (uploadCache.has(cacheKey)) {
+    return uploadCache.get(cacheKey)!;
+  }
+
+  // Build absolute file path
+  // Remove leading slash from relativePath to prevent path.join from discarding base path
+  const normalizedPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+  const referenceImagesPath = join(__dirname, "..", "client", "public");
+  const fullPath = join(referenceImagesPath, normalizedPath);
+
+  // Create and cache the upload promise to prevent duplicate uploads
+  const uploadPromise = (async () => {
+    try {
+      console.log(`Uploading on-demand: ${relativePath}`);
+      // Extract filename for upload path
+      const fileName = relativePath.split('/').pop() || 'unknown';
+      const uploadPath = `reference-images/${styleId}`;
+      
+      const uploaded = await uploadFileToKIE(fullPath, uploadPath, fileName);
+      console.log(`✓ Uploaded: ${uploaded.fileUrl}`);
+      
+      return uploaded.fileUrl;
+    } catch (error) {
+      console.error(`Failed to upload ${relativePath}:`, error);
+      // Remove failed upload from cache to allow retry
+      uploadCache.delete(cacheKey);
+      throw error;
+    }
+  })();
+
+  // Cache the promise immediately to prevent concurrent uploads
+  uploadCache.set(cacheKey, uploadPromise);
+  
+  return uploadPromise;
 }
 
 async function initializeReferenceImages() {
-  try {
-    const referenceImagesPath = join(__dirname, "..", "client", "public", "reference-images");
-    console.log("\n=== Uploading Reference Images ===");
-    console.log(`Scanning directory: ${referenceImagesPath}`);
-    
-    uploadedReferenceImages = await uploadReferenceImages(referenceImagesPath);
-    
-    console.log(`✓ Successfully uploaded ${uploadedReferenceImages.length} style categories`);
-    for (const style of uploadedReferenceImages) {
-      console.log(`  - ${style.styleId}: ${style.imageUrls.length} images`);
-      for (const preset of STYLE_PRESETS) {
-        if (preset.id === style.styleId) {
-          preset.referenceImageUrl = style.imageUrls[0];
-        }
-      }
-    }
-    console.log("==================================\n");
-  } catch (error) {
-    console.error("Failed to upload reference images:", error);
-    console.warn("Using default reference images as fallback");
-  }
+  // No longer uploading images at startup
+  // Images will be uploaded on-demand when needed
+  console.log("\n=== Reference Images On-Demand Mode ===");
+  console.log("Images will be uploaded only when used in generation");
+  console.log("=======================================\n");
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
-  // GET /api/styles - Return available style presets
-  // This endpoint provides the list of style options for the frontend dropdown
-  app.get("/api/styles", (req, res) => {
-    // Only return the fields needed for the frontend (exclude basePrompt)
-    const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines }) => ({
+// Helper function to seed built-in styles to database
+async function seedBuiltInStyles() {
+  try {
+    const builtInStyles = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => ({
       id,
       label,
       description,
       engines,
+      basePrompt,
+      defaultColors,
+      referenceImageUrl,
+      isBuiltIn: true,
     }));
+    await storage.seedBuiltInStyles(builtInStyles);
+    console.log("Built-in styles seeded to database");
+  } catch (error) {
+    console.error("Failed to seed built-in styles:", error);
+  }
+}
 
-    res.json(stylesForFrontend);
+// Helper function to get style by ID (from database or fallback to static)
+async function getStyleById(styleId: string): Promise<(StylePreset & { basePrompt: string; referenceImageUrl: string; isBuiltIn?: boolean }) | undefined> {
+  // Try database first
+  const dbStyle = await storage.getStyle(styleId);
+  if (dbStyle) {
+    return {
+      id: dbStyle.id,
+      label: dbStyle.label,
+      description: dbStyle.description,
+      engines: dbStyle.engines,
+      basePrompt: dbStyle.basePrompt,
+      defaultColors: dbStyle.defaultColors as StylePreset["defaultColors"],
+      referenceImageUrl: dbStyle.referenceImageUrl,
+      isBuiltIn: dbStyle.isBuiltIn,
+    };
+  }
+  // Fallback to static array for backward compatibility
+  return STYLE_PRESETS.find(s => s.id === styleId);
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Seed built-in styles to database on startup
+  await seedBuiltInStyles();
+
+  // GET /api/styles - Return available style presets (from database)
+  // This endpoint provides the list of style options for the frontend dropdown
+  app.get("/api/styles", async (req, res) => {
+    try {
+      // Get styles from database
+      const dbStyles = await storage.getAllStyles();
+      
+      if (dbStyles.length > 0) {
+        // Return database styles with isBuiltIn flag
+        const stylesForFrontend = dbStyles.map(({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn }) => ({
+          id,
+          label,
+          description,
+          engines,
+          basePrompt,
+          defaultColors,
+          isBuiltIn,
+        }));
+        return res.json(stylesForFrontend);
+      }
+      
+      // Fallback to static styles if database is empty
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+        id,
+        label,
+        description,
+        engines,
+        basePrompt,
+        defaultColors,
+        isBuiltIn: true,
+      }));
+      res.json(stylesForFrontend);
+    } catch (error) {
+      console.error("Error fetching styles:", error);
+      // Fallback to static styles on error
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+        id,
+        label,
+        description,
+        engines,
+        basePrompt,
+        defaultColors,
+        isBuiltIn: true,
+      }));
+      res.json(stylesForFrontend);
+    }
+  });
+
+  // POST /api/styles - Create a new custom style
+  app.post("/api/styles", async (req, res) => {
+    try {
+      const { id, label, description, engines, basePrompt, defaultColors, referenceImageUrl } = req.body;
+      
+      if (!id || !label || !description || !engines || !basePrompt) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      // Check if style ID already exists
+      const existing = await storage.getStyle(id);
+      if (existing) {
+        return res.status(409).json({ error: "Style ID already exists" });
+      }
+      
+      const newStyle = await storage.createStyle({
+        id,
+        label,
+        description,
+        engines,
+        basePrompt,
+        defaultColors,
+        referenceImageUrl: referenceImageUrl || DEFAULT_REFERENCE_IMAGE,
+        isBuiltIn: false,
+      });
+      
+      res.status(201).json(newStyle);
+    } catch (error) {
+      console.error("Error creating style:", error);
+      res.status(500).json({ error: "Failed to create style" });
+    }
+  });
+
+  // POST /api/styles/:id/clone - Clone an existing style
+  app.post("/api/styles/:id/clone", async (req, res) => {
+    try {
+      const sourceId = req.params.id;
+      const { newId, newLabel } = req.body;
+      
+      if (!newId || !newLabel) {
+        return res.status(400).json({ error: "newId and newLabel are required" });
+      }
+      
+      // Check if new ID already exists
+      const existingNew = await storage.getStyle(newId);
+      if (existingNew) {
+        return res.status(409).json({ error: "New style ID already exists" });
+      }
+      
+      // Get source style
+      const sourceStyle = await getStyleById(sourceId);
+      if (!sourceStyle) {
+        return res.status(404).json({ error: "Source style not found" });
+      }
+      
+      // Create cloned style
+      const clonedStyle = await storage.createStyle({
+        id: newId,
+        label: newLabel,
+        description: sourceStyle.description,
+        engines: sourceStyle.engines,
+        basePrompt: sourceStyle.basePrompt,
+        defaultColors: sourceStyle.defaultColors,
+        referenceImageUrl: sourceStyle.referenceImageUrl,
+        isBuiltIn: false,
+      });
+      
+      // Clone template if exists
+      const sourceTemplate = await storage.getTemplate(sourceId);
+      if (sourceTemplate) {
+        await storage.saveTemplate(
+          newId,
+          sourceTemplate.templateData,
+          sourceTemplate.referenceImages || []
+        );
+      }
+      
+      res.status(201).json(clonedStyle);
+    } catch (error) {
+      console.error("Error cloning style:", error);
+      res.status(500).json({ error: "Failed to clone style" });
+    }
+  });
+
+  // DELETE /api/styles/:id - Delete a custom style (only non-built-in)
+  app.delete("/api/styles/:id", async (req, res) => {
+    try {
+      const styleId = req.params.id;
+      
+      const style = await storage.getStyle(styleId);
+      if (!style) {
+        return res.status(404).json({ error: "Style not found" });
+      }
+      
+      if (style.isBuiltIn) {
+        return res.status(403).json({ error: "Cannot delete built-in styles" });
+      }
+      
+      await storage.deleteStyle(styleId);
+      res.status(200).json({ success: true, message: "Style deleted" });
+    } catch (error) {
+      console.error("Error deleting style:", error);
+      res.status(500).json({ error: "Failed to delete style" });
+    }
   });
 
   // POST /api/generate - Generate an image based on prompt, style, and engine
@@ -472,6 +950,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validationResult = generateRequestSchema.safeParse(req.body);
 
       if (!validationResult.success) {
+        console.error("\n=== Validation Failed for /api/generate ===");
+        console.error("Request body:", JSON.stringify(req.body, null, 2));
+        console.error("Validation errors:", JSON.stringify(validationResult.error.errors, null, 2));
+        console.error("==========================================\n");
         return res.status(400).json({
           error: "Validation failed",
           details: validationResult.error.errors,
@@ -479,7 +961,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages } = validationResult.data;
-      const selectedStyle = STYLE_PRESETS.find((style) => style.id === styleId);
+      
+      // Get style from database (or fallback to static)
+      const selectedStyle = await getStyleById(styleId);
 
       if (!selectedStyle) {
         return res.status(400).json({
@@ -497,8 +981,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hasUserReference = !!(userReferenceImages && userReferenceImages.length > 0);
       
-      // Use customTemplate if provided, otherwise use default
-      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, customTemplate);
+      // Try to load template from database if no customTemplate provided
+      let templateToUse: any = customTemplate;
+      let dbTemplateReferenceImages: string[] = [];
+      
+      if (!templateToUse) {
+        try {
+          const dbTemplate = await storage.getTemplate(styleId);
+          if (dbTemplate && dbTemplate.templateData) {
+            // Cast from jsonb object to any for template processing
+            templateToUse = dbTemplate.templateData as any;
+            dbTemplateReferenceImages = dbTemplate.referenceImages || [];
+            console.log(`Loaded template from database for style: ${styleId}`);
+          }
+        } catch (error) {
+          console.log(`No saved template found for style: ${styleId}, using default`);
+        }
+      }
+      
+      // Use the template (from request, database, or default)
+      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, templateToUse);
 
       // Build image URLs array with priority order:
       // 1. User-selected reference images (highest priority)
@@ -510,22 +1012,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls.push(...userReferenceImages);
       }
       
-      // Add template reference images if exists
-      if (templateReferenceImages && templateReferenceImages.length > 0) {
-        imageUrls.push(...templateReferenceImages);
+      // Add template reference images if exists (from request or database)
+      const allTemplateReferenceImages = templateReferenceImages?.length 
+        ? templateReferenceImages 
+        : dbTemplateReferenceImages;
+        
+      if (allTemplateReferenceImages && allTemplateReferenceImages.length > 0) {
+        console.log(`Uploading ${allTemplateReferenceImages.length} template reference images on-demand...`);
+        const uploadPromises = allTemplateReferenceImages.map(async (path) => {
+          try {
+            // Upload image on-demand (uses cache if already uploaded)
+            return await uploadImageOnDemand(path, styleId);
+          } catch (error) {
+            console.error(`Failed to upload template image ${path}:`, error);
+            return null;
+          }
+        });
+        
+        const uploadedUrls = await Promise.all(uploadPromises);
+        const validUrls = uploadedUrls.filter((url): url is string => url !== null);
+        imageUrls.push(...validUrls);
       }
       
-      // Add style preset reference images
-      // For Seedream: limit total reference images to 4 to improve processing speed
-      const styleReferenceUrls = getAllReferenceImageUrls(styleId);
-      if (engine === "seedream") {
-        const MAX_SEEDREAM_REFS = 4;
-        const currentRefCount = imageUrls.length;
-        const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
-        imageUrls.push(...styleReferenceUrls.slice(0, maxStyleRefs));
-      } else {
-        // For other engines (like nanobanana), add all style reference images
-        imageUrls.push(...styleReferenceUrls);
+      // Add style preset reference images (upload on-demand with deduplication)
+      // Get all reference image file paths from the file system
+      const styleReferencePaths = getStyleReferenceImagePaths(styleId);
+      
+      if (styleReferencePaths.length > 0) {
+        // Normalize URLs/paths to enable proper comparison
+        // Extracts the relative path portion (e.g., "/reference-images/style-1/1.png")
+        const normalizePathForComparison = (urlOrPath: string): string => {
+          // If it's an HTTP(S) URL, extract the path portion after the domain
+          if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+            try {
+              const url = new URL(urlOrPath);
+              // Extract path after domain, look for /reference-images/ pattern
+              const match = url.pathname.match(/\/reference-images\/.*$/);
+              return match ? match[0] : urlOrPath;
+            } catch {
+              return urlOrPath;
+            }
+          }
+          
+          // For local paths, ensure consistent format with leading slash
+          // Handle both "/reference-images/..." and "reference-images/..."
+          if (urlOrPath.includes('reference-images/')) {
+            // Extract everything from "reference-images/" onward
+            const match = urlOrPath.match(/reference-images\/.*$/);
+            if (match) {
+              // Return with leading slash for consistency
+              return '/' + match[0];
+            }
+          }
+          
+          return urlOrPath;
+        };
+        
+        // Build set of existing normalized paths for deduplication
+        const existingNormalizedPaths = new Set(
+          imageUrls.map(url => normalizePathForComparison(url))
+        );
+        
+        // Filter out any paths that already exist (by full normalized path, not just filename)
+        const uniquePaths = styleReferencePaths.filter(path => {
+          const normalizedPath = normalizePathForComparison(path);
+          const isUnique = !existingNormalizedPaths.has(normalizedPath);
+          if (!isUnique) {
+            console.log(`Skipping duplicate reference image: ${normalizedPath}`);
+          }
+          return isUnique;
+        });
+        
+        // Determine how many style images to upload
+        let pathsToUpload = uniquePaths;
+        if (engine === "seedream") {
+          const MAX_SEEDREAM_REFS = 4;
+          const currentRefCount = imageUrls.length;
+          const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
+          pathsToUpload = uniquePaths.slice(0, maxStyleRefs);
+        }
+        
+        // Upload style preset images on-demand
+        if (pathsToUpload.length > 0) {
+          console.log(`Uploading ${pathsToUpload.length} style preset images on-demand...`);
+          const styleUploadPromises = pathsToUpload.map(async (path) => {
+            try {
+              return await uploadImageOnDemand(path, styleId);
+            } catch (error) {
+              console.error(`Failed to upload style preset image ${path}:`, error);
+              return null;
+            }
+          });
+          
+          const styleUploadedUrls = await Promise.all(styleUploadPromises);
+          const validStyleUrls = styleUploadedUrls.filter((url): url is string => url !== null);
+          imageUrls.push(...validStyleUrls);
+        }
       }
 
       console.log("\n=== Image Generation Request ===");
@@ -538,10 +1120,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
 
-      const imageUrl =
-        engine === "nanobanana"
-          ? await callNanoBananaEdit(finalPrompt, imageUrls)
-          : await callSeedreamEdit(finalPrompt, imageUrls);
+      // Route to appropriate engine
+      let imageUrl: string;
+      if (engine === "nanobanana") {
+        imageUrl = await callNanoBananaEdit(finalPrompt, imageUrls);
+      } else if (engine === "nanopro") {
+        imageUrl = await callNanoProEdit(finalPrompt, imageUrls);
+      } else {
+        imageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
+      }
 
       let historyId: number | undefined;
       try {
@@ -553,6 +1140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           finalPrompt,
           referenceImageUrl: selectedStyle.referenceImageUrl,
           userReferenceUrls: userReferenceImages || undefined,
+          allReferenceImageUrls: imageUrls.length > 0 ? imageUrls : undefined,
           generatedImageUrl: imageUrl,
         });
         historyId = savedHistory.id;
@@ -591,6 +1179,156 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to fetch generation history",
+      });
+    }
+  });
+
+  app.get("/api/templates/:styleId", async (req, res) => {
+    try {
+      const { styleId } = req.params;
+      
+      if (!styleId) {
+        return res.status(400).json({
+          error: "Missing styleId",
+          message: "styleId parameter is required",
+        });
+      }
+
+      const template = await storage.getTemplate(styleId);
+      
+      if (!template) {
+        return res.status(404).json({
+          error: "Template not found",
+          message: `No template found for style '${styleId}'`,
+        });
+      }
+
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching template:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch template",
+      });
+    }
+  });
+
+  app.post("/api/templates/:styleId", async (req, res) => {
+    try {
+      const { styleId } = req.params;
+      const { templateData, referenceImages } = req.body;
+
+      if (!styleId || !templateData) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "styleId and templateData are required",
+        });
+      }
+
+      const saved = await storage.saveTemplate(
+        styleId,
+        templateData,
+        referenceImages || []
+      );
+
+      res.json(saved);
+    } catch (error) {
+      console.error("Error saving template:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to save template",
+      });
+    }
+  });
+
+  app.get("/api/templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching all templates:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch templates",
+      });
+    }
+  });
+
+  app.get("/api/default-templates", (req, res) => {
+    res.json(DEFAULT_TEMPLATES);
+  });
+
+  app.get("/api/default-templates/:styleId", (req, res) => {
+    const { styleId } = req.params;
+    const defaultTemplate = getDefaultTemplate(styleId);
+    
+    if (!defaultTemplate) {
+      return res.status(404).json({
+        error: "Default template not found",
+        message: `No default template found for style '${styleId}'`,
+      });
+    }
+    
+    res.json(defaultTemplate);
+  });
+
+  app.post("/api/templates/:styleId/reset", async (req, res) => {
+    try {
+      const { styleId } = req.params;
+      const defaultTemplate = getDefaultTemplate(styleId);
+      
+      if (!defaultTemplate) {
+        return res.status(404).json({
+          error: "Default template not found",
+          message: `No default template found for style '${styleId}'`,
+        });
+      }
+      
+      const saved = await storage.saveTemplate(
+        defaultTemplate.styleId,
+        defaultTemplate.templateData,
+        defaultTemplate.referenceImages
+      );
+      
+      console.log(`✓ Reset template for style: ${styleId}`);
+      res.json(saved);
+    } catch (error) {
+      console.error("Error resetting template:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reset template",
+      });
+    }
+  });
+
+  app.post("/api/templates/reset-all", async (req, res) => {
+    try {
+      const results = [];
+      
+      for (const template of DEFAULT_TEMPLATES) {
+        try {
+          const saved = await storage.saveTemplate(
+            template.styleId,
+            template.templateData,
+            template.referenceImages
+          );
+          results.push({ styleId: template.styleId, success: true, template: saved });
+          console.log(`✓ Reset template for style: ${template.styleId}`);
+        } catch (error) {
+          results.push({ styleId: template.styleId, success: false, error: String(error) });
+          console.error(`✗ Failed to reset template for ${template.styleId}:`, error);
+        }
+      }
+      
+      res.json({
+        message: "Templates reset complete",
+        results,
+      });
+    } catch (error) {
+      console.error("Error resetting all templates:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reset all templates",
       });
     }
   });
@@ -661,6 +1399,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to upload reference image",
+      });
+    }
+  });
+
+  // ===== Storyboard Scene API =====
+  
+  // Get all scenes
+  app.get("/api/scenes", async (req, res) => {
+    try {
+      const scenes = await storage.getAllScenes();
+      res.json(scenes);
+    } catch (error) {
+      console.error("Error fetching scenes:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch scenes",
+      });
+    }
+  });
+
+  // Create a new scene
+  app.post("/api/scenes", async (req, res) => {
+    try {
+      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      
+      const scene = await storage.createScene({
+        prompt: prompt || "",
+        generatedImageUrl: generatedImageUrl || null,
+        styleId: styleId || null,
+        engine: engine || null,
+        orderIndex,
+      });
+      
+      res.json(scene);
+    } catch (error) {
+      console.error("Error creating scene:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create scene",
+      });
+    }
+  });
+
+  // Update a scene
+  app.patch("/api/scenes/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Scene ID must be a number",
+        });
+      }
+
+      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      
+      const scene = await storage.updateScene(id, {
+        prompt,
+        generatedImageUrl,
+        styleId,
+        engine,
+        orderIndex,
+      });
+
+      if (!scene) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Scene ${id} not found`,
+        });
+      }
+
+      res.json(scene);
+    } catch (error) {
+      console.error("Error updating scene:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update scene",
+      });
+    }
+  });
+
+  // Delete a scene
+  app.delete("/api/scenes/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Scene ID must be a number",
+        });
+      }
+
+      const deleted = await storage.deleteScene(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Scene ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting scene:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete scene",
+      });
+    }
+  });
+
+  // Reorder scenes
+  app.post("/api/scenes/reorder", async (req, res) => {
+    try {
+      const { sceneIds } = req.body;
+      
+      if (!Array.isArray(sceneIds)) {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "sceneIds must be an array",
+        });
+      }
+
+      await storage.reorderScenes(sceneIds);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering scenes:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reorder scenes",
       });
     }
   });

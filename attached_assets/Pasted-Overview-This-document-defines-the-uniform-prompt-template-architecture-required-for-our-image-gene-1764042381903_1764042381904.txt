@@ -1,0 +1,223 @@
+Overview
+
+This document defines the uniform prompt template architecture required for our image-generation platform (NanoBanana / Seedream).
+The goal is to create a stable, scalable system that delivers consistent style, while keeping the user interface extremely simple.
+
+This system consists of:
+
+Admin-level Style Preset Editor
+
+User-level Storyboard Scene Editor
+
+Universal Prompt Assembly Logic
+
+Optional Color Palette Overrides
+
+1. Universal Final Prompt Structure
+
+Every prompt sent to the image model follows the same structured format, regardless of style:
+
+[SCENE]
+{scene}
+
+[FRAMING]
+{framing}
+
+[STYLE]
+In {styleName} style:
+{styleKeywords}
+
+[COLORS]
+Use the following palette:
+{paletteColors}.
+Follow the palette's saturation and contrast.
+
+[RULES]
+{rules}
+
+Negative Prompt (separate field)
+{negativePrompt}
+
+Notes
+
+scene and framing come from the user.
+
+styleName, styleKeywords, rules, defaultPalette, negativePrompt come from style preset (admin).
+
+paletteColors uses user-selected palette, or defaults to the style preset palette.
+
+2. Data Models
+2.1 Style Preset (editable by admin)
+interface StylePreset {
+  id: string;
+  name: string;                 // e.g. "Cyan Sketchline Vector"
+  styleKeywords: string;        // 10–20 words describing the style
+  defaultPalette: string[];     // HEX colors, e.g. ["#00AEEF", "#E6F7FF", "#003B73"]
+  rules: string;                // universal drawing rules
+  negativePrompt: string;       // negative keywords
+  referenceImages: string[];    // sorted list (priority order)
+}
+
+
+Admin maintains only these fields.
+This keeps presets clean, consistent, and safe from user misconfiguration.
+
+2.2 User Scene Input (per storyboard panel)
+interface UserSceneInput {
+  scene: string;              // one-sentence panel description
+  framing: string;            // assembled from UI camera options
+  styleId: string;            // selected style preset
+  paletteOverride?: string[]; // optional user palette override
+}
+
+3. Prompt Assembly Logic
+
+(Not implementation code — only logic explanation.)
+
+Fetch stylePreset using styleId.
+
+Determine which palette to use:
+
+palette =
+  paletteOverride && paletteOverride.length > 0
+    ? paletteOverride
+    : stylePreset.defaultPalette
+
+
+Convert palette array → comma-separated string.
+
+Assemble the final prompt:
+
+{scene}
+
+{framing}
+
+In {styleName} style:
+{styleKeywords}
+
+Use the following palette:
+{paletteColors}.
+Follow the palette's saturation and contrast.
+
+{rules}
+
+
+Attach negative prompt separately.
+
+Requirements
+
+Prompt stays short: 40–70 English words.
+
+No long descriptive paragraphs.
+
+Highly structured — this improves diffusion model stability.
+
+4. Admin Template Editor — Required UI Fields
+
+Admin only needs to maintain style-related data.
+
+1. Style Basics
+
+Style name
+
+Reference images (sortable by priority)
+
+2. Style Keywords
+
+Textarea for 10–20 descriptive terms, e.g.:
+
+simple clean line art, flat 2D shapes, thin outlines, minimal shading
+
+3. Default Color Palette
+
+An array of HEX colors
+(implemented via color pickers or plain HEX string input)
+
+4. Universal Rules
+
+Textarea, e.g.:
+
+Consistent proportions, natural posture, correct scale between character and environment,
+clean minimal background, no text, no watermark.
+
+5. Negative Prompt
+
+Textarea, e.g.:
+
+bad proportions, distorted limbs, extra faces, inconsistent character identity, blurry, noisy
+
+
+👉 All previous camera/environment/character tabs can be removed.
+Those parameters belong to the user-facing storyboard editor, not admin templates.
+
+5. User Storyboard Editor — Required UI Fields
+
+User needs a simple input interface to describe each panel.
+
+User Inputs:
+
+Scene description (text)
+
+Framing selection (via dropdown → converted to a single line)
+
+Style preset (dropdown)
+
+Color palette override (optional; color picker or preset palettes)
+
+System Behavior:
+
+Combines user data with style preset data
+
+Assembles final structured prompt
+
+Sends prompt + negative prompt to image model
+
+6. Palette Override System
+
+Color palette is fully modular.
+
+1. Style Default Palette
+
+(from the style preset)
+
+2. User Palette Override
+
+(takes priority if provided)
+
+Prompt color block:
+
+Use the following palette:
+#FF6B6B, #FFE66D, #4ECDC4.
+Follow the palette's saturation and contrast.
+
+
+If user doesn't choose a palette:
+
+Use the default palette of the {styleName} style:
+#00AEEF, #E6F7FF, #003B73.
+
+7. Design Principles
+
+✔ Universal prompt structure for all styles
+✔ Short, structured prompt improves model output
+✔ Admin only edits style, not scene logic
+✔ User only edits scene + framing + optional palette
+✔ Style presets remain clean and maintainable
+✔ Color palette is flexible but safely constrained
+✔ Future styles can be added without changing architecture
+
+8. Summary
+
+This architecture ensures:
+
+Stable diffusion model performance
+
+Consistent aesthetics across panels
+
+Clean division between admin tasks and user interaction
+
+Highly modular design (easy extension of new styles)
+
+Minimal cognitive load for end users
+
+Professional, predictable output

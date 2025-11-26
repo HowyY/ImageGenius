@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navigation } from "@/components/navigation";
 import Home from "@/pages/home";
 import History from "@/pages/history";
+import Storyboard from "@/pages/storyboard";
 import PromptEditor from "@/pages/prompt-editor";
 import NotFound from "@/pages/not-found";
 
@@ -14,6 +15,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/history" component={History} />
+      <Route path="/storyboard" component={Storyboard} />
       <Route path="/prompt-editor" component={PromptEditor} />
       <Route component={NotFound} />
     </Switch>

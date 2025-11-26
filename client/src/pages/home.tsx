@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSearch } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,11 +25,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, Plus } from "lucide-react";
+import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, Plus, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
 import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
-import { getStyleLock, setStyleLock, getLastGeneratedImage, setLastGeneratedImage, getUserReferenceImages, addUserReferenceImage } from "@/lib/generationState";
+import { 
+  getStyleLock, 
+  setStyleLock, 
+  getUserReferenceImages, 
+  addUserReferenceImage,
+  getPrompt,
+  setPrompt,
+  getEngine,
+  setEngine,
+  getSelectedStyleId,
+  setSelectedStyleId,
+  getLastGeneratedImage,
+  setLastGeneratedImage
+} from "@/lib/generationState";
+import type { SelectGenerationHistory } from "@shared/schema";
+import { normalizeTemplateColors } from "@/lib/templateUtils";
 import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -42,13 +58,23 @@ export default function Home() {
   const [referenceImagesKey, setReferenceImagesKey] = useState(0);
   const [userRefCount, setUserRefCount] = useState(0);
   const { toast, dismiss } = useToast();
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  const searchString = useSearch();
+  const sceneId = new URLSearchParams(searchString).get("sceneId");
 
+  // Restore persisted state on mount
+  const savedPrompt = getPrompt();
+  const savedEngine = getEngine();
+  const savedStyleId = getSelectedStyleId();
+  const savedImage = getLastGeneratedImage();
+  
   const form = useForm<GenerateRequest>({
     resolver: zodResolver(generateRequestSchema),
     defaultValues: {
-      prompt: "",
-      styleId: "",
-      engine: "nanobanana",
+      prompt: savedPrompt,
+      styleId: savedStyleId || "",
+      engine: savedEngine as "nanobanana" | "seedream" | "nanopro",
     },
   });
 
@@ -56,27 +82,93 @@ export default function Home() {
     queryKey: ["/api/styles"],
   });
 
+  // Fetch latest history to get most recent generated image
+  const { data: historyData } = useQuery<SelectGenerationHistory[]>({
+    queryKey: ["/api/history"],
+  });
+
   useEffect(() => {
-    const { locked, styleId } = getStyleLock();
-    const savedImage = getLastGeneratedImage();
+    const { locked, styleId: lockedStyleId } = getStyleLock();
     const userRefs = getUserReferenceImages();
     
     setStyleLocked(locked);
-    setGeneratedImage(savedImage);
     setUserRefCount(userRefs.length);
     
-    if (locked && styleId) {
-      form.setValue("styleId", styleId);
-      const style = styles?.find((s) => s.id === styleId);
-      setSelectedStyleDescription(style?.description || "");
+    // Restore saved image from localStorage first, then fall back to history
+    if (!generatedImage) {
+      if (savedImage) {
+        setGeneratedImage(savedImage);
+      } else if (historyData && historyData.length > 0) {
+        setGeneratedImage(historyData[0].generatedImageUrl);
+      }
     }
-  }, [styles]);
+    
+    // Restore style: locked style takes priority, then saved style, then first available
+    if (locked && lockedStyleId && styles) {
+      form.setValue("styleId", lockedStyleId);
+      const style = styles.find((s) => s.id === lockedStyleId);
+      setSelectedStyleDescription(style?.description || "");
+    } else if (savedStyleId && styles) {
+      const style = styles.find((s) => s.id === savedStyleId);
+      if (style) {
+        form.setValue("styleId", savedStyleId);
+        setSelectedStyleDescription(style.description || "");
+      }
+    } else if (!locked && styles && styles.length > 0) {
+      // Auto-select first style if not locked and no style selected
+      const currentStyleId = form.getValues("styleId");
+      if (!currentStyleId) {
+        form.setValue("styleId", styles[0].id);
+        setSelectedStyleDescription(styles[0].description || "");
+      }
+    }
+  }, [styles, historyData]);
+
+  // Sync prompt from localStorage when coming from storyboard (sceneId in URL)
+  useEffect(() => {
+    if (sceneId) {
+      const currentPrompt = getPrompt();
+      if (currentPrompt && currentPrompt !== form.getValues("prompt")) {
+        form.setValue("prompt", currentPrompt);
+      }
+    }
+  }, [sceneId]);
+
+  // Watch and persist prompt changes
+  const watchedPrompt = form.watch("prompt");
+  useEffect(() => {
+    setPrompt(watchedPrompt);
+  }, [watchedPrompt]);
+
+  // Watch and persist engine changes
+  const watchedEngine = form.watch("engine");
+  useEffect(() => {
+    setEngine(watchedEngine);
+  }, [watchedEngine]);
+
+  const updateSceneMutation = useMutation({
+    mutationFn: async ({ id, generatedImageUrl, styleId, engine }: { 
+      id: number; 
+      generatedImageUrl: string;
+      styleId: string;
+      engine: string;
+    }) => {
+      return apiRequest("PATCH", `/api/scenes/${id}`, { 
+        generatedImageUrl,
+        styleId,
+        engine 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
+    },
+  });
 
   const generateMutation = useMutation({
     mutationFn: async (data: GenerateRequest) => {
       const response = await apiRequest("POST", "/api/generate", data);
       const result = await response.json() as GenerateResponse;
-      return result;
+      return { ...result, requestData: data };
     },
     onMutate: () => {
       if (lastToastId) {
@@ -87,11 +179,26 @@ export default function Home() {
       setGeneratedImage(data.imageUrl);
       setLastGeneratedImage(data.imageUrl);
       queryClient.invalidateQueries({ queryKey: ["/api/history"] });
-      const { id } = toast({
-        title: "Image generated successfully!",
-        description: "Your image is ready.",
-      });
-      setLastToastId(id);
+      
+      if (sceneId) {
+        updateSceneMutation.mutate({
+          id: parseInt(sceneId, 10),
+          generatedImageUrl: data.imageUrl,
+          styleId: data.requestData.styleId,
+          engine: data.requestData.engine,
+        });
+        const { id } = toast({
+          title: "Scene image updated!",
+          description: "Image generated and added to your storyboard scene.",
+        });
+        setLastToastId(id);
+      } else {
+        const { id } = toast({
+          title: "Image generated successfully!",
+          description: "Your image is ready. Generate another or try a different style.",
+        });
+        setLastToastId(id);
+      }
     },
   });
 
@@ -99,6 +206,8 @@ export default function Home() {
     onChange(value);
     const style = styles?.find((s) => s.id === value);
     setSelectedStyleDescription(style?.description || "");
+    // Persist selected style
+    setSelectedStyleId(value);
   };
 
   const toggleStyleLock = () => {
@@ -119,9 +228,16 @@ export default function Home() {
       const storageKey = `promptTemplate_${data.styleId}`;
       const savedTemplate = localStorage.getItem(storageKey);
       if (savedTemplate) {
-        customTemplate = JSON.parse(savedTemplate);
-        // Extract reference images from template
-        templateReferenceImages = customTemplate.referenceImages || [];
+        const loadedTemplate = JSON.parse(savedTemplate);
+        // Extract reference image URLs from template (convert from {id, url}[] to string[])
+        const refImages = loadedTemplate.referenceImages || [];
+        templateReferenceImages = refImages.map((ref: any) => 
+          typeof ref === 'string' ? ref : ref.url
+        );
+        
+        // Normalize template to clean up empty customColors
+        customTemplate = normalizeTemplateColors(loadedTemplate);
+        
         console.log(`Using custom template for style: ${data.styleId} with ${templateReferenceImages.length} reference images`);
       }
     } catch (e) {
@@ -192,10 +308,40 @@ export default function Home() {
                   name="prompt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel data-testid="label-prompt">Describe your image</FormLabel>
+                      <div className="flex items-center justify-between gap-2">
+                        <FormLabel data-testid="label-prompt">Describe your image</FormLabel>
+                        {field.value && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  field.onChange("");
+                                  toast({
+                                    description: "Prompt cleared",
+                                  });
+                                  setTimeout(() => {
+                                    promptTextareaRef.current?.focus();
+                                  }, 0);
+                                }}
+                                className="h-auto p-1"
+                                data-testid="button-clear-prompt"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Clear prompt
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                       <FormControl>
                         <Textarea
                           {...field}
+                          ref={promptTextareaRef}
                           data-testid="input-prompt"
                           placeholder="A serene mountain landscape at sunset, with snow-capped peaks reflecting golden light..."
                           className="min-h-32 resize-none text-base"
@@ -290,26 +436,39 @@ export default function Home() {
                     <FormItem>
                       <FormLabel data-testid="label-engine">Engine</FormLabel>
                       <FormControl>
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             type="button"
                             variant={field.value === "nanobanana" ? "default" : "outline"}
                             onClick={() => field.onChange("nanobanana")}
                             disabled={isGenerating}
-                            className="flex-1"
+                            className="flex-1 min-w-[100px]"
                             data-testid="button-engine-nanobanana"
                           >
-                            Nanobanana
+                            NanoBanana
                           </Button>
                           <Button
                             type="button"
                             variant={field.value === "seedream" ? "default" : "outline"}
                             onClick={() => field.onChange("seedream")}
                             disabled={isGenerating}
-                            className="flex-1"
+                            className="flex-1 min-w-[100px]"
                             data-testid="button-engine-seedream"
                           >
-                            Seedream
+                            SeeDream
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === "nanopro" ? "default" : "outline"}
+                            onClick={() => field.onChange("nanopro")}
+                            disabled={isGenerating}
+                            className="flex-1 min-w-[100px]"
+                            data-testid="button-engine-nanopro"
+                          >
+                            <span className="flex items-center gap-1">
+                              Nano Pro
+                              <Badge variant="secondary" className="text-xs px-1 py-0">2K</Badge>
+                            </span>
                           </Button>
                         </div>
                       </FormControl>

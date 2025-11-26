@@ -1,0 +1,149 @@
+Overview
+
+The current style template produces excessive cyan background lines and incorrect color behavior.
+This does not match the actual reference style provided by the user.
+
+The reference style uses:
+
+Deep-blue outlines for both characters and background
+
+Cyan accents only in small areas
+
+Soft cyan→blue gradients on clothing
+
+White skin + simple eyes + simple curved mouth
+
+No shading / No textures
+
+Clean 2D aesthetic
+
+Therefore, the style preset structure must be updated.
+
+1. Required Fixes Summary
+Fix #1 — Background lines must be deep-blue
+
+Current prompt encourages cyan outlines → creates messy background.
+
+Replace with:
+
+Background outlines must be mostly deep-blue, not cyan.
+Cyan is for accents only.
+
+Fix #2 — Remove strict HEX palette mode (optional)
+
+Strict color palettes reduce model freedom and worsen gradient behavior.
+
+Introduce two modes:
+Mode A: Strict Palette (keep HEX list)
+Mode B: Loose Palette (describe color family, avoid HEX)
+Fix #3 — Update styleKeywords
+
+Needs to specify:
+
+deep-blue outlines
+
+cyan accents
+
+simple facial features
+
+correct gradient behavior
+
+cleaned-up background rules
+
+Fix #4 — Update rules
+
+Add explicit constraint:
+
+Avoid excessive cyan outlines.
+
+Fix #5 — Update negative prompt
+
+Add:
+
+excessive cyan outlines, cyan background lines
+
+2. Updated Style Preset Fields (copy/paste)
+
+Below are corrected versions for your TS/JSON style preset.
+
+2.1 styleKeywords (REPLACE OLD)
+clean deep-blue (#002B5C) line art with consistent medium line weight and smooth rounded strokes,
+simple dot eyes and small curved mouth, no nose, flat white face area with no shading,
+flat 2D illustration with most background outlines also in deep-blue for a unified clean look,
+soft cyan-to-blue gradient fills on clothing and main objects, solid deep-blue hair fill,
+only small accent marks in cyan (#00AEEF), no textures, no shadows,
+simplified anatomy and correct proportions.
+
+2.2 rules (REPLACE OLD)
+Use deep-blue outlines for both characters and background to maintain consistency.
+Restrict cyan to small accent marks or object fills. Avoid using cyan for large background lines.
+Keep backgrounds simple and clean without clutter. Avoid shading and textures.
+Preserve flat 2D aesthetic and keep all colors inside the blue–cyan family on a white background.
+No text, no watermarks, no extra characters.
+
+2.3 negativePrompt (REPLACE OLD)
+excessive cyan outlines, cyan background lines, bad proportions, distorted limbs,
+extra faces, inconsistent character identity, blurry, noisy, cluttered background,
+text, watermark, logo, signature, mixed art styles, heavy shadows.
+
+3. Colors Section — Two-Preset System
+Mode A — Strict Palette (Optional)
+
+(Use only if client branding requires strict colors)
+
+[COLORS]
+Use the following palette:
+#002B5C, #00AEEF, #0084D7, #FFFFFF.
+Follow the palette’s saturation and contrast.
+
+Mode B — Loose Palette (Recommended for This Style)
+
+(Generates results most similar to reference images)
+
+[COLORS]
+Use a deep-blue line palette with soft cyan and blue accents.
+Apply gentle cyan-to-blue gradient fills on clothing and major objects.
+Keep background outlines mostly in deep blue with minimal cyan highlights.
+Avoid introducing any colors outside the blue–cyan family.
+
+4. Final Example Template (Recommended Version)
+
+This is the exact version you can implement:
+
+[STYLE]
+In Sketchline Vector V2 style:
+clean deep-blue (#002B5C) line art with consistent medium line weight and smooth rounded strokes,
+simple dot eyes and small curved mouth, no nose, flat white face area with no shading,
+flat 2D illustration with most background outlines also in deep-blue for a unified clean look,
+soft cyan-to-blue gradient fills on clothing and main objects, solid deep-blue hair fill,
+only small accent marks in cyan (#00AEEF), no textures, no shadows,
+simplified anatomy and correct proportions.
+
+[COLORS]
+Use a deep-blue line palette with soft cyan and blue accents.
+Apply gentle cyan-to-blue gradient fills on clothing and major objects.
+Keep background outlines mostly in deep blue with minimal cyan highlights.
+Avoid introducing any colors outside the blue–cyan family.
+
+[RULES]
+Use deep-blue outlines for both characters and background to maintain consistency.
+Restrict cyan to small accent marks or object fills. Avoid using cyan for large background lines.
+Keep backgrounds simple and clean without clutter. Avoid shading and textures.
+Preserve flat 2D aesthetic. No text, no watermarks, no extra characters.
+
+[NEGATIVE]
+excessive cyan outlines, cyan background lines, bad proportions, distorted limbs,
+extra faces, inconsistent character identity, blurry, noisy, cluttered background,
+text, watermark, logo, signature, mixed art styles, heavy shadows.
+
+5. Implementation Instructions for Replit Team
+✔ Replace existing styleKeywords, rules, negativePrompt.
+✔ Add support for two color modes:
+
+strictPalette (HEX array)
+
+loosePalette (colorDescription text block)
+
+✔ If loosePalette is active → ignore HEX palette.
+✔ Ensure background lines default to deep-blue unless user overrides.
+✔ Ensure cyan only appears in small accents or gradients.

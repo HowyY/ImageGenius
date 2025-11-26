@@ -1,7 +1,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +16,21 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogDescription,
+  DialogHeader,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon, Maximize2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Save, Eye, Copy, RotateCcw, Palette, Upload, X, GripVertical, Image as ImageIcon, Maximize2, Sparkles, Plus, Trash2, ClipboardCopy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -25,17 +39,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { StylePreset } from "@shared/schema";
+import type { StylePreset, Color } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { ColorPaletteManager } from "@/components/ColorPaletteManager";
+import { normalizeTemplateColors } from "@/lib/templateUtils";
 
 interface ImageReference {
   id: string;
   url: string;
 }
 
-interface PromptTemplate {
+interface StructuredTemplate {
   name: string;
+  templateType?: "structured";
   referenceImages?: ImageReference[];
+  colorMode?: "default" | "custom";
+  customColors?: {
+    name?: string;
+    colors: Color[];
+  };
   cameraComposition: {
     enabled: boolean;
     cameraAngle: string;
@@ -75,8 +97,45 @@ interface PromptTemplate {
   };
 }
 
-const DEFAULT_TEMPLATE: PromptTemplate = {
+interface SimpleTemplate {
+  name: string;
+  templateType: "simple";
+  suffix: string;
+  referenceImages?: ImageReference[];
+}
+
+interface UniversalTemplate {
+  name: string;
+  templateType: "universal";
+  styleKeywords: string;
+  paletteMode?: "loose" | "strict";
+  loosePalette?: string;
+  strictPalette?: string[];
+  defaultPalette?: string[];
+  rules: string;
+  negativePrompt: string;
+  referenceImages?: ImageReference[];
+}
+
+type PromptTemplate = StructuredTemplate | SimpleTemplate | UniversalTemplate;
+
+function isSimpleTemplate(template: PromptTemplate): template is SimpleTemplate {
+  return (template as SimpleTemplate).templateType === "simple";
+}
+
+function isUniversalTemplate(template: PromptTemplate): template is UniversalTemplate {
+  return (template as UniversalTemplate).templateType === "universal";
+}
+
+function isStructuredTemplate(template: PromptTemplate): template is StructuredTemplate {
+  return !isSimpleTemplate(template) && !isUniversalTemplate(template);
+}
+
+const DEFAULT_TEMPLATE: StructuredTemplate = {
   name: "Default Template",
+  templateType: "structured",
+  colorMode: "default",
+  customColors: undefined,
   cameraComposition: {
     enabled: true,
     cameraAngle: "stable, undistorted view that clearly presents the subject",
@@ -142,8 +201,135 @@ export default function PromptEditor() {
   const isInitialRender = useRef<boolean>(true);
   const { toast } = useToast();
 
-  const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
+  // Extend StylePreset type with isBuiltIn
+  interface ExtendedStylePreset extends StylePreset {
+    isBuiltIn?: boolean;
+  }
+
+  const { data: styles, isLoading: stylesLoading } = useQuery<ExtendedStylePreset[]>({
     queryKey: ["/api/styles"],
+  });
+
+  // Style management state
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showNewStyleDialog, setShowNewStyleDialog] = useState(false);
+  const [cloneNewLabel, setCloneNewLabel] = useState("");
+  const [newStyleLabel, setNewStyleLabel] = useState("");
+  const [newStyleDescription, setNewStyleDescription] = useState("");
+
+  // Get current selected style
+  const selectedStyle = styles?.find(s => s.id === selectedStyleId);
+  const isBuiltInStyle = selectedStyle?.isBuiltIn !== false;
+
+  // Clone style mutation
+  const cloneStyleMutation = useMutation({
+    mutationFn: async ({ sourceId, newLabel }: { sourceId: string; newLabel: string }) => {
+      const newId = newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      const response = await apiRequest("POST", `/api/styles/${sourceId}/clone`, {
+        newId,
+        newLabel,
+      });
+      return await response.json() as ExtendedStylePreset;
+    },
+    onSuccess: async (result) => {
+      setSelectedStyleId(result.id);
+      setShowCloneDialog(false);
+      setCloneNewLabel("");
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      toast({
+        title: "Style cloned",
+        description: "New style created successfully. You can now modify it.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Clone failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete style mutation
+  const deleteStyleMutation = useMutation({
+    mutationFn: async (styleId: string) => {
+      await apiRequest("DELETE", `/api/styles/${styleId}`);
+      return styleId;
+    },
+    onSuccess: async (deletedStyleId) => {
+      // Find next style to select before invalidating cache
+      const nextStyle = styles?.find(s => s.id !== deletedStyleId);
+      const nextStyleId = nextStyle?.id || "";
+      
+      setShowDeleteDialog(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      
+      // Set the next style after cache is updated
+      if (nextStyleId) {
+        setSelectedStyleId(nextStyleId);
+      }
+      
+      toast({
+        title: "Style deleted",
+        description: "The style has been deleted successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create new style mutation
+  const createStyleMutation = useMutation({
+    mutationFn: async ({ label, description }: { label: string; description: string }) => {
+      const id = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      const response = await apiRequest("POST", "/api/styles", {
+        id,
+        label,
+        description,
+        engines: ["nanobanana", "seedream"],
+        basePrompt: "clean vector art style",
+        referenceImageUrl: "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png",
+      });
+      return await response.json() as ExtendedStylePreset;
+    },
+    onSuccess: async (result) => {
+      setSelectedStyleId(result.id);
+      setShowNewStyleDialog(false);
+      setNewStyleLabel("");
+      setNewStyleDescription("");
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      toast({
+        title: "Style created",
+        description: "New style created successfully. Configure its template now.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Creation failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Load template from database
+  const { data: savedTemplate, isLoading: templateLoading } = useQuery<{
+    id: number;
+    styleId: string;
+    templateData: any;
+    referenceImages: string[];
+    createdAt: Date;
+    updatedAt: Date;
+  } | null>({
+    queryKey: ["/api/templates", selectedStyleId],
+    enabled: !!selectedStyleId,
+    retry: false,
   });
 
   useEffect(() => {
@@ -153,47 +339,173 @@ export default function PromptEditor() {
     }
   }, [styles, selectedStyleId]);
 
+  // Helper function to generate preview for simple templates immediately
+  const generateSimplePreview = (simpleTemplate: SimpleTemplate, basePrompt: string) => {
+    const suffix = simpleTemplate.suffix || "white background, 8k resolution";
+    return `{userPrompt}, ${basePrompt}, ${suffix}`;
+  };
+
+  // Helper function to generate preview for universal templates immediately
+  const generateUniversalPreview = (universalTemplate: UniversalTemplate, styleName: string) => {
+    const styleKeywords = universalTemplate.styleKeywords || "";
+    const rules = universalTemplate.rules || "";
+    const negativePrompt = universalTemplate.negativePrompt || "";
+    const paletteMode = universalTemplate.paletteMode || "loose";
+    
+    let prompt = `[SCENE]
+{userPrompt}
+
+[FRAMING]
+Medium shot, balanced composition
+
+[STYLE]
+In ${styleName} style:
+${styleKeywords}`;
+
+    // Add color section based on palette mode
+    if (paletteMode === "loose" && universalTemplate.loosePalette) {
+      // Loose mode with description
+      prompt += `
+
+[COLORS]
+${universalTemplate.loosePalette}`;
+    } else {
+      // Strict mode OR loose mode without description (fallback to HEX)
+      const palette = universalTemplate.strictPalette || universalTemplate.defaultPalette || [];
+      if (palette.length > 0) {
+        const paletteColors = palette.join(", ");
+        const modeNote = paletteMode === "loose" ? " (fallback - add Color Description above)" : "";
+        prompt += `
+
+[COLORS]${modeNote}
+Use the following palette:
+${paletteColors}.
+Follow the palette's saturation and contrast.`;
+      } else if (paletteMode === "loose") {
+        // Loose mode but no palette at all
+        prompt += `
+
+[COLORS]
+(No color description set - add one above)`;
+      }
+    }
+
+    if (rules) {
+      prompt += `
+
+[RULES]
+${rules}`;
+    }
+
+    if (negativePrompt) {
+      prompt += `
+
+[NEGATIVE]
+${negativePrompt}`;
+    }
+
+    return prompt;
+  };
+
   useEffect(() => {
-    // Load saved template for selected style
-    if (selectedStyleId && styles) {
+    // Load template when selectedStyleId changes or template data arrives
+    if (selectedStyleId && styles && !templateLoading) {
       // Find the selected style to get its label
       const selectedStyle = styles.find(s => s.id === selectedStyleId);
       
-      const storageKey = `promptTemplate_${selectedStyleId}`;
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
+      if (savedTemplate && savedTemplate.templateData) {
         try {
-          const loadedTemplate = JSON.parse(saved);
-          setTemplate(loadedTemplate);
-          // Convert old string array to ImageReference array for backward compatibility
-          const images = (loadedTemplate.referenceImages || []).map((item: any) => {
-            if (typeof item === 'string') {
-              return { id: crypto.randomUUID(), url: item };
+          const loadedTemplate = savedTemplate.templateData;
+          
+          // Check if this is a simple template - don't merge with structured defaults
+          if (loadedTemplate.templateType === "simple") {
+            // Simple template - preserve its structure as-is
+            setTemplate(loadedTemplate);
+            // Immediately generate simple preview to avoid race condition
+            const basePrompt = selectedStyle?.basePrompt || "style base prompt";
+            setPreviewPrompt(generateSimplePreview(loadedTemplate as SimpleTemplate, basePrompt));
+          } else if (loadedTemplate.templateType === "universal") {
+            // Universal template (v2) - handle legacy compatibility
+            let normalizedTemplate = { ...loadedTemplate };
+            
+            // Legacy compatibility: if paletteMode not set but defaultPalette has values,
+            // auto-set to "strict" mode and copy defaultPalette to strictPalette
+            if (!normalizedTemplate.paletteMode) {
+              if (normalizedTemplate.defaultPalette && normalizedTemplate.defaultPalette.length > 0) {
+                normalizedTemplate.paletteMode = "strict";
+                normalizedTemplate.strictPalette = normalizedTemplate.defaultPalette;
+              } else if (normalizedTemplate.loosePalette) {
+                normalizedTemplate.paletteMode = "loose";
+              } else {
+                // Default to loose mode for new templates
+                normalizedTemplate.paletteMode = "loose";
+              }
             }
-            return item;
+            
+            setTemplate(normalizedTemplate);
+            // Generate universal preview immediately
+            const styleName = normalizedTemplate.name || selectedStyle?.label || "Style";
+            setPreviewPrompt(generateUniversalPreview(normalizedTemplate as UniversalTemplate, styleName));
+          } else {
+            // Structured template - merge with DEFAULT_TEMPLATE to ensure all fields exist
+            const mergedTemplate = {
+              ...DEFAULT_TEMPLATE,
+              ...loadedTemplate,
+              // Merge nested objects properly
+              cameraComposition: {
+                ...DEFAULT_TEMPLATE.cameraComposition,
+                ...(loadedTemplate.cameraComposition || {}),
+              },
+              environment: {
+                ...DEFAULT_TEMPLATE.environment,
+                ...(loadedTemplate.environment || {}),
+              },
+              mainCharacter: {
+                ...DEFAULT_TEMPLATE.mainCharacter,
+                ...(loadedTemplate.mainCharacter || {}),
+              },
+              secondaryObjects: {
+                ...DEFAULT_TEMPLATE.secondaryObjects,
+                ...(loadedTemplate.secondaryObjects || {}),
+              },
+              styleEnforcement: {
+                ...DEFAULT_TEMPLATE.styleEnforcement,
+                ...(loadedTemplate.styleEnforcement || {}),
+              },
+              negativePrompt: {
+                ...DEFAULT_TEMPLATE.negativePrompt,
+                ...(loadedTemplate.negativePrompt || {}),
+              },
+            };
+            // Normalize template to clean up any legacy empty customColors
+            setTemplate(normalizeTemplateColors(mergedTemplate));
+          }
+          // Convert reference image paths to ImageReference array
+          const images = (savedTemplate.referenceImages || []).map((path: string) => {
+            return { id: crypto.randomUUID(), url: path };
           });
           setReferenceImages(images);
         } catch (e) {
           console.error("Failed to load saved template:", e);
           // Set default template with style label as name
-          setTemplate({
+          setTemplate(normalizeTemplateColors({
             ...DEFAULT_TEMPLATE,
             name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
-          });
+          }));
           setReferenceImages([]);
         }
       } else {
-        // Set default template with style label as name
-        setTemplate({
+        // No saved template, use default and load local reference images
+        setTemplate(normalizeTemplateColors({
           ...DEFAULT_TEMPLATE,
           name: selectedStyle?.label || DEFAULT_TEMPLATE.name,
-        });
+        }));
         // Clear existing reference images first, then load local ones
         setReferenceImages([]);
         loadLocalReferenceImages(selectedStyleId);
       }
     }
-  }, [selectedStyleId, styles]);
+  }, [selectedStyleId, styles, savedTemplate, templateLoading]);
 
   const loadLocalReferenceImages = async (styleId: string) => {
     setIsLoadingImages(true);
@@ -260,53 +572,115 @@ export default function PromptEditor() {
   };
 
   const generatePreview = useCallback(() => {
-    let prompt = "PROMPT TEMPLATE\n\n[SCENE — {userPrompt}]\n\n";
+    // Get current style info for realistic preview
+    const currentStyle = styles?.find(s => s.id === selectedStyleId);
+    const styleLabel = currentStyle?.label || "Style Preset";
+    const styleDescription = currentStyle?.description || "style description";
+    const styleBasePrompt = currentStyle?.basePrompt || "style base prompt";
+    
+    // Example user prompt for preview
+    const exampleUserPrompt = "{userPrompt}";
+    
+    // Check if this is a simple template using type guard
+    if (isSimpleTemplate(template)) {
+      const suffix = template.suffix || "white background, 8k resolution";
+      const prompt = `${exampleUserPrompt}, ${styleBasePrompt}, ${suffix}`;
+      setPreviewPrompt(prompt);
+      return;
+    }
+    
+    // Check if this is a universal template
+    if (isUniversalTemplate(template)) {
+      setPreviewPrompt(generateUniversalPreview(template, template.name || styleLabel));
+      return;
+    }
+    
+    // Structured template - TypeScript now knows template is StructuredTemplate
+    const structuredTemplate = template as StructuredTemplate;
+    let prompt = `PROMPT TEMPLATE\n\n[SCENE — ${exampleUserPrompt}]\n\n`;
 
-    if (template.cameraComposition.enabled) {
+    if (structuredTemplate.cameraComposition.enabled) {
       prompt += "1. CAMERA & COMPOSITION\n";
-      prompt += `- Camera angle: ${template.cameraComposition.cameraAngle}\n`;
-      prompt += `- Composition layout: ${template.cameraComposition.compositionLayout}\n`;
-      prompt += `- Framing: ${template.cameraComposition.framing}\n`;
-      prompt += `- Depth arrangement: ${template.cameraComposition.depthArrangement}\n\n`;
+      prompt += `- Camera angle: ${structuredTemplate.cameraComposition.cameraAngle}\n`;
+      prompt += `- Composition layout: ${structuredTemplate.cameraComposition.compositionLayout} (${styleLabel} inspiration)\n`;
+      prompt += `- Framing: ${structuredTemplate.cameraComposition.framing}\n`;
+      prompt += `- Depth arrangement: ${structuredTemplate.cameraComposition.depthArrangement}\n\n`;
     }
 
-    if (template.environment.enabled) {
+    if (structuredTemplate.environment.enabled) {
       prompt += "2. ENVIRONMENT\n";
-      prompt += `- Setting: ${template.environment.setting}\n`;
-      prompt += `- Lighting: ${template.environment.lighting}\n`;
-      prompt += `- Atmosphere: ${template.environment.atmosphere}\n`;
-      prompt += `- Background complexity: ${template.environment.backgroundComplexity}\n\n`;
+      const setting = structuredTemplate.environment.setting.replace("[Scene description]", exampleUserPrompt);
+      prompt += `- Setting: ${setting}\n`;
+      prompt += `- Lighting: ${structuredTemplate.environment.lighting}\n`;
+      const atmosphere = structuredTemplate.environment.atmosphere.replace("match style tone", `match ${styleLabel} (${styleDescription}) tone`);
+      prompt += `- Atmosphere: ${atmosphere}\n`;
+      prompt += `- Background complexity: ${structuredTemplate.environment.backgroundComplexity}\n\n`;
     }
 
-    if (template.mainCharacter.enabled) {
+    if (structuredTemplate.mainCharacter.enabled) {
       prompt += "3. MAIN CHARACTER\n";
-      prompt += `- Pose: ${template.mainCharacter.pose}\n`;
-      prompt += `- Expression: ${template.mainCharacter.expression}\n`;
-      prompt += `- Interaction: ${template.mainCharacter.interaction}\n`;
-      prompt += `- Clothing: ${template.mainCharacter.clothing}\n\n`;
+      prompt += `- Pose: ${structuredTemplate.mainCharacter.pose}\n`;
+      prompt += `- Expression: ${structuredTemplate.mainCharacter.expression}\n`;
+      prompt += `- Interaction: ${structuredTemplate.mainCharacter.interaction}\n`;
+      const clothing = structuredTemplate.mainCharacter.clothing.replace("match character lock and respect style", `match character lock and respect ${styleBasePrompt}`);
+      prompt += `- Clothing: ${clothing}\n\n`;
     }
 
-    if (template.secondaryObjects.enabled) {
+    if (structuredTemplate.secondaryObjects.enabled) {
       prompt += "4. SECONDARY OBJECTS & ACTION\n";
-      prompt += `- Objects: ${template.secondaryObjects.objects}\n`;
-      prompt += `- Motion cues: ${template.secondaryObjects.motionCues}\n`;
-      prompt += `- Scale rules: ${template.secondaryObjects.scaleRules}\n\n`;
+      const objects = structuredTemplate.secondaryObjects.objects.replace("follow the same stylization rules as the style preset", `follow the same stylization rules as ${styleLabel}`);
+      prompt += `- Objects: ${objects}\n`;
+      prompt += `- Motion cues: ${structuredTemplate.secondaryObjects.motionCues}\n`;
+      prompt += `- Scale rules: ${structuredTemplate.secondaryObjects.scaleRules}\n\n`;
     }
 
-    if (template.styleEnforcement.enabled) {
+    if (structuredTemplate.styleEnforcement.enabled) {
       prompt += "5. STYLE ENFORCEMENT\n";
-      prompt += `- ${template.styleEnforcement.styleRules}\n`;
-      prompt += `- Color palette: ${template.styleEnforcement.colorPalette}\n`;
-      prompt += `- Texture density: ${template.styleEnforcement.textureDensity}\n\n`;
+      prompt += `- Apply ${styleBasePrompt}\n`;
+      prompt += `- ${structuredTemplate.styleEnforcement.styleRules}\n`;
+      
+      if (structuredTemplate.colorMode === "default") {
+        // Explicit default mode: Do not specify colors, let AI learn from reference images
+      } else if (structuredTemplate.customColors?.colors && structuredTemplate.customColors.colors.length > 0) {
+        // Filter out colors with missing hex or name values
+        const validColors = structuredTemplate.customColors.colors.filter(
+          (color) => color.hex && color.name
+        );
+        if (validColors.length > 0) {
+          prompt += "- Color palette:\n";
+          validColors.forEach((color) => {
+            const usage = color.role ? ` (primarily for ${color.role})` : '';
+            prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
+          });
+          prompt += "  • Maintain consistent use of these colors throughout the image\n";
+        }
+      } else if (currentStyle?.defaultColors?.colors) {
+        // Filter out colors with missing hex or name values
+        const validColors = currentStyle.defaultColors.colors.filter(
+          (color) => color.hex && color.name
+        );
+        if (validColors.length > 0) {
+          prompt += "- Color palette:\n";
+          validColors.forEach((color) => {
+            const usage = color.role ? ` (primarily for ${color.role})` : '';
+            prompt += `  • ${color.hex.toUpperCase()} ${color.name}${usage}\n`;
+          });
+          prompt += "  • Maintain consistent use of these colors throughout the image\n";
+        }
+      } else {
+        prompt += `- Color palette: ${structuredTemplate.styleEnforcement.colorPalette}\n`;
+      }
+      
+      prompt += `- Texture density: ${structuredTemplate.styleEnforcement.textureDensity}\n\n`;
     }
 
-    if (template.negativePrompt.enabled) {
+    if (structuredTemplate.negativePrompt.enabled) {
       prompt += "6. NEGATIVE PROMPT\n";
-      prompt += template.negativePrompt.items;
+      prompt += structuredTemplate.negativePrompt.items;
     }
 
     setPreviewPrompt(prompt);
-  }, [template]);
+  }, [template, styles, selectedStyleId]);
 
   useEffect(() => {
     // Generate preview immediately on initial render
@@ -540,6 +914,32 @@ export default function PromptEditor() {
     isDraggingTouch.current = false;
   };
 
+  // Mutation for saving template
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (data: { styleId: string; templateData: any; referenceImages: string[] }) => {
+      return apiRequest("POST", `/api/templates/${data.styleId}`, {
+        templateData: data.templateData,
+        referenceImages: data.referenceImages,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates", selectedStyleId] });
+      const selectedStyle = styles?.find(s => s.id === selectedStyleId);
+      toast({
+        title: "Template saved",
+        description: `Template for ${selectedStyle?.label || selectedStyleId} has been saved with ${referenceImages.length} reference images.`,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to save template:", error);
+      toast({
+        title: "Save failed",
+        description: "Failed to save template. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSave = () => {
     if (!selectedStyleId) {
       toast({
@@ -550,18 +950,16 @@ export default function PromptEditor() {
       return;
     }
     
-    const templateToSave = {
-      ...template,
-      referenceImages,
-    };
+    // Only normalize colors for structured templates
+    const templateDataToSave = isStructuredTemplate(template) 
+      ? normalizeTemplateColors(template)
+      : template;
+    const referenceImagePaths = referenceImages.map(img => img.url);
     
-    const storageKey = `promptTemplate_${selectedStyleId}`;
-    localStorage.setItem(storageKey, JSON.stringify(templateToSave));
-    
-    const selectedStyle = styles?.find(s => s.id === selectedStyleId);
-    toast({
-      title: "Template saved",
-      description: `Template for ${selectedStyle?.label || selectedStyleId} has been saved with ${referenceImages.length} reference images.`,
+    saveTemplateMutation.mutate({
+      styleId: selectedStyleId,
+      templateData: templateDataToSave,
+      referenceImages: referenceImagePaths,
     });
   };
 
@@ -589,6 +987,25 @@ export default function PromptEditor() {
     });
   };
 
+  // Show loading state while data is being fetched
+  if (stylesLoading || (selectedStyleId && templateLoading)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold">Prompt Template Editor</h1>
+            <p className="text-muted-foreground mt-2">
+              Customize prompt templates for each style preset (Admin Only)
+            </p>
+          </div>
+          <div className="flex items-center justify-center py-12">
+            <p className="text-muted-foreground">Loading template...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -600,9 +1017,9 @@ export default function PromptEditor() {
         </div>
 
         <Card className="p-6 mb-6">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <Palette className="w-5 h-5 text-primary" />
-            <div className="flex-1">
+            <div className="flex-1 min-w-[200px]">
               <Label htmlFor="style-select" className="text-base font-semibold">
                 Select Style to Edit
               </Label>
@@ -610,22 +1027,64 @@ export default function PromptEditor() {
                 Each style can have its own custom template
               </p>
             </div>
-            <Select
-              value={selectedStyleId}
-              onValueChange={setSelectedStyleId}
-              disabled={stylesLoading}
-            >
-              <SelectTrigger id="style-select" className="w-[280px]">
-                <SelectValue placeholder={stylesLoading ? "Loading..." : "Select a style"} />
-              </SelectTrigger>
-              <SelectContent>
-                {styles?.map((style) => (
-                  <SelectItem key={style.id} value={style.id}>
-                    {style.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={selectedStyleId}
+                onValueChange={setSelectedStyleId}
+              >
+                <SelectTrigger id="style-select" className="w-[240px]" data-testid="select-style">
+                  <SelectValue placeholder={stylesLoading ? "Loading..." : "Select a style"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {styles?.map((style) => (
+                    <SelectItem key={style.id} value={style.id} data-testid={`select-style-${style.id}`}>
+                      <div className="flex items-center gap-2">
+                        <span>{style.label}</span>
+                        {style.isBuiltIn === false && (
+                          <span className="text-xs text-muted-foreground">(custom)</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {/* Style management buttons */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowNewStyleDialog(true)}
+                title="Create new style"
+                data-testid="button-new-style"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  setCloneNewLabel(selectedStyle?.label ? `${selectedStyle.label} Copy` : "");
+                  setShowCloneDialog(true);
+                }}
+                disabled={!selectedStyleId}
+                title="Clone this style"
+                data-testid="button-clone-style"
+              >
+                <ClipboardCopy className="w-4 h-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={!selectedStyleId || isBuiltInStyle}
+                title={isBuiltInStyle ? "Cannot delete built-in styles" : "Delete this style"}
+                data-testid="button-delete-style"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -783,11 +1242,192 @@ export default function PromptEditor() {
 
               <Separator />
 
+              {/* Simple Template UI - only show suffix editor */}
+              {isSimpleTemplate(template) && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-md">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">Simple Concatenation Template</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    This template uses a simple format: <code className="bg-muted px-1 py-0.5 rounded">{"{scene}, {style}, {suffix}"}</code>
+                  </p>
+                  <div>
+                    <Label>Suffix Keywords</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Added at the end of the prompt (e.g., "white background, 8k resolution")
+                    </p>
+                    <Input
+                      value={template.suffix || "white background, 8k resolution"}
+                      onChange={(e) => setTemplate({ ...template, suffix: e.target.value })}
+                      placeholder="white background, 8k resolution"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Universal Template UI (V2) - simplified admin editor */}
+              {isUniversalTemplate(template) && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-md">
+                    <Sparkles className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium">Universal Template (V2)</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Simplified prompt structure: [SCENE] + [FRAMING] + [STYLE] + [COLORS] + [RULES] + [NEGATIVE]
+                  </p>
+
+                  {/* Style Keywords */}
+                  <div>
+                    <Label>Style Keywords</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Descriptive words defining the visual style
+                    </p>
+                    <Textarea
+                      value={template.styleKeywords}
+                      onChange={(e) => setTemplate({ ...template, styleKeywords: e.target.value })}
+                      placeholder="simple clean line art, flat 2D shapes, thin outlines, minimal shading, vector style"
+                      rows={3}
+                      data-testid="input-style-keywords"
+                    />
+                  </div>
+
+                  {/* Palette Mode Toggle */}
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Color Palette Mode</Label>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Choose how colors are specified in the prompt
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={template.paletteMode === "loose" || !template.paletteMode ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setTemplate({ ...template, paletteMode: "loose" })}
+                          data-testid="button-palette-mode-loose"
+                        >
+                          <Palette className="w-4 h-4 mr-2" />
+                          Loose (Recommended)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={template.paletteMode === "strict" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setTemplate({ ...template, paletteMode: "strict" })}
+                          data-testid="button-palette-mode-strict"
+                        >
+                          Strict (HEX)
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Loose Palette - Text Description */}
+                    {(template.paletteMode === "loose" || !template.paletteMode) && (
+                      <div>
+                        <Label>Color Description</Label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Describe colors in natural language for better gradient behavior
+                        </p>
+                        <Textarea
+                          value={template.loosePalette || ""}
+                          onChange={(e) => setTemplate({ ...template, loosePalette: e.target.value })}
+                          placeholder="Use a deep-blue line palette with soft cyan and blue accents. Apply gentle cyan-to-blue gradient fills on clothing and major objects."
+                          rows={4}
+                          data-testid="input-loose-palette"
+                        />
+                        {/* Show hint when loosePalette is empty but strictPalette/defaultPalette exists */}
+                        {!template.loosePalette && (template.strictPalette || template.defaultPalette) && (
+                          <div className="mt-2 p-2 bg-amber-500/10 rounded-md">
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                              <Palette className="w-3 h-3 inline mr-1" />
+                              HEX palette available: {(template.strictPalette || template.defaultPalette || []).join(", ")}. 
+                              Add a color description above, or switch to Strict mode to use HEX values.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Strict Palette - HEX Colors */}
+                    {template.paletteMode === "strict" && (
+                      <div>
+                        <Label>HEX Color Palette</Label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          HEX colors separated by commas (for brand color requirements)
+                        </p>
+                        <Input
+                          value={(template.strictPalette || template.defaultPalette || []).join(", ")}
+                          onChange={(e) => {
+                            const colors = e.target.value
+                              .split(",")
+                              .map(c => c.trim())
+                              .filter(c => c.length > 0);
+                            setTemplate({ ...template, strictPalette: colors });
+                          }}
+                          placeholder="#002B5C, #00AEEF, #0084D7, #FFFFFF"
+                          data-testid="input-strict-palette"
+                        />
+                        {/* Color preview swatches */}
+                        {(template.strictPalette || template.defaultPalette || []).length > 0 && (
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {(template.strictPalette || template.defaultPalette || []).map((color, idx) => (
+                              <div
+                                key={idx}
+                                className="w-8 h-8 rounded-md border border-border"
+                                style={{ backgroundColor: color }}
+                                title={color}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Universal Rules */}
+                  <div>
+                    <Label>Universal Rules</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Drawing rules that apply to all generations
+                    </p>
+                    <Textarea
+                      value={template.rules}
+                      onChange={(e) => setTemplate({ ...template, rules: e.target.value })}
+                      placeholder="Consistent proportions, natural posture, correct scale, clean minimal background, no text, no watermark."
+                      rows={3}
+                      data-testid="input-rules"
+                    />
+                  </div>
+
+                  {/* Negative Prompt */}
+                  <div>
+                    <Label>Negative Prompt</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Keywords to avoid in generation
+                    </p>
+                    <Textarea
+                      value={template.negativePrompt}
+                      onChange={(e) => setTemplate({ ...template, negativePrompt: e.target.value })}
+                      placeholder="bad proportions, distorted limbs, extra faces, blurry, noisy, cluttered background"
+                      rows={3}
+                      data-testid="input-negative-prompt"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Structured Template UI - show full tabs */}
+              {isStructuredTemplate(template) && (
               <Tabs defaultValue="camera" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-3 h-auto">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
                   <TabsTrigger value="camera" className="text-xs sm:text-sm">Camera</TabsTrigger>
                   <TabsTrigger value="environment" className="text-xs sm:text-sm">Environment</TabsTrigger>
                   <TabsTrigger value="character" className="text-xs sm:text-sm">Character</TabsTrigger>
+                  <TabsTrigger value="colors" className="text-xs sm:text-sm">
+                    <Palette className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                    Colors
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="camera" className="space-y-4 mt-4">
@@ -1034,42 +1674,132 @@ export default function PromptEditor() {
                     </>
                   )}
                 </TabsContent>
-              </Tabs>
 
-              <Separator />
+                <TabsContent value="colors" className="space-y-4 mt-4">
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Color Mode</Label>
+                      <div className="space-y-2 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="color-mode-default"
+                            name="color-mode"
+                            value="default"
+                            checked={template.colorMode === "default" || !template.colorMode}
+                            onChange={(e) =>
+                              setTemplate({
+                                ...template,
+                                colorMode: "default",
+                              })
+                            }
+                            data-testid="radio-color-mode-default"
+                          />
+                          <Label htmlFor="color-mode-default" className="font-normal cursor-pointer">
+                            Use style default colors
+                            {styles?.find(s => s.id === selectedStyleId)?.defaultColors && (
+                              <span className="text-muted-foreground text-sm ml-2">
+                                ({styles.find(s => s.id === selectedStyleId)?.defaultColors?.colors.length || 0} colors)
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                        
+                        {styles?.find(s => s.id === selectedStyleId)?.defaultColors && (
+                          <div className="ml-6 flex flex-wrap gap-2">
+                            {styles.find(s => s.id === selectedStyleId)?.defaultColors?.colors.map((color, i) => (
+                              <div key={i} className="flex items-center gap-2 text-sm">
+                                <div
+                                  className="w-6 h-6 rounded border"
+                                  style={{ backgroundColor: color.hex }}
+                                  title={`${color.name} (${color.hex})`}
+                                />
+                                <span className="text-muted-foreground">{color.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="negative-enabled">Enable Negative Prompt</Label>
-                  <Switch
-                    id="negative-enabled"
-                    checked={template.negativePrompt.enabled}
-                    onCheckedChange={(checked) =>
-                      setTemplate({
-                        ...template,
-                        negativePrompt: { ...template.negativePrompt, enabled: checked },
-                      })
-                    }
-                  />
-                </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="color-mode-custom"
+                            name="color-mode"
+                            value="custom"
+                            checked={template.colorMode === "custom"}
+                            onChange={(e) =>
+                              setTemplate({
+                                ...template,
+                                colorMode: "custom",
+                                customColors: template.customColors || { colors: [] },
+                              })
+                            }
+                            data-testid="radio-color-mode-custom"
+                          />
+                          <Label htmlFor="color-mode-custom" className="font-normal cursor-pointer">
+                            Use custom color palette
+                          </Label>
+                        </div>
+                      </div>
+                    </div>
 
-                {template.negativePrompt.enabled && (
-                  <div>
-                    <Label>Negative Prompt Items</Label>
-                    <Textarea
-                      value={template.negativePrompt.items}
-                      onChange={(e) =>
-                        setTemplate({
-                          ...template,
-                          negativePrompt: { ...template.negativePrompt, items: e.target.value },
-                        })
-                      }
-                      rows={8}
-                      className="font-mono text-sm"
-                    />
+                    {template.colorMode === "custom" && (
+                      <div className="space-y-4 pl-6">
+                        <ColorPaletteManager
+                          colors={template.customColors?.colors || []}
+                          onColorsChange={(colors) => {
+                            const updatedTemplate = {
+                              ...template,
+                              customColors: { ...template.customColors, colors },
+                            };
+                            setTemplate(normalizeTemplateColors(updatedTemplate));
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </TabsContent>
+              </Tabs>
+              )}
+
+              {/* Negative Prompt - only for structured templates */}
+              {isStructuredTemplate(template) && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="negative-enabled">Enable Negative Prompt</Label>
+                      <Switch
+                        id="negative-enabled"
+                        checked={template.negativePrompt.enabled}
+                        onCheckedChange={(checked) =>
+                          setTemplate({
+                            ...template,
+                            negativePrompt: { ...template.negativePrompt, enabled: checked },
+                          })
+                        }
+                      />
+                    </div>
+
+                    {template.negativePrompt.enabled && (
+                      <div>
+                        <Label>Negative Prompt Items</Label>
+                        <Textarea
+                          value={template.negativePrompt.items}
+                          onChange={(e) =>
+                            setTemplate({
+                              ...template,
+                              negativePrompt: { ...template.negativePrompt, items: e.target.value },
+                            })
+                          }
+                          rows={8}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button onClick={handleSave} className="flex-1">
@@ -1125,6 +1855,111 @@ export default function PromptEditor() {
               />
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Clone Style Dialog */}
+      <Dialog open={showCloneDialog} onOpenChange={setShowCloneDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clone Style</DialogTitle>
+            <DialogDescription>
+              Create a copy of "{selectedStyle?.label}" that you can modify independently.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="clone-label">New Style Name</Label>
+              <Input
+                id="clone-label"
+                value={cloneNewLabel}
+                onChange={(e) => setCloneNewLabel(e.target.value)}
+                placeholder="Enter name for the cloned style"
+                data-testid="input-clone-label"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCloneDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => cloneStyleMutation.mutate({ sourceId: selectedStyleId, newLabel: cloneNewLabel })}
+              disabled={!cloneNewLabel.trim() || cloneStyleMutation.isPending}
+              data-testid="button-confirm-clone"
+            >
+              {cloneStyleMutation.isPending ? "Cloning..." : "Clone Style"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Style Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Style</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedStyle?.label}"? This will also delete all associated template settings. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteStyleMutation.mutate(selectedStyleId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteStyleMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteStyleMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* New Style Dialog */}
+      <Dialog open={showNewStyleDialog} onOpenChange={setShowNewStyleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Style</DialogTitle>
+            <DialogDescription>
+              Create a new custom style preset with default settings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="new-style-label">Style Name</Label>
+              <Input
+                id="new-style-label"
+                value={newStyleLabel}
+                onChange={(e) => setNewStyleLabel(e.target.value)}
+                placeholder="My Custom Style"
+                data-testid="input-new-style-label"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-style-description">Description</Label>
+              <Input
+                id="new-style-description"
+                value={newStyleDescription}
+                onChange={(e) => setNewStyleDescription(e.target.value)}
+                placeholder="Brief description of the style"
+                data-testid="input-new-style-description"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewStyleDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createStyleMutation.mutate({ label: newStyleLabel, description: newStyleDescription || newStyleLabel })}
+              disabled={!newStyleLabel.trim() || createStyleMutation.isPending}
+              data-testid="button-confirm-create"
+            >
+              {createStyleMutation.isPending ? "Creating..." : "Create Style"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
