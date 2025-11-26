@@ -41,7 +41,12 @@ Palette fallback hierarchy: User override → Template default → Style default
 ### Data Storage Solutions
 
 -   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs), prompt templates, and storyboard scenes. All data is defined by Drizzle ORM schemas.
--   **Storyboard Scenes**: Script-driven scene cards with editable prompts and optional generated images. Scenes can be created, edited, and deleted. Clicking "Generate" navigates to the generation page with the scene's prompt and updates the scene with the generated image.
+-   **Storyboard Scenes**: Script-driven scene cards in a 3-column grid layout. Each scene has:
+    - Image area (clickable to generate) with amber placeholder for empty scenes
+    - Status line showing "Generated Images (1)" or "No images generated yet"
+    - Voice Over text field (for narration/script)
+    - Visual Description text field (used as generation prompt)
+    Clicking the image area or entering a visual description and clicking generate navigates to the generation page. Generated images are automatically saved back to the scene.
 -   **Client-Side Persistence**: localStorage is used for user preferences like style lock status and selected reference images. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
 -   **Reference Image Storage**: The KIE File Upload API stores reference images, uploading them on-demand with temporary URLs and promise-based caching to prevent duplicate uploads.
 
