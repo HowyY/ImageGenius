@@ -798,8 +798,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dbStyles = await storage.getAllStyles();
       
       if (dbStyles.length > 0) {
-        // Return database styles with isBuiltIn flag
-        const stylesForFrontend = dbStyles.map(({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn }) => ({
+        // Return database styles with isBuiltIn flag and referenceImageUrl
+        const stylesForFrontend = dbStyles.map(({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn, referenceImageUrl }) => ({
           id,
           label,
           description,
@@ -807,12 +807,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           basePrompt,
           defaultColors,
           isBuiltIn,
+          referenceImageUrl,
         }));
         return res.json(stylesForFrontend);
       }
       
       // Fallback to static styles if database is empty
-      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => ({
         id,
         label,
         description,
@@ -820,12 +821,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         basePrompt,
         defaultColors,
         isBuiltIn: true,
+        referenceImageUrl,
       }));
       res.json(stylesForFrontend);
     } catch (error) {
       console.error("Error fetching styles:", error);
       // Fallback to static styles on error
-      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => ({
         id,
         label,
         description,
@@ -833,6 +835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         basePrompt,
         defaultColors,
         isBuiltIn: true,
+        referenceImageUrl,
       }));
       res.json(stylesForFrontend);
     }

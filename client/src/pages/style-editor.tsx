@@ -214,6 +214,53 @@ interface ExtendedStylePreset extends StylePreset {
   referenceImageUrl?: string;
 }
 
+function StyleThumbnail({ src, label }: { src?: string; label: string }) {
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const imgRef = useRef<HTMLImageElement>(null);
+  
+  useEffect(() => {
+    setHasError(false);
+    if (imgRef.current?.complete && imgRef.current?.naturalWidth > 0) {
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+  }, [src]);
+  
+  const firstLetter = label.charAt(0).toUpperCase();
+  
+  if (!src || hasError) {
+    return (
+      <div className="w-12 h-12 rounded-md overflow-hidden bg-gradient-to-br from-primary/20 to-primary/5 flex-shrink-0 flex items-center justify-center" data-testid="thumb-fallback">
+        <span className="text-lg font-semibold text-primary/60">{firstLetter}</span>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0 relative" data-testid="thumb-container">
+      {isLoading && (
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+          <span className="text-lg font-semibold text-primary/60">{firstLetter}</span>
+        </div>
+      )}
+      <img
+        ref={imgRef}
+        src={src}
+        alt={label}
+        className={`w-full h-full object-cover transition-opacity duration-200 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+        onLoad={() => setIsLoading(false)}
+        onError={() => {
+          setHasError(true);
+          setIsLoading(false);
+        }}
+        data-testid="thumb-image"
+      />
+    </div>
+  );
+}
+
 export default function StyleEditor() {
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -774,9 +821,9 @@ ${negativePrompt}`;
         <div className="space-y-1 pr-2">
           {stylesLoading ? (
             Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="p-3 rounded-md">
-                <div className="flex items-start gap-3">
-                  <Skeleton className="w-10 h-10 rounded-md flex-shrink-0" />
+              <div key={i} className="p-2 rounded-md">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-12 h-12 rounded-md flex-shrink-0" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-3 w-1/2" />
@@ -796,25 +843,21 @@ ${negativePrompt}`;
                   setSelectedStyleId(style.id);
                   setShowMobileStylesPanel(false);
                 }}
-                className={`p-3 rounded-md cursor-pointer transition-colors ${
+                className={`p-2 rounded-md cursor-pointer transition-colors ${
                   selectedStyleId === style.id
                     ? "bg-primary/10 border border-primary/30"
                     : "hover-elevate"
                 }`}
                 data-testid={`style-item-${style.id}`}
               >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                    <ImageWithFallback
-                      src={style.referenceImageUrl}
-                      alt={style.label}
-                      className="w-full h-full object-cover"
-                      fallbackText=""
-                    />
-                  </div>
+                <div className="flex items-center gap-3">
+                  <StyleThumbnail 
+                    src={style.referenceImageUrl} 
+                    label={style.label} 
+                  />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm truncate">{style.label}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm truncate max-w-[120px]">{style.label}</span>
                       {style.isBuiltIn !== false && (
                         <Badge variant="secondary" className="text-xs flex-shrink-0">Built-in</Badge>
                       )}
