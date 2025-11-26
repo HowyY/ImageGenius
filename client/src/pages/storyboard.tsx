@@ -19,7 +19,9 @@ import {
   Save,
   RotateCcw,
   MoreHorizontal,
-  Check
+  Check,
+  Eye,
+  X
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, GenerateResponse, SelectStoryboard, SelectStoryboardVersion } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
@@ -79,6 +81,7 @@ export default function Storyboard() {
   const [versionName, setVersionName] = useState("");
   const [versionDescription, setVersionDescription] = useState("");
   const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; prompt: string; style: string; engine: string; date: string } | null>(null);
 
   const { data: storyboards, isLoading: storyboardsLoading } = useQuery<SelectStoryboard[]>({
     queryKey: ["/api/storyboards"],
@@ -1274,7 +1277,17 @@ export default function Storyboard() {
             <div className="space-y-4">
               {sceneHistory.map((item) => (
                 <div key={item.id} className="flex gap-4 p-3 border rounded-lg" data-testid={`history-item-${item.id}`}>
-                  <div className="w-32 h-24 bg-muted rounded overflow-hidden flex-shrink-0">
+                  <div 
+                    className="w-32 h-24 bg-muted rounded overflow-hidden flex-shrink-0 cursor-pointer hover-elevate"
+                    onClick={() => setPreviewImage({
+                      url: item.generatedImageUrl,
+                      prompt: item.prompt,
+                      style: item.styleLabel,
+                      engine: item.engine,
+                      date: format(new Date(item.createdAt), "MMM d, yyyy 'at' h:mm a")
+                    })}
+                    data-testid={`thumbnail-preview-${item.id}`}
+                  >
                     <ImageWithFallback
                       src={item.generatedImageUrl}
                       alt={item.prompt}
@@ -1291,29 +1304,45 @@ export default function Storyboard() {
                     <p className="text-xs text-muted-foreground mt-1">
                       {format(new Date(item.createdAt), "MMM d, yyyy 'at' h:mm a")}
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => historySceneId && rollbackSceneImageMutation.mutate({ 
-                        sceneId: historySceneId, 
-                        imageUrl: item.generatedImageUrl 
-                      })}
-                      disabled={rollbackSceneImageMutation.isPending}
-                      data-testid={`button-use-image-${item.id}`}
-                    >
-                      {rollbackSceneImageMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                          Applying...
-                        </>
-                      ) : (
-                        <>
-                          <RotateCcw className="w-3 h-3 mr-1" />
-                          Use this image
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPreviewImage({
+                          url: item.generatedImageUrl,
+                          prompt: item.prompt,
+                          style: item.styleLabel,
+                          engine: item.engine,
+                          date: format(new Date(item.createdAt), "MMM d, yyyy 'at' h:mm a")
+                        })}
+                        data-testid={`button-preview-${item.id}`}
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        Preview
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => historySceneId && rollbackSceneImageMutation.mutate({ 
+                          sceneId: historySceneId, 
+                          imageUrl: item.generatedImageUrl 
+                        })}
+                        disabled={rollbackSceneImageMutation.isPending}
+                        data-testid={`button-use-image-${item.id}`}
+                      >
+                        {rollbackSceneImageMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Applying...
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw className="w-3 h-3 mr-1" />
+                            Use this image
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1368,6 +1397,44 @@ export default function Storyboard() {
               Generate Edit
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 z-10 bg-background/80 backdrop-blur-sm"
+              onClick={() => setPreviewImage(null)}
+              data-testid="button-close-preview"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+            {previewImage && (
+              <div className="flex flex-col">
+                <div className="bg-muted flex items-center justify-center max-h-[70vh] overflow-hidden">
+                  <img
+                    src={previewImage.url}
+                    alt={previewImage.prompt}
+                    className="max-w-full max-h-[70vh] object-contain"
+                    data-testid="img-preview-full"
+                  />
+                </div>
+                <div className="p-4 space-y-2 border-t">
+                  <p className="text-sm text-foreground">{previewImage.prompt}</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>{previewImage.style}</span>
+                    <span>-</span>
+                    <span>{previewImage.engine}</span>
+                    <span>-</span>
+                    <span>{previewImage.date}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
