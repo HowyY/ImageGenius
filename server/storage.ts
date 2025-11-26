@@ -280,6 +280,16 @@ export class MemStorage implements IStorage {
       const existing = await this.getStyle(style.id);
       if (!existing) {
         await this.createStyle({ ...style, isBuiltIn: true });
+      } else if (existing.isBuiltIn) {
+        // Update existing built-in styles to ensure they have latest reference images
+        await this.updateStyle(style.id, { 
+          referenceImageUrl: style.referenceImageUrl,
+          label: style.label,
+          description: style.description,
+          basePrompt: style.basePrompt,
+          engines: style.engines,
+          defaultColors: style.defaultColors,
+        });
       }
     }
   }
