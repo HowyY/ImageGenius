@@ -947,10 +947,11 @@ ${negativePrompt}`;
                   </div>
 
                   <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-                    <TabsList className="grid grid-cols-4 mb-4">
+                    <TabsList className="grid grid-cols-5 mb-4">
                       <TabsTrigger value="template">Template</TabsTrigger>
                       <TabsTrigger value="colors">Colors</TabsTrigger>
                       <TabsTrigger value="references">References</TabsTrigger>
+                      <TabsTrigger value="characters">Characters</TabsTrigger>
                       <TabsTrigger value="meta">Meta</TabsTrigger>
                     </TabsList>
 
@@ -1319,6 +1320,19 @@ ${negativePrompt}`;
                             ))}
                           </div>
                         )}
+                      </TabsContent>
+
+                      <TabsContent value="characters" className="mt-0 space-y-4">
+                        <div className="text-center py-8 space-y-4">
+                          <div className="text-muted-foreground">
+                            <p className="text-sm mb-2">Test how characters look with this style</p>
+                            <p className="text-xs">Characters will be managed in a dedicated Character Editor</p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => window.location.href = '/characters'}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Open Character Editor
+                          </Button>
+                        </div>
                       </TabsContent>
 
                       <TabsContent value="meta" className="mt-0 space-y-4">

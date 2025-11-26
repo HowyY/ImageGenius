@@ -8,8 +8,9 @@ import Home from "@/pages/home";
 import History from "@/pages/history";
 import Storyboard from "@/pages/storyboard";
 import StyleEditor from "@/pages/style-editor";
-import PromptEditor from "@/pages/prompt-editor";
-import NotFound from "@/pages/not-found";
+import CharacterEditor from "./pages/character-editor";
+import PromptEditor from "./pages/prompt-editor";
+import NotFound from "./pages/not-found";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/history" component={History} />
       <Route path="/storyboard" component={Storyboard} />
       <Route path="/style-editor" component={StyleEditor} />
+      <Route path="/characters" element={<CharacterEditor />} />
       <Route path="/prompt-editor" component={PromptEditor} />
       <Route component={NotFound} />
     </Switch>

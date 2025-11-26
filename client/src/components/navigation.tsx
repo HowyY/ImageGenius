@@ -58,6 +58,17 @@ export function Navigation() {
                 Style Editor
               </Link>
             </Button>
+            <Button
+              variant={location === "/characters" ? "default" : "ghost"}
+              size="sm"
+              asChild
+              data-testid="button-nav-characters"
+            >
+              <Link href="/characters">
+                <Sparkles className="w-4 h-4 mr-2" />
+                Characters
+              </Link>
+            </Button>
           </nav>
         </div>
       </div>
