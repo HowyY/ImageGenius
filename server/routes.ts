@@ -1882,6 +1882,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Migrate orphan scenes to a default storyboard
   await migrateOrphanScenes();
 
+  // ===== Character API =====
+
+  // Get all characters
+  app.get("/api/characters", async (req, res) => {
+    try {
+      const chars = await storage.getAllCharacters();
+      res.json(chars);
+    } catch (error) {
+      console.error("Error fetching characters:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch characters",
+      });
+    }
+  });
+
+  // Get single character
+  app.get("/api/characters/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const character = await storage.getCharacter(id);
+      
+      if (!character) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${id} not found`,
+        });
+      }
+
+      res.json(character);
+    } catch (error) {
+      console.error("Error fetching character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch character",
+      });
+    }
+  });
+
+  // Create a new character
+  app.post("/api/characters", async (req, res) => {
+    try {
+      const { id, name, description, appearance, features, referenceImageUrls } = req.body;
+      
+      if (!id || !name) {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "id and name are required",
+        });
+      }
+
+      // Check if character ID already exists
+      const existing = await storage.getCharacter(id);
+      if (existing) {
+        return res.status(409).json({
+          error: "Conflict",
+          message: "Character ID already exists",
+        });
+      }
+
+      const character = await storage.createCharacter({
+        id,
+        name,
+        description: description || "",
+        appearance: appearance || "",
+        features: features || "",
+        referenceImageUrls: referenceImageUrls || [],
+      });
+      
+      res.json(character);
+    } catch (error) {
+      console.error("Error creating character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create character",
+      });
+    }
+  });
+
+  // Update a character
+  app.patch("/api/characters/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description, appearance, features, referenceImageUrls } = req.body;
+      
+      const character = await storage.updateCharacter(id, {
+        name,
+        description,
+        appearance,
+        features,
+        referenceImageUrls,
+      });
+
+      if (!character) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${id} not found`,
+        });
+      }
+
+      res.json(character);
+    } catch (error) {
+      console.error("Error updating character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update character",
+      });
+    }
+  });
+
+  // Delete a character
+  app.delete("/api/characters/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteCharacter(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete character",
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

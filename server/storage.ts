@@ -3,25 +3,37 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { desc, eq, and, isNull } from "drizzle-orm";
 import {
   generationHistory,
-  promptTemplates,
-  styles,
-  storyboards,
-  storyboardVersions,
-  storyboardScenes,
+  insertGenerationHistorySchema,
   type InsertGenerationHistory,
   type SelectGenerationHistory,
+  promptTemplates,
+  insertPromptTemplateSchema,
   type InsertPromptTemplate,
   type SelectPromptTemplate,
+  styles,
+  insertStyleSchema,
   type InsertStyle,
   type SelectStyle,
+  storyboards,
+  insertStoryboardSchema,
+  updateStoryboardSchema,
   type InsertStoryboard,
   type UpdateStoryboard,
   type SelectStoryboard,
-  type InsertStoryboardVersion,
+  storyboardVersions,
   type SelectStoryboardVersion,
+  storyboardScenes,
+  insertStoryboardSceneSchema,
+  updateStoryboardSceneSchema,
   type InsertStoryboardScene,
   type UpdateStoryboardScene,
   type SelectStoryboardScene,
+  characters,
+  insertCharacterSchema,
+  updateCharacterSchema,
+  type InsertCharacter,
+  type UpdateCharacter,
+  type SelectCharacter,
 } from "@shared/schema";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -69,6 +81,12 @@ export interface IStorage {
   deleteScene(id: number): Promise<boolean>;
   reorderScenes(sceneIds: number[]): Promise<void>;
   migrateScenesToStoryboard(storyboardId: number): Promise<void>;
+  // Character CRUD Operations
+  getAllCharacters(): Promise<SelectCharacter[]>;
+  getCharacter(id: string): Promise<SelectCharacter | null>;
+  createCharacter(data: InsertCharacter): Promise<SelectCharacter>;
+  updateCharacter(id: string, data: UpdateCharacter): Promise<SelectCharacter | null>;
+  deleteCharacter(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -76,7 +94,7 @@ export class MemStorage implements IStorage {
     if (!db) {
       throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
     }
-    
+
     const [result] = await db
       .insert(generationHistory)
       .values({
@@ -99,7 +117,7 @@ export class MemStorage implements IStorage {
     if (!db) {
       return [];
     }
-    
+
     return await db
       .select()
       .from(generationHistory)
@@ -111,7 +129,7 @@ export class MemStorage implements IStorage {
     if (!db) {
       return [];
     }
-    
+
     return await db
       .select()
       .from(generationHistory)
@@ -294,112 +312,6 @@ export class MemStorage implements IStorage {
     }
   }
 
-  // Storyboard scene operations
-  async getAllScenes(): Promise<SelectStoryboardScene[]> {
-    if (!db) {
-      return [];
-    }
-
-    return await db
-      .select()
-      .from(storyboardScenes)
-      .orderBy(storyboardScenes.orderIndex);
-  }
-
-  async getScene(id: number): Promise<SelectStoryboardScene | null> {
-    if (!db) {
-      return null;
-    }
-
-    const results = await db
-      .select()
-      .from(storyboardScenes)
-      .where(eq(storyboardScenes.id, id))
-      .limit(1);
-
-    return results[0] || null;
-  }
-
-  async createScene(data: InsertStoryboardScene): Promise<SelectStoryboardScene> {
-    if (!db) {
-      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
-    }
-
-    // Get the next order index for scenes in the same storyboard
-    let nextOrderIndex = data.orderIndex;
-    if (nextOrderIndex === undefined) {
-      if (data.storyboardId) {
-        const storyboardScenesList = await this.getScenesByStoryboardId(data.storyboardId);
-        nextOrderIndex = storyboardScenesList.length;
-      } else {
-        const allScenes = await this.getAllScenes();
-        nextOrderIndex = allScenes.length;
-      }
-    }
-
-    const [result] = await db
-      .insert(storyboardScenes)
-      .values({
-        storyboardId: data.storyboardId,
-        orderIndex: nextOrderIndex,
-        voiceOver: data.voiceOver ?? "",
-        visualDescription: data.visualDescription ?? "",
-        generatedImageUrl: data.generatedImageUrl,
-        styleId: data.styleId,
-        engine: data.engine,
-      })
-      .returning();
-    return result;
-  }
-
-  async updateScene(id: number, data: UpdateStoryboardScene): Promise<SelectStoryboardScene | null> {
-    if (!db) {
-      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
-    }
-
-    const updateData: any = { updatedAt: new Date() };
-    if (data.orderIndex !== undefined) updateData.orderIndex = data.orderIndex;
-    if (data.voiceOver !== undefined) updateData.voiceOver = data.voiceOver;
-    if (data.visualDescription !== undefined) updateData.visualDescription = data.visualDescription;
-    if (data.generatedImageUrl !== undefined) updateData.generatedImageUrl = data.generatedImageUrl;
-    if (data.styleId !== undefined) updateData.styleId = data.styleId;
-    if (data.engine !== undefined) updateData.engine = data.engine;
-
-    const [result] = await db
-      .update(storyboardScenes)
-      .set(updateData)
-      .where(eq(storyboardScenes.id, id))
-      .returning();
-    return result || null;
-  }
-
-  async deleteScene(id: number): Promise<boolean> {
-    if (!db) {
-      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
-    }
-
-    const scene = await this.getScene(id);
-    if (!scene) {
-      return false;
-    }
-
-    await db.delete(storyboardScenes).where(eq(storyboardScenes.id, id));
-    return true;
-  }
-
-  async reorderScenes(sceneIds: number[]): Promise<void> {
-    if (!db) {
-      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
-    }
-
-    for (let i = 0; i < sceneIds.length; i++) {
-      await db
-        .update(storyboardScenes)
-        .set({ orderIndex: i, updatedAt: new Date() })
-        .where(eq(storyboardScenes.id, sceneIds[i]));
-    }
-  }
-
   // Storyboard CRUD operations
   async getAllStoryboards(): Promise<SelectStoryboard[]> {
     if (!db) {
@@ -474,10 +386,10 @@ export class MemStorage implements IStorage {
 
     // Delete all scenes in this storyboard
     await db.delete(storyboardScenes).where(eq(storyboardScenes.storyboardId, id));
-    
+
     // Delete all versions of this storyboard
     await db.delete(storyboardVersions).where(eq(storyboardVersions.storyboardId, id));
-    
+
     // Delete the storyboard
     await db.delete(storyboards).where(eq(storyboards.id, id));
     return true;
@@ -618,6 +530,160 @@ export class MemStorage implements IStorage {
     await db.delete(storyboardVersions).where(eq(storyboardVersions.id, id));
     return true;
   }
+
+  // Storyboard scene operations
+  async getAllScenes(): Promise<SelectStoryboardScene[]> {
+    if (!db) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(storyboardScenes)
+      .orderBy(storyboardScenes.orderIndex);
+  }
+
+  async getScene(id: number): Promise<SelectStoryboardScene | null> {
+    if (!db) {
+      return null;
+    }
+
+    const results = await db
+      .select()
+      .from(storyboardScenes)
+      .where(eq(storyboardScenes.id, id))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
+  async createScene(data: InsertStoryboardScene): Promise<SelectStoryboardScene> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Get the next order index for scenes in the same storyboard
+    let nextOrderIndex = data.orderIndex;
+    if (nextOrderIndex === undefined) {
+      if (data.storyboardId) {
+        const storyboardScenesList = await this.getScenesByStoryboardId(data.storyboardId);
+        nextOrderIndex = storyboardScenesList.length;
+      } else {
+        const allScenes = await this.getAllScenes();
+        nextOrderIndex = allScenes.length;
+      }
+    }
+
+    const [result] = await db
+      .insert(storyboardScenes)
+      .values({
+        storyboardId: data.storyboardId,
+        orderIndex: nextOrderIndex,
+        voiceOver: data.voiceOver ?? "",
+        visualDescription: data.visualDescription ?? "",
+        generatedImageUrl: data.generatedImageUrl,
+        styleId: data.styleId,
+        engine: data.engine,
+      })
+      .returning();
+    return result;
+  }
+
+  async updateScene(id: number, data: UpdateStoryboardScene): Promise<SelectStoryboardScene | null> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const updateData: any = { updatedAt: new Date() };
+    if (data.orderIndex !== undefined) updateData.orderIndex = data.orderIndex;
+    if (data.voiceOver !== undefined) updateData.voiceOver = data.voiceOver;
+    if (data.visualDescription !== undefined) updateData.visualDescription = data.visualDescription;
+    if (data.generatedImageUrl !== undefined) updateData.generatedImageUrl = data.generatedImageUrl;
+    if (data.styleId !== undefined) updateData.styleId = data.styleId;
+    if (data.engine !== undefined) updateData.engine = data.engine;
+
+    const [result] = await db
+      .update(storyboardScenes)
+      .set(updateData)
+      .where(eq(storyboardScenes.id, id))
+      .returning();
+    return result || null;
+  }
+
+  async deleteScene(id: number): Promise<boolean> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const scene = await this.getScene(id);
+    if (!scene) {
+      return false;
+    }
+
+    await db.delete(storyboardScenes).where(eq(storyboardScenes.id, id));
+    return true;
+  }
+
+  async reorderScenes(sceneIds: number[]): Promise<void> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < sceneIds.length; i++) {
+        await tx
+          .update(storyboardScenes)
+          .set({ orderIndex: i, updatedAt: new Date() })
+          .where(eq(storyboardScenes.id, sceneIds[i]));
+      }
+    });
+  }
+
+  // ===== Character CRUD Operations =====
+
+  async getAllCharacters() {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    return await db.select().from(characters).orderBy(desc(characters.createdAt));
+  },
+
+  async getCharacter(id: string) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.select().from(characters).where(eq(characters.id, id));
+    return result[0] || null;
+  },
+
+  async createCharacter(data: InsertCharacter) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.insert(characters).values(data).returning();
+    return result[0];
+  },
+
+  async updateCharacter(id: string, data: UpdateCharacter) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db
+      .update(characters)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(characters.id, id))
+      .returning();
+    return result[0] || null;
+  },
+
+  async deleteCharacter(id: string) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.delete(characters).where(eq(characters.id, id)).returning();
+    return result.length > 0;
+  },
+
 
   // Get scenes by storyboard ID
   async getScenesByStoryboardId(storyboardId: number): Promise<SelectStoryboardScene[]> {

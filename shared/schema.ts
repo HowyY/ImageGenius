@@ -78,6 +78,18 @@ export const storyboardScenes = pgTable("storyboard_scenes", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Characters table for managing reusable characters
+export const characters = pgTable("characters", {
+  id: text("id").primaryKey(), // e.g., "protagonist_001"
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  appearance: text("appearance").notNull().default(""),
+  features: text("features").notNull().default(""),
+  referenceImageUrls: text("reference_image_urls").array().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 const baseInsertSchema = createInsertSchema(generationHistory);
 
 export const insertGenerationHistorySchema = z.object({
@@ -173,6 +185,28 @@ export const updateStoryboardSceneSchema = z.object({
 export type InsertStoryboardScene = z.infer<typeof insertStoryboardSceneSchema>;
 export type UpdateStoryboardScene = z.infer<typeof updateStoryboardSceneSchema>;
 export type SelectStoryboardScene = typeof storyboardScenes.$inferSelect;
+
+// Insert schema for characters
+export const insertCharacterSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1, "Character name is required"),
+  description: z.string().default(""),
+  appearance: z.string().default(""),
+  features: z.string().default(""),
+  referenceImageUrls: z.array(z.string().url()).optional().default([]),
+});
+
+export const updateCharacterSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  appearance: z.string().optional(),
+  features: z.string().optional(),
+  referenceImageUrls: z.array(z.string().url()).optional(),
+});
+
+export type InsertCharacter = z.infer<typeof insertCharacterSchema>;
+export type UpdateCharacter = z.infer<typeof updateCharacterSchema>;
+export type SelectCharacter = typeof characters.$inferSelect;
 
 const colorSchema = z.object({
   name: z.string(),

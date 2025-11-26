@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
@@ -37,18 +37,140 @@ export default function CharacterEditor() {
   const [showNewCharacterDialog, setShowNewCharacterDialog] = useState(false);
   const [newCharacterName, setNewCharacterName] = useState("");
   const [newCharacterDescription, setNewCharacterDescription] = useState("");
+  const [editedCharacter, setEditedCharacter] = useState<Partial<Character>>({});
   const { toast } = useToast();
 
-  // TODO: Replace with actual API calls
+  const handleCreateCharacter = () => {
+    if (!newCharacterName.trim()) {
+      toast({
+        title: "Error",
+        description: "Character name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const id = `char_${Date.now()}`;
+    createCharacterMutation.mutate({
+      id,
+      name: newCharacterName.trim(),
+      description: newCharacterDescription.trim(),
+    });
+
+    setShowNewCharacterDialog(false);
+    setNewCharacterName("");
+    setNewCharacterDescription("");
+  };
+
+  const handleSaveCharacter = () => {
+    if (!selectedCharacter) return;
+
+    const updates: Partial<Character> = {};
+    if (editedCharacter.name !== undefined) updates.name = editedCharacter.name;
+    if (editedCharacter.description !== undefined) updates.description = editedCharacter.description;
+    if (editedCharacter.appearance !== undefined) updates.appearance = editedCharacter.appearance;
+    if (editedCharacter.features !== undefined) updates.features = editedCharacter.features;
+
+    if (Object.keys(updates).length === 0) {
+      toast({
+        title: "No changes",
+        description: "No changes to save",
+      });
+      return;
+    }
+
+    updateCharacterMutation.mutate({
+      id: selectedCharacter.id,
+      data: updates,
+    });
+    setEditedCharacter({});
+  };
+
+  const handleDeleteCharacter = () => {
+    if (!selectedCharacter) return;
+    if (!confirm(`Are you sure you want to delete "${selectedCharacter.name}"?`)) return;
+    deleteCharacterMutation.mutate(selectedCharacter.id);
+  };
+
   const { data: characters = [], isLoading } = useQuery<Character[]>({
     queryKey: ["/api/characters"],
-    queryFn: async () => {
-      // Placeholder - implement actual API
-      return [];
+  });
+
+  const createCharacterMutation = useMutation({
+    mutationFn: async (data: { id: string; name: string; description: string }) => {
+      const res = await apiRequest("POST", "/api/characters", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      toast({
+        title: "Success",
+        description: "Character created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
+  const updateCharacterMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Character> }) => {
+      const res = await apiRequest("PATCH", `/api/characters/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      toast({
+        title: "Success",
+        description: "Character updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCharacterMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/characters/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      setSelectedCharacterId("");
+      toast({
+        title: "Success",
+        description: "Character deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const filteredCharacters = characters.filter(char =>
+    char.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    char.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
+
+  // Reset edited state when selected character changes
+  useEffect(() => {
+    setEditedCharacter({});
+  }, [selectedCharacterId]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -82,13 +204,17 @@ export default function CharacterEditor() {
               </div>
 
               <ScrollArea className="flex-1">
-                {characters.length === 0 ? (
+                {isLoading ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
-                    No characters yet. Create your first character!
+                    Loading characters...
+                  </div>
+                ) : filteredCharacters.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    {searchQuery ? "No characters match your search" : "No characters yet. Create your first character!"}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {characters.map((char) => (
+                    {filteredCharacters.map((char) => (
                       <div
                         key={char.id}
                         onClick={() => setSelectedCharacterId(char.id)}
@@ -127,25 +253,32 @@ export default function CharacterEditor() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{selectedCharacter.name}</h2>
-                    <Button size="sm" variant="destructive">
+                    <Button size="sm" variant="destructive" onClick={handleDeleteCharacter}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                   
                   <div>
                     <Label>Character Name</Label>
-                    <Input value={selectedCharacter.name} />
+                    <Input 
+                      value={editedCharacter.name ?? selectedCharacter.name}
+                      onChange={(e) => setEditedCharacter({ ...editedCharacter, name: e.target.value })}
+                    />
                   </div>
 
                   <div>
                     <Label>Description</Label>
-                    <Input value={selectedCharacter.description} />
+                    <Input 
+                      value={editedCharacter.description ?? selectedCharacter.description}
+                      onChange={(e) => setEditedCharacter({ ...editedCharacter, description: e.target.value })}
+                    />
                   </div>
 
                   <div>
                     <Label>Appearance Details</Label>
                     <Textarea
-                      value={selectedCharacter.appearance}
+                      value={editedCharacter.appearance ?? selectedCharacter.appearance}
+                      onChange={(e) => setEditedCharacter({ ...editedCharacter, appearance: e.target.value })}
                       placeholder="Short brown hair, blue jacket, casual style..."
                       rows={3}
                     />
@@ -154,7 +287,8 @@ export default function CharacterEditor() {
                   <div>
                     <Label>Distinctive Features</Label>
                     <Textarea
-                      value={selectedCharacter.features}
+                      value={editedCharacter.features ?? selectedCharacter.features}
+                      onChange={(e) => setEditedCharacter({ ...editedCharacter, features: e.target.value })}
                       placeholder="Round glasses, friendly smile, athletic build..."
                       rows={3}
                     />
@@ -165,12 +299,18 @@ export default function CharacterEditor() {
                     <div className="border-2 border-dashed rounded-lg p-6 text-center">
                       <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                       <p className="text-sm text-muted-foreground">
-                        Upload character reference images
+                        Upload character reference images (Coming soon)
                       </p>
                     </div>
                   </div>
 
-                  <Button className="w-full">Save Character</Button>
+                  <Button 
+                    className="w-full" 
+                    onClick={handleSaveCharacter}
+                    disabled={updateCharacterMutation.isPending}
+                  >
+                    {updateCharacterMutation.isPending ? "Saving..." : "Save Character"}
+                  </Button>
                 </div>
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -252,14 +392,11 @@ export default function CharacterEditor() {
             <Button variant="outline" onClick={() => setShowNewCharacterDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              toast({
-                title: "Coming soon",
-                description: "Character creation will be implemented in the next phase",
-              });
-              setShowNewCharacterDialog(false);
-            }}>
-              Create Character
+            <Button 
+              onClick={handleCreateCharacter}
+              disabled={createCharacterMutation.isPending}
+            >
+              {createCharacterMutation.isPending ? "Creating..." : "Create Character"}
             </Button>
           </DialogFooter>
         </DialogContent>
