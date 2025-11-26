@@ -44,9 +44,8 @@ Palette fallback hierarchy: User override → Template default → Style default
 -   **Storyboard Scenes**: Script-driven scene cards in a 3-column grid layout. Each scene has:
     - Image area (clickable to generate) with amber placeholder for empty scenes
     - Status line showing "Generated Images (1)" or "No images generated yet"
-    - Voice Over text field (for narration/script)
-    - Visual Description text field (used as generation prompt)
-    Clicking the image area or entering a visual description and clicking generate navigates to the generation page. Generated images are automatically saved back to the scene.
+    - Scene Description text field (used as generation prompt)
+    Clicking the image area navigates to the generation page with the scene description. Generated images are automatically saved back to the scene.
 -   **Client-Side Persistence**: localStorage is used for user preferences like style lock status and selected reference images. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
 -   **Reference Image Storage**: The KIE File Upload API stores reference images, uploading them on-demand with temporary URLs and promise-based caching to prevent duplicate uploads.
 
