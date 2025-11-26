@@ -1424,11 +1424,287 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Storyboard API =====
+
+  // Get all storyboards
+  app.get("/api/storyboards", async (req, res) => {
+    try {
+      const storyboards = await storage.getAllStoryboards();
+      res.json(storyboards);
+    } catch (error) {
+      console.error("Error fetching storyboards:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch storyboards",
+      });
+    }
+  });
+
+  // Get single storyboard
+  app.get("/api/storyboards/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const storyboard = await storage.getStoryboard(id);
+      if (!storyboard) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Storyboard ${id} not found`,
+        });
+      }
+
+      res.json(storyboard);
+    } catch (error) {
+      console.error("Error fetching storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch storyboard",
+      });
+    }
+  });
+
+  // Create a new storyboard
+  app.post("/api/storyboards", async (req, res) => {
+    try {
+      const { name, description, styleId, engine } = req.body;
+      
+      if (!name || name.trim() === "") {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "Storyboard name is required",
+        });
+      }
+
+      const storyboard = await storage.createStoryboard({
+        name: name.trim(),
+        description: description || "",
+        styleId: styleId || null,
+        engine: engine || null,
+      });
+      
+      res.json(storyboard);
+    } catch (error) {
+      console.error("Error creating storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create storyboard",
+      });
+    }
+  });
+
+  // Update a storyboard
+  app.patch("/api/storyboards/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const { name, description, styleId, engine } = req.body;
+      
+      const storyboard = await storage.updateStoryboard(id, {
+        name,
+        description,
+        styleId,
+        engine,
+      });
+
+      if (!storyboard) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Storyboard ${id} not found`,
+        });
+      }
+
+      res.json(storyboard);
+    } catch (error) {
+      console.error("Error updating storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update storyboard",
+      });
+    }
+  });
+
+  // Delete a storyboard
+  app.delete("/api/storyboards/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const deleted = await storage.deleteStoryboard(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Storyboard ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete storyboard",
+      });
+    }
+  });
+
+  // ===== Storyboard Version API =====
+
+  // Get all versions for a storyboard
+  app.get("/api/storyboards/:id/versions", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const versions = await storage.getStoryboardVersions(id);
+      res.json(versions);
+    } catch (error) {
+      console.error("Error fetching storyboard versions:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch storyboard versions",
+      });
+    }
+  });
+
+  // Create a new version (save current state)
+  app.post("/api/storyboards/:id/versions", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const { name, description } = req.body;
+      
+      if (!name || name.trim() === "") {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "Version name is required",
+        });
+      }
+
+      const version = await storage.createStoryboardVersion(id, name.trim(), description || "");
+      res.json(version);
+    } catch (error: any) {
+      console.error("Error creating storyboard version:", error);
+      if (error.message === "Storyboard not found") {
+        return res.status(404).json({
+          error: "Not found",
+          message: "Storyboard not found",
+        });
+      }
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create storyboard version",
+      });
+    }
+  });
+
+  // Restore a version
+  app.post("/api/storyboards/versions/:versionId/restore", async (req, res) => {
+    try {
+      const versionId = parseInt(req.params.versionId, 10);
+      if (isNaN(versionId)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Version ID must be a number",
+        });
+      }
+
+      const storyboard = await storage.restoreStoryboardVersion(versionId);
+      
+      if (!storyboard) {
+        return res.status(404).json({
+          error: "Not found",
+          message: "Version or storyboard not found",
+        });
+      }
+
+      res.json({ success: true, storyboard });
+    } catch (error) {
+      console.error("Error restoring storyboard version:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to restore storyboard version",
+      });
+    }
+  });
+
+  // Delete a version
+  app.delete("/api/storyboards/versions/:versionId", async (req, res) => {
+    try {
+      const versionId = parseInt(req.params.versionId, 10);
+      if (isNaN(versionId)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Version ID must be a number",
+        });
+      }
+
+      const deleted = await storage.deleteStoryboardVersion(versionId);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Version ${versionId} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting storyboard version:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete storyboard version",
+      });
+    }
+  });
+
   // ===== Storyboard Scene API =====
   
-  // Get all scenes
+  // Get all scenes (legacy - returns all scenes regardless of storyboard)
   app.get("/api/scenes", async (req, res) => {
     try {
+      const storyboardId = req.query.storyboardId;
+      
+      if (storyboardId) {
+        const id = parseInt(storyboardId as string, 10);
+        if (isNaN(id)) {
+          return res.status(400).json({
+            error: "Invalid ID",
+            message: "Storyboard ID must be a number",
+          });
+        }
+        const scenes = await storage.getScenesByStoryboardId(id);
+        return res.json(scenes);
+      }
+      
       const scenes = await storage.getAllScenes();
       res.json(scenes);
     } catch (error) {
@@ -1443,9 +1719,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a new scene
   app.post("/api/scenes", async (req, res) => {
     try {
-      const { voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      const { storyboardId, voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex } = req.body;
       
       const scene = await storage.createScene({
+        storyboardId: storyboardId || null,
         voiceOver: voiceOver || "",
         visualDescription: visualDescription || "",
         generatedImageUrl: generatedImageUrl || null,
@@ -1558,7 +1835,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   await initializeReferenceImages();
 
+  // Migrate orphan scenes to a default storyboard
+  await migrateOrphanScenes();
+
   const httpServer = createServer(app);
 
   return httpServer;
+}
+
+async function migrateOrphanScenes() {
+  try {
+    // Check if there are any orphan scenes (scenes without a storyboardId)
+    const allScenes = await storage.getAllScenes();
+    const orphanScenes = allScenes.filter(s => s.storyboardId === null);
+    
+    if (orphanScenes.length === 0) {
+      console.log("No orphan scenes to migrate");
+      return;
+    }
+
+    console.log(`Found ${orphanScenes.length} orphan scene(s), migrating...`);
+
+    // Check if there's already a default storyboard
+    const storyboards = await storage.getAllStoryboards();
+    let defaultStoryboard = storyboards.find(s => s.name === "Default Storyboard");
+
+    if (!defaultStoryboard) {
+      // Create a default storyboard
+      defaultStoryboard = await storage.createStoryboard({
+        name: "Default Storyboard",
+        description: "Auto-created storyboard for migrated scenes",
+      });
+      console.log(`Created default storyboard with ID: ${defaultStoryboard.id}`);
+    }
+
+    // Migrate orphan scenes to the default storyboard
+    await storage.migrateScenesToStoryboard(defaultStoryboard.id);
+    console.log(`✓ Migrated ${orphanScenes.length} scene(s) to storyboard: ${defaultStoryboard.name}`);
+  } catch (error) {
+    console.error("Error migrating orphan scenes:", error);
+  }
 }

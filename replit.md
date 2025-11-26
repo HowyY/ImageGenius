@@ -40,14 +40,18 @@ Palette fallback hierarchy: User override → Template default → Style default
 
 ### Data Storage Solutions
 
--   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs), prompt templates, and storyboard scenes. All data is defined by Drizzle ORM schemas.
+-   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs), prompt templates, storyboards, storyboard versions, and storyboard scenes. All data is defined by Drizzle ORM schemas.
+-   **Multiple Storyboards**: Users can create, switch between, rename, and delete different storyboard projects. Each storyboard is isolated with its own scenes. The currently selected storyboard ID is persisted in localStorage for cross-session continuity.
+-   **Version Control**: Each storyboard supports named versions (snapshots) that can be saved and restored. Versions capture the complete scene state including descriptions, generated images, style settings, and engine choices.
 -   **Storyboard Scenes**: Script-driven scene cards in a 3-column grid layout. Each scene has:
     - Image area (clickable to generate) with amber placeholder for empty scenes
     - Status line showing "Generated Images (1)" or "No images generated yet"
     - Scene Description text field (used as generation prompt)
-    Clicking the image area navigates to the generation page with the scene description. Generated images are automatically saved back to the scene.
--   **Client-Side Persistence**: localStorage is used for user preferences like style lock status and selected reference images. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
+    - Generate and Edit buttons for inline image generation
+    Scenes belong to a specific storyboard via `storyboardId` foreign key.
+-   **Client-Side Persistence**: localStorage is used for user preferences like style lock status, selected reference images, and current storyboard ID. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
 -   **Reference Image Storage**: The KIE File Upload API stores reference images, uploading them on-demand with temporary URLs and promise-based caching to prevent duplicate uploads.
+-   **Migration Logic**: On server startup, orphan scenes (without a storyboard) are automatically migrated to a "Default Storyboard" for backward compatibility.
 
 ### Type Safety and Code Sharing
 

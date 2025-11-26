@@ -40,9 +40,34 @@ export const promptTemplates = pgTable("prompt_templates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Storyboards table - container for scenes
+export const storyboards = pgTable("storyboards", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  styleId: text("style_id"),
+  engine: text("engine"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Storyboard versions table - snapshot of storyboard state for version control
+export const storyboardVersions = pgTable("storyboard_versions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  storyboardId: integer("storyboard_id").notNull(),
+  versionNumber: integer("version_number").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  scenesSnapshot: jsonb("scenes_snapshot").notNull(), // Array of scene data
+  styleId: text("style_id"),
+  engine: text("engine"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Storyboard scenes table for script-driven image generation
 export const storyboardScenes = pgTable("storyboard_scenes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  storyboardId: integer("storyboard_id"), // null for legacy scenes, will be migrated
   orderIndex: integer("order_index").notNull().default(0),
   voiceOver: text("voice_over").notNull().default(""),
   visualDescription: text("visual_description").notNull().default(""),
@@ -95,8 +120,38 @@ export const insertStyleSchema = z.object({
 export type InsertStyle = z.infer<typeof insertStyleSchema>;
 export type SelectStyle = typeof styles.$inferSelect;
 
+// Insert schema for storyboards
+export const insertStoryboardSchema = z.object({
+  name: z.string().min(1, "Storyboard name is required"),
+  description: z.string().default(""),
+  styleId: z.string().optional().nullable(),
+  engine: z.string().optional().nullable(),
+});
+
+export const updateStoryboardSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  styleId: z.string().optional().nullable(),
+  engine: z.string().optional().nullable(),
+});
+
+export type InsertStoryboard = z.infer<typeof insertStoryboardSchema>;
+export type UpdateStoryboard = z.infer<typeof updateStoryboardSchema>;
+export type SelectStoryboard = typeof storyboards.$inferSelect;
+
+// Insert schema for storyboard versions
+export const insertStoryboardVersionSchema = z.object({
+  storyboardId: z.number().int(),
+  name: z.string().min(1, "Version name is required"),
+  description: z.string().default(""),
+});
+
+export type InsertStoryboardVersion = z.infer<typeof insertStoryboardVersionSchema>;
+export type SelectStoryboardVersion = typeof storyboardVersions.$inferSelect;
+
 // Insert schema for storyboard scenes
 export const insertStoryboardSceneSchema = z.object({
+  storyboardId: z.number().int().optional().nullable(),
   orderIndex: z.number().int().min(0).optional(),
   voiceOver: z.string().default(""),
   visualDescription: z.string().default(""),
@@ -106,6 +161,7 @@ export const insertStoryboardSceneSchema = z.object({
 });
 
 export const updateStoryboardSceneSchema = z.object({
+  storyboardId: z.number().int().optional().nullable(),
   orderIndex: z.number().int().min(0).optional(),
   voiceOver: z.string().optional(),
   visualDescription: z.string().optional(),
