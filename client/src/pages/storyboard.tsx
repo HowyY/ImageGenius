@@ -1,41 +1,50 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { 
   Upload, 
   RefreshCw, 
   Plus,
   Trash2,
   History,
-  X
+  Loader2,
+  Sparkles,
+  Pencil
 } from "lucide-react";
-import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory } from "@shared/schema";
+import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, GenerateResponse } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
-import { setPrompt, getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
+import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { format } from "date-fns";
 
 interface EditingState {
   sceneDescription: string;
 }
 
+interface EditDialogState {
+  sceneId: number;
+  imageUrl: string;
+  editPrompt: string;
+}
+
 export default function Storyboard() {
-  const [, navigate] = useLocation();
   const { toast } = useToast();
   const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
   const [selectedStyle, setSelectedStyle] = useState<string>(getSelectedStyleId() || "");
   const [selectedEngine, setSelectedEngineState] = useState<string>(getEngine() || "nanobanana");
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historySceneId, setHistorySceneId] = useState<number | null>(null);
+  const [generatingScenes, setGeneratingScenes] = useState<Set<number>>(new Set());
+  const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
   
   const { data: scenes, isLoading, refetch } = useQuery<SelectStoryboardScene[]>({
     queryKey: ["/api/scenes"],
@@ -161,20 +170,147 @@ export default function Storyboard() {
     }
   }, [editingScenes, updateSceneMutation]);
 
-  const handleGenerateClick = (scene: SelectStoryboardScene) => {
+  const handleGenerateClick = async (scene: SelectStoryboardScene) => {
     const editing = editingScenes[scene.id];
     const sceneDescription = editing?.sceneDescription ?? scene.visualDescription;
     
-    if (sceneDescription?.trim()) {
-      setPrompt(sceneDescription);
-      setSelectedStyleId(selectedStyle);
-      setEngine(selectedEngine);
-      navigate(`/?sceneId=${scene.id}`);
-    } else {
+    if (!sceneDescription?.trim()) {
       toast({
         title: "Empty description",
         description: "Please enter a scene description first",
         variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedStyle) {
+      toast({
+        title: "No style selected",
+        description: "Please select a style first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setGeneratingScenes(prev => new Set(prev).add(scene.id));
+
+    try {
+      const generateRes = await apiRequest("POST", "/api/generate", {
+        prompt: sceneDescription,
+        styleId: selectedStyle,
+        engine: selectedEngine,
+        sceneId: scene.id,
+      });
+      const generateData = await generateRes.json() as GenerateResponse;
+
+      await apiRequest("PATCH", `/api/scenes/${scene.id}`, {
+        generatedImageUrl: generateData.imageUrl,
+        styleId: selectedStyle,
+        engine: selectedEngine,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", scene.id] });
+
+      toast({
+        title: "Image generated",
+        description: "Scene image has been updated",
+      });
+    } catch (error) {
+      console.error("Generation failed:", error);
+      toast({
+        title: "Generation failed",
+        description: error instanceof Error ? error.message : "Failed to generate image",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingScenes(prev => {
+        const next = new Set(prev);
+        next.delete(scene.id);
+        return next;
+      });
+    }
+  };
+
+  const handleEditClick = (scene: SelectStoryboardScene) => {
+    if (!scene.generatedImageUrl) {
+      toast({
+        title: "No image to edit",
+        description: "Generate an image first before editing",
+        variant: "destructive",
+      });
+      return;
+    }
+    setEditDialog({
+      sceneId: scene.id,
+      imageUrl: scene.generatedImageUrl,
+      editPrompt: "",
+    });
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editDialog) return;
+
+    if (!editDialog.editPrompt.trim()) {
+      toast({
+        title: "Empty edit prompt",
+        description: "Please describe what you want to change",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedStyle) {
+      toast({
+        title: "No style selected",
+        description: "Please select a style first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const sceneIdToEdit = editDialog.sceneId;
+    const editPrompt = editDialog.editPrompt;
+    const imageUrl = editDialog.imageUrl;
+    
+    setGeneratingScenes(prev => new Set(prev).add(sceneIdToEdit));
+    setEditDialog(null);
+
+    try {
+      const generateRes = await apiRequest("POST", "/api/generate", {
+        prompt: editPrompt,
+        styleId: selectedStyle,
+        engine: selectedEngine,
+        userReferenceImages: [imageUrl],
+        sceneId: sceneIdToEdit,
+      });
+      const generateData = await generateRes.json() as GenerateResponse;
+
+      await apiRequest("PATCH", `/api/scenes/${sceneIdToEdit}`, {
+        generatedImageUrl: generateData.imageUrl,
+        styleId: selectedStyle,
+        engine: selectedEngine,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", sceneIdToEdit] });
+
+      toast({
+        title: "Image edited",
+        description: "Scene image has been updated",
+      });
+    } catch (error) {
+      console.error("Edit failed:", error);
+      toast({
+        title: "Edit failed",
+        description: error instanceof Error ? error.message : "Failed to edit image",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingScenes(prev => {
+        const next = new Set(prev);
+        next.delete(sceneIdToEdit);
+        return next;
       });
     }
   };
@@ -326,14 +462,18 @@ export default function Storyboard() {
                 data-testid={`scene-card-${scene.id}`}
               >
                 <div 
-                  className={`relative aspect-video cursor-pointer group ${
+                  className={`relative aspect-video group ${
                     scene.generatedImageUrl 
                       ? 'bg-muted' 
                       : 'bg-amber-50 dark:bg-amber-950/30 border-2 border-dashed border-amber-400 dark:border-amber-600'
                   }`}
-                  onClick={() => handleGenerateClick(scene)}
                 >
-                  {scene.generatedImageUrl ? (
+                  {generatingScenes.has(scene.id) ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                      <Loader2 className="w-10 h-10 animate-spin" />
+                      <span className="text-sm font-medium">Generating...</span>
+                    </div>
+                  ) : scene.generatedImageUrl ? (
                     <ImageWithFallback
                       src={scene.generatedImageUrl}
                       alt={scene.visualDescription || `Scene`}
@@ -345,7 +485,7 @@ export default function Storyboard() {
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
                       <Upload className="w-8 h-8" />
-                      <span className="text-sm font-medium">Click Generate or Upload</span>
+                      <span className="text-sm font-medium">Add description and generate</span>
                     </div>
                   )}
                   
@@ -359,7 +499,7 @@ export default function Storyboard() {
                           e.stopPropagation();
                           deleteSceneMutation.mutate(scene.id);
                         }}
-                        disabled={deleteSceneMutation.isPending}
+                        disabled={deleteSceneMutation.isPending || generatingScenes.has(scene.id)}
                         data-testid={`button-delete-scene-${scene.id}`}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -390,7 +530,7 @@ export default function Storyboard() {
                 </div>
                 
                 <div className="p-3 flex-1 flex flex-col">
-                  <div>
+                  <div className="flex-1">
                     <label className="text-sm font-medium text-foreground mb-1 block">
                       Scene Description
                     </label>
@@ -399,9 +539,45 @@ export default function Storyboard() {
                       value={getSceneDescription(scene)}
                       onChange={(e) => handleDescriptionChange(scene.id, e.target.value)}
                       onBlur={() => handleDescriptionBlur(scene)}
-                      className="min-h-[100px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
+                      className="min-h-[80px] resize-none text-sm"
                       data-testid={`textarea-scene-description-${scene.id}`}
                     />
+                  </div>
+                  
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      onClick={() => handleGenerateClick(scene)}
+                      disabled={generatingScenes.has(scene.id) || !getSceneDescription(scene).trim()}
+                      className="flex-1"
+                      data-testid={`button-generate-scene-${scene.id}`}
+                    >
+                      {generatingScenes.has(scene.id) ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Generate
+                        </>
+                      )}
+                    </Button>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleEditClick(scene)}
+                          disabled={generatingScenes.has(scene.id) || !scene.generatedImageUrl}
+                          data-testid={`button-edit-scene-${scene.id}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Edit with reference</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </Card>
@@ -468,6 +644,67 @@ export default function Storyboard() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editDialog} onOpenChange={(open) => !open && setEditDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Image</DialogTitle>
+            <DialogDescription>
+              Describe what you want to change. The current image will be used as a reference.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editDialog && (
+            <div className="space-y-4">
+              <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+                <ImageWithFallback
+                  src={editDialog.imageUrl}
+                  alt="Current image"
+                  className="w-full h-full object-cover"
+                  fallbackText="Failed to load"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-prompt" className="mb-2 block text-sm font-medium">
+                  Edit Instructions
+                </Label>
+                <Input
+                  id="edit-prompt"
+                  placeholder="e.g., Change the background to blue, add a sunset..."
+                  value={editDialog.editPrompt}
+                  onChange={(e) => setEditDialog({ ...editDialog, editPrompt: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleEditSubmit();
+                    }
+                  }}
+                  data-testid="input-edit-prompt"
+                />
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditDialog(null)}
+              data-testid="button-cancel-edit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditSubmit}
+              disabled={!editDialog?.editPrompt.trim()}
+              data-testid="button-submit-edit"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Apply Edit
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

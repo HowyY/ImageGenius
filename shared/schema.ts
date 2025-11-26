@@ -218,6 +218,7 @@ export const generateRequestSchema = z.object({
   userReferenceImages: z.array(z.string().url()).max(3).optional(),
   customTemplate: anyTemplateSchema.optional(),
   templateReferenceImages: z.array(z.string()).optional(),
+  sceneId: z.number().optional(),
 });
 
 export const generateResponseSchema = z.object({

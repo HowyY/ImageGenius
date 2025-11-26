@@ -960,7 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages } = validationResult.data;
+      const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages, sceneId } = validationResult.data;
       
       // Get style from database (or fallback to static)
       const selectedStyle = await getStyleById(styleId);
@@ -1142,9 +1142,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userReferenceUrls: userReferenceImages || undefined,
           allReferenceImageUrls: imageUrls.length > 0 ? imageUrls : undefined,
           generatedImageUrl: imageUrl,
+          sceneId: sceneId || null,
         });
         historyId = savedHistory.id;
-        console.log(`✓ Saved to history with ID: ${historyId}`);
+        console.log(`✓ Saved to history with ID: ${historyId}${sceneId ? ` (Scene ${sceneId})` : ''}`);
       } catch (dbError) {
         console.error("Failed to save generation history:", dbError);
       }
