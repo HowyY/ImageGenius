@@ -13,7 +13,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Define style presets with detailed visual descriptions
+// Each style has its own unique reference image for thumbnails
 const DEFAULT_REFERENCE_IMAGE = "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png";
+
+// Local reference image URLs (served from client/public/)
+const STYLE_REFERENCE_IMAGES = {
+  cyan_sketchline_vector: "/reference-images/cyan_sketchline_vector/1.png",
+  warm_orange_flat: "/reference-images/t/A.png", // Fallback until specific images added
+  simple_cyan_test: "/reference-images/cyan_sketchline_vector/2.png",
+  cyan_sketchline_vector_v2: "/reference-images/cyan_sketchline_vector/3.png",
+} as const;
 
 let uploadedReferenceImages: StyleImageMapping[] = [];
 
@@ -37,7 +46,7 @@ const STYLE_PRESETS: Array<
         { name: "White", hex: "#FFFFFF", role: "background" },
       ],
     },
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.cyan_sketchline_vector,
   },
   {
     id: "warm_orange_flat",
@@ -46,7 +55,7 @@ const STYLE_PRESETS: Array<
     engines: ["nanobanana", "seedream", "nanopro"],
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.warm_orange_flat,
   },
   {
     id: "simple_cyan_test",
@@ -64,7 +73,7 @@ const STYLE_PRESETS: Array<
         { name: "White", hex: "#FFFFFF", role: "background" },
       ],
     },
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.simple_cyan_test,
   },
   {
     id: "cyan_sketchline_vector_v2",
@@ -82,7 +91,7 @@ const STYLE_PRESETS: Array<
         { name: "White", hex: "#FFFFFF", role: "background" },
       ],
     },
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.cyan_sketchline_vector_v2,
   },
 ];
 
