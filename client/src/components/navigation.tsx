@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Home, History, Sparkles } from "lucide-react";
+import { Home, History, Sparkles, LayoutGrid } from "lucide-react";
 
 export function Navigation() {
   const [location] = useLocation();
@@ -13,7 +13,7 @@ export function Navigation() {
             <Sparkles className="w-6 h-6 text-primary" />
             <span className="font-bold text-xl">AI Image Generator</span>
           </div>
-          <nav className="flex items-center gap-2">
+          <nav className="flex flex-wrap items-center gap-2">
             <Button
               variant={location === "/" ? "default" : "ghost"}
               size="sm"
@@ -23,6 +23,17 @@ export function Navigation() {
               <Link href="/">
                 <Home className="w-4 h-4 mr-2" />
                 Generate
+              </Link>
+            </Button>
+            <Button
+              variant={location === "/storyboard" ? "default" : "ghost"}
+              size="sm"
+              asChild
+              data-testid="button-nav-storyboard"
+            >
+              <Link href="/storyboard">
+                <LayoutGrid className="w-4 h-4 mr-2" />
+                Storyboard
               </Link>
             </Button>
             <Button
@@ -36,7 +47,6 @@ export function Navigation() {
                 History
               </Link>
             </Button>
-            {/* New button for Prompt Editor */}
             <Button
               variant={location === "/prompt-editor" ? "default" : "ghost"}
               size="sm"
@@ -44,7 +54,7 @@ export function Navigation() {
               data-testid="button-nav-prompt-editor"
             >
               <Link href="/prompt-editor">
-                <Sparkles className="w-4 h-4 mr-2" /> {/* Assuming Sparkles or FileEdit icon */}
+                <Sparkles className="w-4 h-4 mr-2" />
                 Prompt Editor
               </Link>
             </Button>
