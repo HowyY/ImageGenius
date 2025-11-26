@@ -345,8 +345,8 @@ export default function Storyboard() {
   });
 
   const updateSceneMutation = useMutation({
-    mutationFn: async ({ id, visualDescription }: { id: number; visualDescription?: string }) => {
-      return apiRequest("PATCH", `/api/scenes/${id}`, { visualDescription });
+    mutationFn: async ({ id, visualDescription, generatedImageUrl }: { id: number; visualDescription?: string; generatedImageUrl?: string }) => {
+      return apiRequest("PATCH", `/api/scenes/${id}`, { visualDescription, generatedImageUrl });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
@@ -355,6 +355,27 @@ export default function Storyboard() {
       toast({
         title: "Error",
         description: "Failed to update scene",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rollbackSceneImageMutation = useMutation({
+    mutationFn: async ({ sceneId, imageUrl }: { sceneId: number; imageUrl: string }) => {
+      return apiRequest("PATCH", `/api/scenes/${sceneId}`, { generatedImageUrl: imageUrl });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", historySceneId] });
+      toast({
+        title: "Image restored",
+        description: "Scene image has been updated to the selected version",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to restore image",
         variant: "destructive",
       });
     },
@@ -1252,7 +1273,7 @@ export default function Storyboard() {
           ) : (
             <div className="space-y-4">
               {sceneHistory.map((item) => (
-                <div key={item.id} className="flex gap-4 p-3 border rounded-lg">
+                <div key={item.id} className="flex gap-4 p-3 border rounded-lg" data-testid={`history-item-${item.id}`}>
                   <div className="w-32 h-24 bg-muted rounded overflow-hidden flex-shrink-0">
                     <ImageWithFallback
                       src={item.generatedImageUrl}
@@ -1270,6 +1291,29 @@ export default function Storyboard() {
                     <p className="text-xs text-muted-foreground mt-1">
                       {format(new Date(item.createdAt), "MMM d, yyyy 'at' h:mm a")}
                     </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => historySceneId && rollbackSceneImageMutation.mutate({ 
+                        sceneId: historySceneId, 
+                        imageUrl: item.generatedImageUrl 
+                      })}
+                      disabled={rollbackSceneImageMutation.isPending}
+                      data-testid={`button-use-image-${item.id}`}
+                    >
+                      {rollbackSceneImageMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Applying...
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-3 h-3 mr-1" />
+                          Use this image
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               ))}
