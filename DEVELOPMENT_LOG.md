@@ -146,17 +146,43 @@ Build an AI-powered image generation tool for ORAMA's storyboard feature, suppor
 ## TODO List
 
 ### High Priority
-- [ ] _Add your high priority tasks here_
+- [ ] **Style Editor Redesign**: Redesign the Prompt Editor interface to become a comprehensive Style Editor
+  - Rename and restructure the editor page
+  - Better organization for style configuration
+  - Improved UX for template editing
+
+- [ ] **Character System**: Add character creation and editing interface
+  - Design character definition schema
+  - Build character creation UI
+  - Figure out efficient character reference system for maintaining consistency across storyboard scenes
+  - _Note: Still exploring the best approach for character persistence and invocation_
 
 ### Medium Priority
-- [ ] _Add your medium priority tasks here_
+- [ ] **New Styles**: Continue debugging and adding new visual styles
+  - Test and refine existing templates
+  - Create additional style presets
+  - Validate style consistency across different prompts
+
+- [ ] **UI/UX Optimization**: Continue improving interface usability
+  - Streamline common workflows
+  - Enhance visual feedback
+  - Mobile responsiveness improvements
 
 ### Future Ideas / Backlog
-- [ ] _Add your future ideas here_
+- [ ] Batch image generation for multiple scenes
+- [ ] Export storyboard as PDF/image sequence
+- [ ] AI-assisted prompt suggestions
+- [ ] Collaborative editing features
 
 ---
 
 ## Notes
+
+**Character System Design Considerations:**
+- Need to determine how characters are stored (database vs. reference images)
+- Consider character "tokens" or IDs that can be embedded in prompts
+- Explore using consistent reference images per character across scenes
+- Balance between flexibility and consistency
 
 _Add any additional notes, learnings, or decisions here._
 
