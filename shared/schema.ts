@@ -39,6 +39,18 @@ export const promptTemplates = pgTable("prompt_templates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Storyboard scenes table for script-driven image generation
+export const storyboardScenes = pgTable("storyboard_scenes", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  orderIndex: integer("order_index").notNull().default(0),
+  prompt: text("prompt").notNull().default(""),
+  generatedImageUrl: text("generated_image_url"),
+  styleId: text("style_id"),
+  engine: text("engine"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 const baseInsertSchema = createInsertSchema(generationHistory);
 
 export const insertGenerationHistorySchema = z.object({
@@ -79,6 +91,27 @@ export const insertStyleSchema = z.object({
 
 export type InsertStyle = z.infer<typeof insertStyleSchema>;
 export type SelectStyle = typeof styles.$inferSelect;
+
+// Insert schema for storyboard scenes
+export const insertStoryboardSceneSchema = z.object({
+  orderIndex: z.number().int().min(0).optional(),
+  prompt: z.string().default(""),
+  generatedImageUrl: z.string().url().optional().nullable(),
+  styleId: z.string().optional().nullable(),
+  engine: z.string().optional().nullable(),
+});
+
+export const updateStoryboardSceneSchema = z.object({
+  orderIndex: z.number().int().min(0).optional(),
+  prompt: z.string().optional(),
+  generatedImageUrl: z.string().optional().nullable(),
+  styleId: z.string().optional().nullable(),
+  engine: z.string().optional().nullable(),
+});
+
+export type InsertStoryboardScene = z.infer<typeof insertStoryboardSceneSchema>;
+export type UpdateStoryboardScene = z.infer<typeof updateStoryboardSceneSchema>;
+export type SelectStoryboardScene = typeof storyboardScenes.$inferSelect;
 
 const colorSchema = z.object({
   name: z.string(),

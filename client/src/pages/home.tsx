@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSearch } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -58,6 +59,9 @@ export default function Home() {
   const [userRefCount, setUserRefCount] = useState(0);
   const { toast, dismiss } = useToast();
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  const searchString = useSearch();
+  const sceneId = new URLSearchParams(searchString).get("sceneId");
 
   // Restore persisted state on mount
   const savedPrompt = getPrompt();
@@ -120,6 +124,16 @@ export default function Home() {
     }
   }, [styles, historyData]);
 
+  // Sync prompt from localStorage when coming from storyboard (sceneId in URL)
+  useEffect(() => {
+    if (sceneId) {
+      const currentPrompt = getPrompt();
+      if (currentPrompt && currentPrompt !== form.getValues("prompt")) {
+        form.setValue("prompt", currentPrompt);
+      }
+    }
+  }, [sceneId]);
+
   // Watch and persist prompt changes
   const watchedPrompt = form.watch("prompt");
   useEffect(() => {
@@ -132,11 +146,29 @@ export default function Home() {
     setEngine(watchedEngine);
   }, [watchedEngine]);
 
+  const updateSceneMutation = useMutation({
+    mutationFn: async ({ id, generatedImageUrl, styleId, engine }: { 
+      id: number; 
+      generatedImageUrl: string;
+      styleId: string;
+      engine: string;
+    }) => {
+      return apiRequest("PATCH", `/api/scenes/${id}`, { 
+        generatedImageUrl,
+        styleId,
+        engine 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
+    },
+  });
+
   const generateMutation = useMutation({
     mutationFn: async (data: GenerateRequest) => {
       const response = await apiRequest("POST", "/api/generate", data);
       const result = await response.json() as GenerateResponse;
-      return result;
+      return { ...result, requestData: data };
     },
     onMutate: () => {
       if (lastToastId) {
@@ -145,14 +177,28 @@ export default function Home() {
     },
     onSuccess: (data) => {
       setGeneratedImage(data.imageUrl);
-      // Persist generated image to localStorage
       setLastGeneratedImage(data.imageUrl);
       queryClient.invalidateQueries({ queryKey: ["/api/history"] });
-      const { id } = toast({
-        title: "Image generated successfully!",
-        description: "Your image is ready. Generate another or try a different style.",
-      });
-      setLastToastId(id);
+      
+      if (sceneId) {
+        updateSceneMutation.mutate({
+          id: parseInt(sceneId, 10),
+          generatedImageUrl: data.imageUrl,
+          styleId: data.requestData.styleId,
+          engine: data.requestData.engine,
+        });
+        const { id } = toast({
+          title: "Scene image updated!",
+          description: "Image generated and added to your storyboard scene.",
+        });
+        setLastToastId(id);
+      } else {
+        const { id } = toast({
+          title: "Image generated successfully!",
+          description: "Your image is ready. Generate another or try a different style.",
+        });
+        setLastToastId(id);
+      }
     },
   });
 

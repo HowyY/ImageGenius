@@ -5,12 +5,16 @@ import {
   generationHistory,
   promptTemplates,
   styles,
+  storyboardScenes,
   type InsertGenerationHistory,
   type SelectGenerationHistory,
   type InsertPromptTemplate,
   type SelectPromptTemplate,
   type InsertStyle,
   type SelectStyle,
+  type InsertStoryboardScene,
+  type UpdateStoryboardScene,
+  type SelectStoryboardScene,
 } from "@shared/schema";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -36,6 +40,13 @@ export interface IStorage {
   updateStyle(styleId: string, data: Partial<InsertStyle>): Promise<SelectStyle | null>;
   deleteStyle(styleId: string): Promise<boolean>;
   seedBuiltInStyles(builtInStyles: InsertStyle[]): Promise<void>;
+  // Storyboard scene operations
+  getAllScenes(): Promise<SelectStoryboardScene[]>;
+  getScene(id: number): Promise<SelectStoryboardScene | null>;
+  createScene(data: InsertStoryboardScene): Promise<SelectStoryboardScene>;
+  updateScene(id: number, data: UpdateStoryboardScene): Promise<SelectStoryboardScene | null>;
+  deleteScene(id: number): Promise<boolean>;
+  reorderScenes(sceneIds: number[]): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -235,6 +246,101 @@ export class MemStorage implements IStorage {
       if (!existing) {
         await this.createStyle({ ...style, isBuiltIn: true });
       }
+    }
+  }
+
+  // Storyboard scene operations
+  async getAllScenes(): Promise<SelectStoryboardScene[]> {
+    if (!db) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(storyboardScenes)
+      .orderBy(storyboardScenes.orderIndex);
+  }
+
+  async getScene(id: number): Promise<SelectStoryboardScene | null> {
+    if (!db) {
+      return null;
+    }
+
+    const results = await db
+      .select()
+      .from(storyboardScenes)
+      .where(eq(storyboardScenes.id, id))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
+  async createScene(data: InsertStoryboardScene): Promise<SelectStoryboardScene> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Get the next order index
+    const allScenes = await this.getAllScenes();
+    const nextOrderIndex = data.orderIndex ?? allScenes.length;
+
+    const [result] = await db
+      .insert(storyboardScenes)
+      .values({
+        orderIndex: nextOrderIndex,
+        prompt: data.prompt ?? "",
+        generatedImageUrl: data.generatedImageUrl,
+        styleId: data.styleId,
+        engine: data.engine,
+      })
+      .returning();
+    return result;
+  }
+
+  async updateScene(id: number, data: UpdateStoryboardScene): Promise<SelectStoryboardScene | null> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const updateData: any = { updatedAt: new Date() };
+    if (data.orderIndex !== undefined) updateData.orderIndex = data.orderIndex;
+    if (data.prompt !== undefined) updateData.prompt = data.prompt;
+    if (data.generatedImageUrl !== undefined) updateData.generatedImageUrl = data.generatedImageUrl;
+    if (data.styleId !== undefined) updateData.styleId = data.styleId;
+    if (data.engine !== undefined) updateData.engine = data.engine;
+
+    const [result] = await db
+      .update(storyboardScenes)
+      .set(updateData)
+      .where(eq(storyboardScenes.id, id))
+      .returning();
+    return result || null;
+  }
+
+  async deleteScene(id: number): Promise<boolean> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const scene = await this.getScene(id);
+    if (!scene) {
+      return false;
+    }
+
+    await db.delete(storyboardScenes).where(eq(storyboardScenes.id, id));
+    return true;
+  }
+
+  async reorderScenes(sceneIds: number[]): Promise<void> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    for (let i = 0; i < sceneIds.length; i++) {
+      await db
+        .update(storyboardScenes)
+        .set({ orderIndex: i, updatedAt: new Date() })
+        .where(eq(storyboardScenes.id, sceneIds[i]));
     }
   }
 }

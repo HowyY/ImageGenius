@@ -1403,6 +1403,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Storyboard Scene API =====
+  
+  // Get all scenes
+  app.get("/api/scenes", async (req, res) => {
+    try {
+      const scenes = await storage.getAllScenes();
+      res.json(scenes);
+    } catch (error) {
+      console.error("Error fetching scenes:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch scenes",
+      });
+    }
+  });
+
+  // Create a new scene
+  app.post("/api/scenes", async (req, res) => {
+    try {
+      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      
+      const scene = await storage.createScene({
+        prompt: prompt || "",
+        generatedImageUrl: generatedImageUrl || null,
+        styleId: styleId || null,
+        engine: engine || null,
+        orderIndex,
+      });
+      
+      res.json(scene);
+    } catch (error) {
+      console.error("Error creating scene:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create scene",
+      });
+    }
+  });
+
+  // Update a scene
+  app.patch("/api/scenes/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Scene ID must be a number",
+        });
+      }
+
+      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      
+      const scene = await storage.updateScene(id, {
+        prompt,
+        generatedImageUrl,
+        styleId,
+        engine,
+        orderIndex,
+      });
+
+      if (!scene) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Scene ${id} not found`,
+        });
+      }
+
+      res.json(scene);
+    } catch (error) {
+      console.error("Error updating scene:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update scene",
+      });
+    }
+  });
+
+  // Delete a scene
+  app.delete("/api/scenes/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Scene ID must be a number",
+        });
+      }
+
+      const deleted = await storage.deleteScene(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Scene ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting scene:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete scene",
+      });
+    }
+  });
+
+  // Reorder scenes
+  app.post("/api/scenes/reorder", async (req, res) => {
+    try {
+      const { sceneIds } = req.body;
+      
+      if (!Array.isArray(sceneIds)) {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "sceneIds must be an array",
+        });
+      }
+
+      await storage.reorderScenes(sceneIds);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering scenes:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reorder scenes",
+      });
+    }
+  });
+
   await initializeReferenceImages();
 
   const httpServer = createServer(app);
