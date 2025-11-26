@@ -29,6 +29,7 @@ if (DATABASE_URL) {
 export interface IStorage {
   saveGenerationHistory(data: InsertGenerationHistory): Promise<SelectGenerationHistory>;
   getGenerationHistory(limit?: number): Promise<SelectGenerationHistory[]>;
+  getGenerationHistoryBySceneId(sceneId: number): Promise<SelectGenerationHistory[]>;
   getTemplate(styleId: string): Promise<SelectPromptTemplate | null>;
   getAllTemplates(): Promise<SelectPromptTemplate[]>;
   saveTemplate(styleId: string, templateData: any, referenceImages?: string[]): Promise<SelectPromptTemplate>;
@@ -67,6 +68,7 @@ export class MemStorage implements IStorage {
         generatedImageUrl: data.generatedImageUrl,
         userReferenceUrls: data.userReferenceUrls,
         allReferenceImageUrls: data.allReferenceImageUrls,
+        sceneId: data.sceneId,
       })
       .returning();
     return result;
@@ -82,6 +84,18 @@ export class MemStorage implements IStorage {
       .from(generationHistory)
       .orderBy(desc(generationHistory.createdAt))
       .limit(limit);
+  }
+
+  async getGenerationHistoryBySceneId(sceneId: number): Promise<SelectGenerationHistory[]> {
+    if (!db) {
+      return [];
+    }
+    
+    return await db
+      .select()
+      .from(generationHistory)
+      .where(eq(generationHistory.sceneId, sceneId))
+      .orderBy(desc(generationHistory.createdAt));
   }
 
   async getTemplate(styleId: string): Promise<SelectPromptTemplate | null> {

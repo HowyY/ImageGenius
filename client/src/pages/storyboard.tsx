@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -10,14 +10,19 @@ import {
   RefreshCw, 
   Plus,
   Trash2,
-  MessageCircle
+  History,
+  X
 } from "lucide-react";
-import type { SelectStoryboardScene } from "@shared/schema";
+import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
-import { setPrompt } from "@/lib/generationState";
+import { setPrompt, getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { format } from "date-fns";
 
 interface EditingState {
   sceneDescription: string;
@@ -27,11 +32,56 @@ export default function Storyboard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
+  const [selectedStyle, setSelectedStyle] = useState<string>(getSelectedStyleId() || "");
+  const [selectedEngine, setSelectedEngineState] = useState<string>(getEngine() || "nanobanana");
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historySceneId, setHistorySceneId] = useState<number | null>(null);
   
   const { data: scenes, isLoading, refetch } = useQuery<SelectStoryboardScene[]>({
     queryKey: ["/api/scenes"],
     refetchInterval: 30000,
   });
+
+  const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
+    queryKey: ["/api/styles"],
+  });
+
+  const { data: sceneHistory, isLoading: historyLoading } = useQuery<SelectGenerationHistory[]>({
+    queryKey: ["/api/history/scene", historySceneId],
+    enabled: historySceneId !== null,
+  });
+
+  useEffect(() => {
+    if (styles && styles.length > 0 && !selectedStyle) {
+      const savedStyleId = getSelectedStyleId();
+      if (savedStyleId && styles.some(s => s.id === savedStyleId)) {
+        setSelectedStyle(savedStyleId);
+      } else {
+        setSelectedStyle(styles[0].id);
+        setSelectedStyleId(styles[0].id);
+      }
+    }
+  }, [styles, selectedStyle]);
+
+  const handleStyleChange = (value: string) => {
+    setSelectedStyle(value);
+    setSelectedStyleId(value);
+  };
+
+  const handleEngineChange = (value: string) => {
+    setSelectedEngineState(value);
+    setEngine(value);
+  };
+
+  const openSceneHistory = (sceneId: number) => {
+    setHistorySceneId(sceneId);
+    setHistoryDialogOpen(true);
+  };
+
+  const closeSceneHistory = () => {
+    setHistoryDialogOpen(false);
+    setHistorySceneId(null);
+  };
 
   const createSceneMutation = useMutation({
     mutationFn: async () => {
@@ -117,6 +167,8 @@ export default function Storyboard() {
     
     if (sceneDescription?.trim()) {
       setPrompt(sceneDescription);
+      setSelectedStyleId(selectedStyle);
+      setEngine(selectedEngine);
       navigate(`/?sceneId=${scene.id}`);
     } else {
       toast({
@@ -173,6 +225,63 @@ export default function Storyboard() {
             </Button>
           </div>
         </div>
+
+        <Card className="p-4 mb-6">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="style-select" className="mb-2 block text-sm font-medium">
+                Style Preset
+              </Label>
+              <Select
+                value={selectedStyle}
+                onValueChange={handleStyleChange}
+                disabled={stylesLoading}
+              >
+                <SelectTrigger id="style-select" data-testid="select-storyboard-style">
+                  <SelectValue placeholder={stylesLoading ? "Loading styles..." : "Select a style"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {stylesLoading ? (
+                    <div className="p-2">
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : (
+                    styles?.map((style) => (
+                      <SelectItem key={style.id} value={style.id} data-testid={`option-storyboard-style-${style.id}`}>
+                        {style.label}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="engine-select" className="mb-2 block text-sm font-medium">
+                Engine
+              </Label>
+              <Select
+                value={selectedEngine}
+                onValueChange={handleEngineChange}
+              >
+                <SelectTrigger id="engine-select" data-testid="select-storyboard-engine">
+                  <SelectValue placeholder="Select engine" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nanobanana" data-testid="option-engine-nanobanana">
+                    NanoBanana Edit
+                  </SelectItem>
+                  <SelectItem value="seedream" data-testid="option-engine-seedream">
+                    SeeDream V4
+                  </SelectItem>
+                  <SelectItem value="nanopro" data-testid="option-engine-nanopro">
+                    Nano Pro (2K/4K)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </Card>
 
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -264,7 +373,20 @@ export default function Storyboard() {
                   <span data-testid={`text-image-status-${scene.id}`}>
                     {scene.generatedImageUrl ? "Generated Images (1)" : "No images generated yet"}
                   </span>
-                  <MessageCircle className="w-4 h-4" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => openSceneHistory(scene.id)}
+                        data-testid={`button-scene-history-${scene.id}`}
+                      >
+                        <History className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>View History</TooltipContent>
+                  </Tooltip>
                 </div>
                 
                 <div className="p-3 flex-1 flex flex-col">
@@ -293,6 +415,61 @@ export default function Storyboard() {
           </div>
         )}
       </div>
+
+      <Dialog open={historyDialogOpen} onOpenChange={(open) => !open && closeSceneHistory()}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Scene History</DialogTitle>
+          </DialogHeader>
+          {historyLoading ? (
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="w-32 h-24 rounded" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : !sceneHistory || sceneHistory.length === 0 ? (
+            <div className="text-center py-8">
+              <History className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No generation history for this scene yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sceneHistory.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="flex gap-4 p-3 border rounded-lg"
+                  data-testid={`history-item-${item.id}`}
+                >
+                  <div className="w-32 h-24 flex-shrink-0 bg-muted rounded overflow-hidden">
+                    <ImageWithFallback
+                      src={item.generatedImageUrl}
+                      alt="Generated image"
+                      className="w-full h-full object-cover"
+                      fallbackText="Failed"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground line-clamp-2 mb-1">{item.prompt}</p>
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <span>{item.styleLabel}</span>
+                      <span className="text-border">|</span>
+                      <span className="capitalize">{item.engine}</span>
+                      <span className="text-border">|</span>
+                      <span>{format(new Date(item.createdAt), "MMM d, yyyy h:mm a")}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

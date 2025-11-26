@@ -1183,6 +1183,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/history/scene/:sceneId", async (req, res) => {
+    try {
+      const sceneId = parseInt(req.params.sceneId, 10);
+      if (isNaN(sceneId)) {
+        return res.status(400).json({
+          error: "Invalid scene ID",
+          message: "Scene ID must be a number",
+        });
+      }
+      const history = await storage.getGenerationHistoryBySceneId(sceneId);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching scene history:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch scene history",
+      });
+    }
+  });
+
   app.get("/api/templates/:styleId", async (req, res) => {
     try {
       const { styleId } = req.params;

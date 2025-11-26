@@ -27,6 +27,7 @@ export const generationHistory = pgTable("generation_history", {
   generatedImageUrl: text("generated_image_url").notNull(),
   userReferenceUrls: text("user_reference_urls").array(),
   allReferenceImageUrls: text("all_reference_image_urls").array(),
+  sceneId: integer("scene_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -64,6 +65,7 @@ export const insertGenerationHistorySchema = z.object({
   generatedImageUrl: z.string().url(),
   userReferenceUrls: z.array(z.string().url()).max(3).optional(),
   allReferenceImageUrls: z.array(z.string().url()).optional(),
+  sceneId: z.number().int().optional().nullable(),
 });
 
 export type InsertGenerationHistory = z.infer<typeof insertGenerationHistorySchema>;
