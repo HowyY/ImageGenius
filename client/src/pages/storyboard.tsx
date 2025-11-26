@@ -2,17 +2,15 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Image as ImageIcon, 
-  Play, 
+  Upload, 
   RefreshCw, 
   Plus,
   Trash2,
-  GripVertical
+  MessageCircle
 } from "lucide-react";
 import type { SelectStoryboardScene } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
@@ -21,10 +19,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+interface EditingState {
+  voiceOver: string;
+  visualDescription: string;
+}
+
 export default function Storyboard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [editingPrompts, setEditingPrompts] = useState<Record<number, string>>({});
+  const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
   
   const { data: scenes, isLoading, refetch } = useQuery<SelectStoryboardScene[]>({
     queryKey: ["/api/scenes"],
@@ -33,7 +36,7 @@ export default function Storyboard() {
 
   const createSceneMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/scenes", { prompt: "" });
+      return apiRequest("POST", "/api/scenes", { voiceOver: "", visualDescription: "" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
@@ -42,7 +45,7 @@ export default function Storyboard() {
         description: "New scene added to your storyboard",
       });
     },
-    onError: (error) => {
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to create scene",
@@ -52,13 +55,13 @@ export default function Storyboard() {
   });
 
   const updateSceneMutation = useMutation({
-    mutationFn: async ({ id, prompt }: { id: number; prompt: string }) => {
-      return apiRequest("PATCH", `/api/scenes/${id}`, { prompt });
+    mutationFn: async ({ id, voiceOver, visualDescription }: { id: number; voiceOver?: string; visualDescription?: string }) => {
+      return apiRequest("PATCH", `/api/scenes/${id}`, { voiceOver, visualDescription });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
     },
-    onError: (error) => {
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to update scene",
@@ -78,7 +81,7 @@ export default function Storyboard() {
         description: "Scene removed from storyboard",
       });
     },
-    onError: (error) => {
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to delete scene",
@@ -87,37 +90,65 @@ export default function Storyboard() {
     },
   });
 
-  const handlePromptChange = useCallback((sceneId: number, value: string) => {
-    setEditingPrompts(prev => ({ ...prev, [sceneId]: value }));
+  const handleFieldChange = useCallback((sceneId: number, field: keyof EditingState, value: string) => {
+    setEditingScenes(prev => ({
+      ...prev,
+      [sceneId]: {
+        ...prev[sceneId],
+        [field]: value,
+      }
+    }));
   }, []);
 
-  const handlePromptBlur = useCallback((scene: SelectStoryboardScene) => {
-    const newPrompt = editingPrompts[scene.id];
-    if (newPrompt !== undefined && newPrompt !== scene.prompt) {
-      updateSceneMutation.mutate({ id: scene.id, prompt: newPrompt });
+  const handleFieldBlur = useCallback((scene: SelectStoryboardScene, field: keyof EditingState) => {
+    const editing = editingScenes[scene.id];
+    if (!editing) return;
+
+    const newValue = editing[field];
+    const originalValue = scene[field];
+    
+    if (newValue !== undefined && newValue !== originalValue) {
+      updateSceneMutation.mutate({ 
+        id: scene.id, 
+        [field]: newValue 
+      });
     }
-    setEditingPrompts(prev => {
-      const { [scene.id]: _, ...rest } = prev;
-      return rest;
-    });
-  }, [editingPrompts, updateSceneMutation]);
+  }, [editingScenes, updateSceneMutation]);
 
   const handleGenerateClick = (scene: SelectStoryboardScene) => {
-    const prompt = editingPrompts[scene.id] ?? scene.prompt;
-    if (prompt.trim()) {
-      setPrompt(prompt);
+    const editing = editingScenes[scene.id];
+    const visualDescription = editing?.visualDescription ?? scene.visualDescription;
+    
+    if (visualDescription.trim()) {
+      setPrompt(visualDescription);
       navigate(`/?sceneId=${scene.id}`);
     } else {
       toast({
-        title: "Empty prompt",
-        description: "Please enter a scene description first",
+        title: "Empty description",
+        description: "Please enter a visual description first",
         variant: "destructive",
       });
     }
   };
 
-  const getPromptValue = (scene: SelectStoryboardScene) => {
-    return editingPrompts[scene.id] ?? scene.prompt;
+  const getFieldValue = (scene: SelectStoryboardScene, field: keyof EditingState) => {
+    const editing = editingScenes[scene.id];
+    if (editing && editing[field] !== undefined) {
+      return editing[field];
+    }
+    return scene[field] || "";
+  };
+
+  const initializeEditing = (scene: SelectStoryboardScene) => {
+    if (!editingScenes[scene.id]) {
+      setEditingScenes(prev => ({
+        ...prev,
+        [scene.id]: {
+          voiceOver: scene.voiceOver || "",
+          visualDescription: scene.visualDescription || "",
+        }
+      }));
+    }
   };
 
   return (
@@ -160,11 +191,14 @@ export default function Storyboard() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="overflow-hidden">
                 <Skeleton className="aspect-video w-full" />
-                <div className="p-4">
+                <div className="p-3 space-y-3">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-4 w-32" />
                   <Skeleton className="h-20 w-full" />
                 </div>
               </Card>
@@ -173,7 +207,7 @@ export default function Storyboard() {
         ) : !scenes || scenes.length === 0 ? (
           <Card className="p-12">
             <div className="text-center">
-              <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2" data-testid="text-empty-title">
                 No scenes in your storyboard
               </h3>
@@ -191,82 +225,93 @@ export default function Storyboard() {
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {scenes.map((scene, index) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {scenes.map((scene) => (
               <Card 
                 key={scene.id} 
-                className="overflow-hidden flex flex-col"
+                className="overflow-visible flex flex-col border"
                 data-testid={`scene-card-${scene.id}`}
               >
-                <div className="relative aspect-video bg-muted">
+                <div 
+                  className={`relative aspect-video cursor-pointer group ${
+                    scene.generatedImageUrl 
+                      ? 'bg-muted' 
+                      : 'bg-amber-50 dark:bg-amber-950/30 border-2 border-dashed border-amber-400 dark:border-amber-600'
+                  }`}
+                  onClick={() => handleGenerateClick(scene)}
+                >
                   {scene.generatedImageUrl ? (
                     <ImageWithFallback
                       src={scene.generatedImageUrl}
-                      alt={scene.prompt || `Scene ${index + 1}`}
+                      alt={scene.visualDescription || `Scene`}
                       className="w-full h-full object-cover"
                       data-testid={`img-scene-${scene.id}`}
                       loading="lazy"
                       fallbackText="Failed to load"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="w-12 h-12 text-muted-foreground/50" />
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
+                      <Upload className="w-8 h-8" />
+                      <span className="text-sm font-medium">Click Generate or Upload</span>
                     </div>
                   )}
                   
-                  <Badge 
-                    variant="secondary" 
-                    className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm"
-                    data-testid={`badge-scene-number-${scene.id}`}
-                  >
-                    Scene {index + 1}
-                  </Badge>
-
-                  {scene.engine && (
-                    <Badge 
-                      variant="outline" 
-                      className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm text-xs"
-                    >
-                      {scene.engine}
-                    </Badge>
-                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSceneMutation.mutate(scene.id);
+                        }}
+                        disabled={deleteSceneMutation.isPending}
+                        data-testid={`button-delete-scene-${scene.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete Scene</TooltipContent>
+                  </Tooltip>
                 </div>
                 
-                <div className="p-4 flex-1 flex flex-col gap-3">
-                  <Textarea
-                    placeholder="Enter scene description..."
-                    value={getPromptValue(scene)}
-                    onChange={(e) => handlePromptChange(scene.id, e.target.value)}
-                    onBlur={() => handlePromptBlur(scene)}
-                    className="min-h-[80px] resize-none text-sm"
-                    data-testid={`textarea-scene-prompt-${scene.id}`}
-                  />
+                <div className="flex items-center justify-between px-3 py-2 border-b text-sm text-muted-foreground">
+                  <span data-testid={`text-image-status-${scene.id}`}>
+                    {scene.generatedImageUrl ? "Generated Images (1)" : "No images generated yet"}
+                  </span>
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                
+                <div className="p-3 flex-1 flex flex-col gap-3" onFocus={() => initializeEditing(scene)}>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">
+                      Voice Over
+                    </label>
+                    <Textarea
+                      placeholder="Enter voice over text..."
+                      value={getFieldValue(scene, "voiceOver")}
+                      onChange={(e) => handleFieldChange(scene.id, "voiceOver", e.target.value)}
+                      onFocus={() => initializeEditing(scene)}
+                      onBlur={() => handleFieldBlur(scene, "voiceOver")}
+                      className="min-h-[60px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
+                      data-testid={`textarea-scene-voiceover-${scene.id}`}
+                    />
+                  </div>
                   
-                  <div className="flex items-center justify-between gap-2 mt-auto">
-                    <Button
-                      onClick={() => handleGenerateClick(scene)}
-                      disabled={!getPromptValue(scene).trim()}
-                      className="flex-1"
-                      data-testid={`button-generate-scene-${scene.id}`}
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Generate
-                    </Button>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => deleteSceneMutation.mutate(scene.id)}
-                          disabled={deleteSceneMutation.isPending}
-                          data-testid={`button-delete-scene-${scene.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Delete Scene</TooltipContent>
-                    </Tooltip>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">
+                      Visual Description
+                    </label>
+                    <Textarea
+                      placeholder="Enter visual description for image generation..."
+                      value={getFieldValue(scene, "visualDescription")}
+                      onChange={(e) => handleFieldChange(scene.id, "visualDescription", e.target.value)}
+                      onFocus={() => initializeEditing(scene)}
+                      onBlur={() => handleFieldBlur(scene, "visualDescription")}
+                      className="min-h-[80px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
+                      data-testid={`textarea-scene-visual-${scene.id}`}
+                    />
                   </div>
                 </div>
               </Card>
