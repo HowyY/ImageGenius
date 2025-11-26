@@ -43,7 +43,8 @@ export const promptTemplates = pgTable("prompt_templates", {
 export const storyboardScenes = pgTable("storyboard_scenes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   orderIndex: integer("order_index").notNull().default(0),
-  prompt: text("prompt").notNull().default(""),
+  voiceOver: text("voice_over").notNull().default(""),
+  visualDescription: text("visual_description").notNull().default(""),
   generatedImageUrl: text("generated_image_url"),
   styleId: text("style_id"),
   engine: text("engine"),
@@ -95,7 +96,8 @@ export type SelectStyle = typeof styles.$inferSelect;
 // Insert schema for storyboard scenes
 export const insertStoryboardSceneSchema = z.object({
   orderIndex: z.number().int().min(0).optional(),
-  prompt: z.string().default(""),
+  voiceOver: z.string().default(""),
+  visualDescription: z.string().default(""),
   generatedImageUrl: z.string().url().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
@@ -103,7 +105,8 @@ export const insertStoryboardSceneSchema = z.object({
 
 export const updateStoryboardSceneSchema = z.object({
   orderIndex: z.number().int().min(0).optional(),
-  prompt: z.string().optional(),
+  voiceOver: z.string().optional(),
+  visualDescription: z.string().optional(),
   generatedImageUrl: z.string().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),

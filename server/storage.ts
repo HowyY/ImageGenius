@@ -288,7 +288,8 @@ export class MemStorage implements IStorage {
       .insert(storyboardScenes)
       .values({
         orderIndex: nextOrderIndex,
-        prompt: data.prompt ?? "",
+        voiceOver: data.voiceOver ?? "",
+        visualDescription: data.visualDescription ?? "",
         generatedImageUrl: data.generatedImageUrl,
         styleId: data.styleId,
         engine: data.engine,
@@ -304,7 +305,8 @@ export class MemStorage implements IStorage {
 
     const updateData: any = { updatedAt: new Date() };
     if (data.orderIndex !== undefined) updateData.orderIndex = data.orderIndex;
-    if (data.prompt !== undefined) updateData.prompt = data.prompt;
+    if (data.voiceOver !== undefined) updateData.voiceOver = data.voiceOver;
+    if (data.visualDescription !== undefined) updateData.visualDescription = data.visualDescription;
     if (data.generatedImageUrl !== undefined) updateData.generatedImageUrl = data.generatedImageUrl;
     if (data.styleId !== undefined) updateData.styleId = data.styleId;
     if (data.engine !== undefined) updateData.engine = data.engine;

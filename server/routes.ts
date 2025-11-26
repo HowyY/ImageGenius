@@ -1422,10 +1422,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a new scene
   app.post("/api/scenes", async (req, res) => {
     try {
-      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      const { voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex } = req.body;
       
       const scene = await storage.createScene({
-        prompt: prompt || "",
+        voiceOver: voiceOver || "",
+        visualDescription: visualDescription || "",
         generatedImageUrl: generatedImageUrl || null,
         styleId: styleId || null,
         engine: engine || null,
@@ -1453,10 +1454,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      const { voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex } = req.body;
       
       const scene = await storage.updateScene(id, {
-        prompt,
+        voiceOver,
+        visualDescription,
         generatedImageUrl,
         styleId,
         engine,
