@@ -2,7 +2,7 @@
 
 ## Overview
 
-This web application enables users to generate AI-driven images from text prompts, offering various style presets and AI engine choices. It features a React frontend with shadcn/ui and an Express backend managing presets and generation requests. Key capabilities include text-to-image generation, style selection and locking, integration of up to three reference images for consistency, and a generation history. The project aims to be a user-friendly and powerful tool for creative AI image generation.
+This web application enables users to generate AI-driven images from text prompts, offering various style presets and AI engine choices. It features a React frontend with shadcn/ui and an Express backend managing presets and generation requests. Key capabilities include text-to-image generation, style selection and locking, integration of up to three reference images for consistency, a generation history, and a visual storyboard for iterating on images. The project aims to be a user-friendly and powerful tool for creative AI image generation.
 
 ## User Preferences
 

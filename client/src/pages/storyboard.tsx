@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { SelectGenerationHistory } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
-import { setPrompt, setEngine, setSelectedStyleId } from "@/lib/generationState";
+import { setPrompt, setEngine, setSelectedStyleId, setUserReferenceImages } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type ViewMode = "compact" | "comfortable";
@@ -33,6 +33,9 @@ export default function Storyboard() {
     setPrompt(item.prompt);
     setEngine(item.engine);
     setSelectedStyleId(item.styleId);
+    if (item.userReferenceUrls && item.userReferenceUrls.length > 0) {
+      setUserReferenceImages(item.userReferenceUrls);
+    }
     navigate("/");
   };
 
@@ -41,6 +44,9 @@ export default function Storyboard() {
     setPrompt(item.prompt);
     setEngine(item.engine);
     setSelectedStyleId(item.styleId);
+    if (item.userReferenceUrls && item.userReferenceUrls.length > 0) {
+      setUserReferenceImages(item.userReferenceUrls);
+    }
     navigate("/");
   };
 
@@ -167,7 +173,7 @@ export default function Storyboard() {
                     className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm text-xs"
                     data-testid={`badge-sequence-${item.id}`}
                   >
-                    #{history.length - index}
+                    #{index + 1}
                   </Badge>
                   
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
