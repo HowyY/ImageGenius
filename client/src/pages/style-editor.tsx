@@ -31,6 +31,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
   Save,
   Copy,
   RotateCcw,
@@ -47,6 +54,7 @@ import {
   Loader2,
   Play,
   ChevronRight,
+  Menu,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -219,6 +227,7 @@ export default function StyleEditor() {
   const [testPrompt, setTestPrompt] = useState("A girl running in the park on a sunny day");
   const [testEngine, setTestEngine] = useState<string>("nanobanana");
   const [activeTab, setActiveTab] = useState("template");
+  const [testResultUrl, setTestResultUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -229,6 +238,7 @@ export default function StyleEditor() {
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showNewStyleDialog, setShowNewStyleDialog] = useState(false);
+  const [showMobileStylesPanel, setShowMobileStylesPanel] = useState(false);
   const [cloneNewLabel, setCloneNewLabel] = useState("");
   const [newStyleLabel, setNewStyleLabel] = useState("");
   const [newStyleDescription, setNewStyleDescription] = useState("");
@@ -351,9 +361,12 @@ export default function StyleEditor() {
       return await response.json();
     },
     onSuccess: (result) => {
+      if (result?.imageUrl) {
+        setTestResultUrl(result.imageUrl);
+      }
       toast({
         title: "Test image generated",
-        description: "Check the preview panel for the result.",
+        description: "Image generated successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/history"] });
     },
@@ -721,111 +734,156 @@ ${negativePrompt}`;
     );
   }
 
+  const StylesNavigatorContent = () => (
+    <>
+      <div className="space-y-3 mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search styles..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            data-testid="input-search-styles"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={() => setShowNewStyleDialog(true)}
+            className="flex-1"
+            data-testid="button-new-style"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            New
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowCloneDialog(true)}
+            disabled={!selectedStyleId}
+            data-testid="button-clone-style"
+          >
+            <Copy className="w-4 h-4 mr-1" />
+            Clone
+          </Button>
+        </div>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="space-y-1 pr-2">
+          {stylesLoading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="p-3 rounded-md">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="w-10 h-10 rounded-md flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : filteredStyles.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground text-sm">
+              {searchQuery ? "No styles match your search" : "No styles available"}
+            </div>
+          ) : (
+            filteredStyles.map((style) => (
+              <div
+                key={style.id}
+                onClick={() => {
+                  setSelectedStyleId(style.id);
+                  setShowMobileStylesPanel(false);
+                }}
+                className={`p-3 rounded-md cursor-pointer transition-colors ${
+                  selectedStyleId === style.id
+                    ? "bg-primary/10 border border-primary/30"
+                    : "hover-elevate"
+                }`}
+                data-testid={`style-item-${style.id}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                    <ImageWithFallback
+                      src={style.referenceImageUrl}
+                      alt={style.label}
+                      className="w-full h-full object-cover"
+                      fallbackText=""
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm truncate">{style.label}</span>
+                      {style.isBuiltIn !== false && (
+                        <Badge variant="secondary" className="text-xs flex-shrink-0">Built-in</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{style.id}</p>
+                  </div>
+                  {selectedStyleId === style.id && (
+                    <ChevronRight className="w-4 h-4 text-primary flex-shrink-0" />
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+
+      {selectedStyle && !isBuiltInStyle && (
+        <div className="pt-3 mt-3 border-t">
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => setShowDeleteDialog(true)}
+            className="w-full"
+            data-testid="button-delete-style"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Style
+          </Button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto p-4">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">Style Editor</h1>
-          <p className="text-muted-foreground">Create and manage visual styles for image generation</p>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Style Editor</h1>
+            <p className="text-muted-foreground hidden sm:block">Create and manage visual styles for image generation</p>
+          </div>
+          
+          {/* Mobile styles panel trigger */}
+          <Sheet open={showMobileStylesPanel} onOpenChange={setShowMobileStylesPanel}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="lg:hidden" data-testid="button-mobile-styles">
+                <Menu className="w-4 h-4 mr-2" />
+                Styles
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-80 p-4 flex flex-col">
+              <SheetHeader className="mb-4">
+                <SheetTitle>Styles</SheetTitle>
+              </SheetHeader>
+              <StylesNavigatorContent />
+            </SheetContent>
+          </Sheet>
         </div>
 
         <div className="grid grid-cols-12 gap-4">
-          {/* Left Panel - Styles Navigator */}
-          <div className="col-span-12 lg:col-span-3">
+          {/* Left Panel - Styles Navigator (Hidden on mobile, shown on lg+) */}
+          <div className="hidden lg:block lg:col-span-3">
             <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
-              <div className="space-y-3 mb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search styles..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                    data-testid="input-search-styles"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => setShowNewStyleDialog(true)}
-                    className="flex-1"
-                    data-testid="button-new-style"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    New
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowCloneDialog(true)}
-                    disabled={!selectedStyleId}
-                    data-testid="button-clone-style"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    Clone
-                  </Button>
-                </div>
-              </div>
-
-              <ScrollArea className="flex-1">
-                <div className="space-y-1 pr-2">
-                  {filteredStyles.map((style) => (
-                    <div
-                      key={style.id}
-                      onClick={() => setSelectedStyleId(style.id)}
-                      className={`p-3 rounded-md cursor-pointer transition-colors ${
-                        selectedStyleId === style.id
-                          ? "bg-primary/10 border border-primary/30"
-                          : "hover-elevate"
-                      }`}
-                      data-testid={`style-item-${style.id}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                          <ImageWithFallback
-                            src={style.referenceImageUrl}
-                            alt={style.label}
-                            className="w-full h-full object-cover"
-                            fallbackText=""
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm truncate">{style.label}</span>
-                            {style.isBuiltIn !== false && (
-                              <Badge variant="secondary" className="text-xs flex-shrink-0">Built-in</Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">{style.id}</p>
-                        </div>
-                        {selectedStyleId === style.id && (
-                          <ChevronRight className="w-4 h-4 text-primary flex-shrink-0" />
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-
-              {selectedStyle && !isBuiltInStyle && (
-                <div className="pt-3 mt-3 border-t">
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => setShowDeleteDialog(true)}
-                    className="w-full"
-                    data-testid="button-delete-style"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Style
-                  </Button>
-                </div>
-              )}
+              <StylesNavigatorContent />
             </Card>
           </div>
 
           {/* Center Panel - Editor Tabs */}
-          <div className="col-span-12 lg:col-span-5">
+          <div className="col-span-12 md:col-span-7 lg:col-span-5">
             <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
               {selectedStyle ? (
                 <>
@@ -1258,7 +1316,7 @@ ${negativePrompt}`;
           </div>
 
           {/* Right Panel - Preview */}
-          <div className="col-span-12 lg:col-span-4">
+          <div className="col-span-12 md:col-span-5 lg:col-span-4">
             <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Preview</h2>
@@ -1278,6 +1336,37 @@ ${negativePrompt}`;
 
               <div className="space-y-4">
                 <h3 className="font-medium">Test Generation</h3>
+                
+                {/* Test Result Area */}
+                <div className="rounded-lg border overflow-hidden bg-muted/30">
+                  {generateMutation.isPending ? (
+                    <div className="aspect-square flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      <p className="text-sm text-muted-foreground">Generating image...</p>
+                    </div>
+                  ) : testResultUrl ? (
+                    <div 
+                      className="aspect-square cursor-pointer relative group"
+                      onClick={() => setPreviewImageUrl(testResultUrl)}
+                    >
+                      <ImageWithFallback
+                        src={testResultUrl}
+                        alt="Test result"
+                        className="w-full h-full object-cover"
+                        fallbackText="Failed to load"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Maximize2 className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="aspect-square flex flex-col items-center justify-center gap-2">
+                      <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
+                      <p className="text-xs text-muted-foreground">No test result yet</p>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <Label>Engine</Label>
                   <Select value={testEngine} onValueChange={setTestEngine}>
@@ -1301,7 +1390,7 @@ ${negativePrompt}`;
                     value={testPrompt}
                     onChange={(e) => setTestPrompt(e.target.value)}
                     placeholder="A girl running in the park..."
-                    rows={3}
+                    rows={2}
                     data-testid="textarea-test-prompt"
                   />
                 </div>
