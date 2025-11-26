@@ -20,8 +20,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface EditingState {
-  voiceOver: string;
-  visualDescription: string;
+  sceneDescription: string;
 }
 
 export default function Storyboard() {
@@ -36,7 +35,7 @@ export default function Storyboard() {
 
   const createSceneMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/scenes", { voiceOver: "", visualDescription: "" });
+      return apiRequest("POST", "/api/scenes", { visualDescription: "" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
@@ -55,8 +54,8 @@ export default function Storyboard() {
   });
 
   const updateSceneMutation = useMutation({
-    mutationFn: async ({ id, voiceOver, visualDescription }: { id: number; voiceOver?: string; visualDescription?: string }) => {
-      return apiRequest("PATCH", `/api/scenes/${id}`, { voiceOver, visualDescription });
+    mutationFn: async ({ id, visualDescription }: { id: number; visualDescription?: string }) => {
+      return apiRequest("PATCH", `/api/scenes/${id}`, { visualDescription });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenes"] });
@@ -90,71 +89,50 @@ export default function Storyboard() {
     },
   });
 
-  const handleFieldChange = useCallback((sceneId: number, field: keyof EditingState, value: string, scene: SelectStoryboardScene) => {
-    setEditingScenes(prev => {
-      const existing = prev[sceneId] || {
-        voiceOver: scene.voiceOver || "",
-        visualDescription: scene.visualDescription || "",
-      };
-      return {
-        ...prev,
-        [sceneId]: {
-          ...existing,
-          [field]: value,
-        }
-      };
-    });
+  const handleDescriptionChange = useCallback((sceneId: number, value: string) => {
+    setEditingScenes(prev => ({
+      ...prev,
+      [sceneId]: { sceneDescription: value }
+    }));
   }, []);
 
-  const handleFieldBlur = useCallback((scene: SelectStoryboardScene, field: keyof EditingState) => {
+  const handleDescriptionBlur = useCallback((scene: SelectStoryboardScene) => {
     const editing = editingScenes[scene.id];
     if (!editing) return;
 
-    const newValue = editing[field];
-    const originalValue = scene[field];
+    const newValue = editing.sceneDescription;
+    const originalValue = scene.visualDescription || "";
     
     if (newValue !== undefined && newValue !== originalValue) {
       updateSceneMutation.mutate({ 
         id: scene.id, 
-        [field]: newValue 
+        visualDescription: newValue 
       });
     }
   }, [editingScenes, updateSceneMutation]);
 
   const handleGenerateClick = (scene: SelectStoryboardScene) => {
     const editing = editingScenes[scene.id];
-    const visualDescription = editing?.visualDescription ?? scene.visualDescription;
+    const sceneDescription = editing?.sceneDescription ?? scene.visualDescription;
     
-    if (visualDescription.trim()) {
-      setPrompt(visualDescription);
+    if (sceneDescription?.trim()) {
+      setPrompt(sceneDescription);
       navigate(`/?sceneId=${scene.id}`);
     } else {
       toast({
         title: "Empty description",
-        description: "Please enter a visual description first",
+        description: "Please enter a scene description first",
         variant: "destructive",
       });
     }
   };
 
-  const getFieldValue = (scene: SelectStoryboardScene, field: keyof EditingState) => {
+  const getSceneDescription = (scene: SelectStoryboardScene) => {
     const editing = editingScenes[scene.id];
-    if (editing && editing[field] !== undefined) {
-      return editing[field];
+    if (editing?.sceneDescription !== undefined) {
+      return editing.sceneDescription;
     }
-    return scene[field] || "";
-  };
-
-  const initializeEditing = (scene: SelectStoryboardScene) => {
-    if (!editingScenes[scene.id]) {
-      setEditingScenes(prev => ({
-        ...prev,
-        [scene.id]: {
-          voiceOver: scene.voiceOver || "",
-          visualDescription: scene.visualDescription || "",
-        }
-      }));
-    }
+    return scene.visualDescription || "";
   };
 
   return (
@@ -289,34 +267,18 @@ export default function Storyboard() {
                   <MessageCircle className="w-4 h-4" />
                 </div>
                 
-                <div className="p-3 flex-1 flex flex-col gap-3" onFocus={() => initializeEditing(scene)}>
+                <div className="p-3 flex-1 flex flex-col">
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">
-                      Voice Over
+                      Scene Description
                     </label>
                     <Textarea
-                      placeholder="Enter voice over text..."
-                      value={getFieldValue(scene, "voiceOver")}
-                      onChange={(e) => handleFieldChange(scene.id, "voiceOver", e.target.value, scene)}
-                      onFocus={() => initializeEditing(scene)}
-                      onBlur={() => handleFieldBlur(scene, "voiceOver")}
-                      className="min-h-[60px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
-                      data-testid={`textarea-scene-voiceover-${scene.id}`}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">
-                      Visual Description
-                    </label>
-                    <Textarea
-                      placeholder="Enter visual description for image generation..."
-                      value={getFieldValue(scene, "visualDescription")}
-                      onChange={(e) => handleFieldChange(scene.id, "visualDescription", e.target.value, scene)}
-                      onFocus={() => initializeEditing(scene)}
-                      onBlur={() => handleFieldBlur(scene, "visualDescription")}
-                      className="min-h-[80px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
-                      data-testid={`textarea-scene-visual-${scene.id}`}
+                      placeholder="Enter scene description for image generation..."
+                      value={getSceneDescription(scene)}
+                      onChange={(e) => handleDescriptionChange(scene.id, e.target.value)}
+                      onBlur={() => handleDescriptionBlur(scene)}
+                      className="min-h-[100px] resize-none text-sm border-l-4 border-l-primary rounded-l-none"
+                      data-testid={`textarea-scene-description-${scene.id}`}
                     />
                   </div>
                 </div>
