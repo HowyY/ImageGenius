@@ -801,37 +801,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/styles - Return available style presets (from database)
   // This endpoint provides the list of style options for the frontend dropdown
+  // Uses the first reference image from the style's template as thumbnail
   app.get("/api/styles", async (req, res) => {
     try {
       // Get styles from database
       const dbStyles = await storage.getAllStyles();
       
       if (dbStyles.length > 0) {
-        // Return database styles with isBuiltIn flag and referenceImageUrl
-        const stylesForFrontend = dbStyles.map(({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn, referenceImageUrl }) => ({
-          id,
-          label,
-          description,
-          engines,
-          basePrompt,
-          defaultColors,
-          isBuiltIn,
-          referenceImageUrl,
-        }));
+        // For each style, get its template to find the first reference image
+        const stylesForFrontend = await Promise.all(
+          dbStyles.map(async ({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn, referenceImageUrl }) => {
+            // Try to get template's first reference image
+            let thumbnailUrl = referenceImageUrl;
+            
+            // Check database template first
+            const dbTemplate = await storage.getTemplate(id);
+            if (dbTemplate?.referenceImages && dbTemplate.referenceImages.length > 0) {
+              thumbnailUrl = dbTemplate.referenceImages[0];
+            } else {
+              // Fall back to default template if exists
+              const defaultTemplate = getDefaultTemplate(id);
+              if (defaultTemplate?.referenceImages && defaultTemplate.referenceImages.length > 0) {
+                thumbnailUrl = defaultTemplate.referenceImages[0];
+              }
+            }
+            
+            return {
+              id,
+              label,
+              description,
+              engines,
+              basePrompt,
+              defaultColors,
+              isBuiltIn,
+              referenceImageUrl: thumbnailUrl,
+            };
+          })
+        );
         return res.json(stylesForFrontend);
       }
       
       // Fallback to static styles if database is empty
-      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => ({
-        id,
-        label,
-        description,
-        engines,
-        basePrompt,
-        defaultColors,
-        isBuiltIn: true,
-        referenceImageUrl,
-      }));
+      const stylesForFrontend = await Promise.all(
+        STYLE_PRESETS.map(async ({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => {
+          // Try to get default template's first reference image
+          let thumbnailUrl = referenceImageUrl;
+          const defaultTemplate = getDefaultTemplate(id);
+          if (defaultTemplate?.referenceImages && defaultTemplate.referenceImages.length > 0) {
+            thumbnailUrl = defaultTemplate.referenceImages[0];
+          }
+          
+          return {
+            id,
+            label,
+            description,
+            engines,
+            basePrompt,
+            defaultColors,
+            isBuiltIn: true,
+            referenceImageUrl: thumbnailUrl,
+          };
+        })
+      );
       res.json(stylesForFrontend);
     } catch (error) {
       console.error("Error fetching styles:", error);
