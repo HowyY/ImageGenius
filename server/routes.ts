@@ -1365,9 +1365,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Validate styleId exists
-      const styleExists = STYLE_PRESETS.some((s) => s.id === styleId);
-      if (!styleExists) {
+      // Validate styleId exists (check both presets and database)
+      const presetExists = STYLE_PRESETS.some((s) => s.id === styleId);
+      const dbTemplate = await storage.getTemplate(styleId);
+      if (!presetExists && !dbTemplate) {
         return res.status(400).json({
           error: "Invalid styleId",
           message: `Style '${styleId}' does not exist`,
