@@ -101,7 +101,8 @@ export const characters = pgTable("characters", {
   name: text("name").notNull(),
   visualPrompt: text("visual_prompt").notNull().default(""), // description for generating character cards
   characterCards: jsonb("character_cards").$type<CharacterCard[]>().default([]), // generated cards by style
-  selectedCardId: text("selected_card_id"), // currently selected card id
+  selectedCardId: text("selected_card_id"), // currently selected card id for style reference
+  avatarCardId: text("avatar_card_id"), // card id specifically for avatar display (separate from main card)
   tags: text("tags").array().default([]), // optional tags for categorization
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -224,6 +225,7 @@ export const insertCharacterSchema = z.object({
   visualPrompt: z.string().default(""),
   characterCards: z.array(characterCardSchema).optional().default([]),
   selectedCardId: z.string().optional().nullable(),
+  avatarCardId: z.string().optional().nullable(), // separate card for avatar display
   tags: z.array(z.string()).optional().default([]),
 });
 
@@ -232,6 +234,7 @@ export const updateCharacterSchema = z.object({
   visualPrompt: z.string().optional(),
   characterCards: z.array(characterCardSchema).optional(),
   selectedCardId: z.string().optional().nullable(),
+  avatarCardId: z.string().optional().nullable(), // separate card for avatar display
   tags: z.array(z.string()).optional(),
 });
 
