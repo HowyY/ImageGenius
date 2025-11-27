@@ -280,6 +280,7 @@ export default function StyleEditor() {
   const [testEngine, setTestEngine] = useState<string>("nanobanana");
   const [activeTab, setActiveTab] = useState("template");
   const [testResultUrl, setTestResultUrl] = useState<string | null>(null);
+  const [selectedCharacterCardUrl, setSelectedCharacterCardUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -441,7 +442,7 @@ export default function StyleEditor() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: async (data: { prompt: string; styleId: string; engine: string }) => {
+    mutationFn: async (data: { prompt: string; styleId: string; engine: string; userReferenceImages?: string[] }) => {
       const response = await apiRequest("POST", "/api/generate", data);
       return await response.json();
     },
@@ -513,6 +514,11 @@ export default function StyleEditor() {
       }
     }
   }, [selectedStyleId, selectedStyle?.engines, testEngine]);
+
+  // Reset character card selection when style changes
+  useEffect(() => {
+    setSelectedCharacterCardUrl(null);
+  }, [selectedStyleId]);
 
   const generateSimplePreview = (simpleTemplate: SimpleTemplate, basePrompt: string) => {
     const suffix = simpleTemplate.suffix || "white background, 8k resolution";
@@ -746,11 +752,18 @@ ${negativePrompt}`;
   const handleTestGenerate = () => {
     if (!selectedStyleId || !testPrompt.trim()) return;
     
-    generateMutation.mutate({
+    const payload: { prompt: string; styleId: string; engine: string; userReferenceImages?: string[] } = {
       prompt: testPrompt,
       styleId: selectedStyleId,
       engine: testEngine,
-    });
+    };
+    
+    // Include selected character card as a user reference image
+    if (selectedCharacterCardUrl) {
+      payload.userReferenceImages = [selectedCharacterCardUrl];
+    }
+    
+    generateMutation.mutate(payload);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1520,11 +1533,27 @@ ${negativePrompt}`;
                                     displayCard = cards.find((card: CharacterCard) => card.id === character.selectedCardId);
                                   }
                                   
+                                  const isSelected = displayCard?.imageUrl === selectedCharacterCardUrl;
+                                  
                                   return (
                                     <div
                                       key={character.id}
-                                      className="relative group rounded-lg overflow-hidden border border-border hover-elevate cursor-pointer"
-                                      onClick={() => displayCard?.imageUrl && setPreviewImageUrl(displayCard.imageUrl)}
+                                      className={`relative group rounded-lg overflow-hidden cursor-pointer transition-all ${
+                                        isSelected 
+                                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background border-primary" 
+                                          : "border border-border hover-elevate"
+                                      }`}
+                                      onClick={() => {
+                                        if (displayCard?.imageUrl) {
+                                          // Toggle selection: click to select, click again to deselect
+                                          if (isSelected) {
+                                            setSelectedCharacterCardUrl(null);
+                                          } else {
+                                            setSelectedCharacterCardUrl(displayCard.imageUrl);
+                                          }
+                                        }
+                                      }}
+                                      onDoubleClick={() => displayCard?.imageUrl && setPreviewImageUrl(displayCard.imageUrl)}
                                       data-testid={`character-card-${character.id}`}
                                     >
                                       <div className="aspect-square bg-muted">
@@ -1544,18 +1573,25 @@ ${negativePrompt}`;
                                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
                                         <p className="text-white text-sm font-medium truncate">{character.name}</p>
                                         <p className="text-white/70 text-xs">
-                                          {hasStyleMatch 
-                                            ? `${styleSpecificCards.length} card${styleSpecificCards.length !== 1 ? 's' : ''}`
-                                            : 'Using fallback card'
+                                          {isSelected 
+                                            ? 'Selected as reference'
+                                            : hasStyleMatch 
+                                              ? `${styleSpecificCards.length} card${styleSpecificCards.length !== 1 ? 's' : ''}`
+                                              : 'Using fallback card'
                                           }
                                         </p>
                                       </div>
-                                      {!hasStyleMatch && (
+                                      {isSelected && (
+                                        <Badge className="absolute top-2 left-2 bg-primary">
+                                          Reference
+                                        </Badge>
+                                      )}
+                                      {!hasStyleMatch && !isSelected && (
                                         <Badge className="absolute top-2 right-2 bg-amber-500/90">
                                           Fallback
                                         </Badge>
                                       )}
-                                      {hasStyleMatch && styleSpecificCards.length > 1 && (
+                                      {hasStyleMatch && styleSpecificCards.length > 1 && !isSelected && (
                                         <Badge className="absolute top-2 right-2" variant="secondary">
                                           +{styleSpecificCards.length - 1}
                                         </Badge>
@@ -1626,7 +1662,19 @@ ${negativePrompt}`;
               <Separator className="my-4" />
 
               <div className="space-y-4">
-                <h3 className="font-medium">Test Generation</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-medium">Test Generation</h3>
+                  {selectedCharacterCardUrl && (
+                    <Badge 
+                      variant="outline" 
+                      className="text-xs cursor-pointer"
+                      onClick={() => setSelectedCharacterCardUrl(null)}
+                    >
+                      Character ref
+                      <X className="w-3 h-3 ml-1" />
+                    </Badge>
+                  )}
+                </div>
                 
                 {/* Test Result Area */}
                 <div className="rounded-lg border overflow-hidden bg-muted/30">
