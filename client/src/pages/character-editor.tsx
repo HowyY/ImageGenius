@@ -246,6 +246,7 @@ export default function CharacterEditor() {
     if (editedCharacter.tags !== undefined) updates.tags = editedCharacter.tags;
     if (editedCharacter.characterCards !== undefined) updates.characterCards = editedCharacter.characterCards;
     if (editedCharacter.selectedCardId !== undefined) updates.selectedCardId = editedCharacter.selectedCardId;
+    if (editedCharacter.avatarCardId !== undefined) updates.avatarCardId = editedCharacter.avatarCardId;
 
     if (Object.keys(updates).length === 0) {
       toast({
