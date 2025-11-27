@@ -225,16 +225,33 @@ Build an AI-powered image generation tool for ORAMA's storyboard feature, suppor
   - Enhance visual feedback
   - Mobile responsiveness improvements
 
-### Future Ideas / Backlog
-- [ ] Character combination sheets (pre-generated multi-character references)
-- [ ] Character pose/expression library
-- [ ] Card metadata and tagging system (add custom tags to cards)
-- [ ] Batch card generation (generate multiple angles/poses at once)
-- [ ] Card quality rating system (rate cards 1-5 stars)
-- [ ] Batch image generation for multiple scenes
-- [ ] Export storyboard as PDF/image sequence
-- [ ] AI-assisted prompt suggestions
-- [ ] Collaborative editing features
+### Lower Priority
+1. **风格编辑器预览交互改进**
+   - 添加双击预览的视觉提示（hover 时显示"双击预览大图"）
+   - 或添加放大图标按钮作为替代
+
+2. **测试生成结果保存功能**
+   - 在风格编辑器的测试生成区域添加"保存到角色"按钮
+   - 允许用户将满意的测试结果直接保存为角色卡
+
+3. **角色卡版本管理**
+   - 当风格模板设置更改后，标记旧卡片（显示警告图标）
+   - 提供批量重新生成选项，更新所有该风格的角色卡
+
+4. **多角色选择支持**
+   - 在风格编辑器和故事板中支持同时选择多个角色
+   - 利用 API 的多图参考能力生成包含多角色的场景
+
+## Future Ideas / Backlog
+- 角色组合表（预生成的多角色参考）
+- 角色姿势/表情库
+- 卡片元数据和标签系统（添加自定义标签）
+- 批量卡片生成（一次生成多个角度/姿势）
+- 卡片质量评分系统（1-5星评分）
+- 批量场景图片生成
+- 导出故事板为 PDF/图片序列
+- AI 辅助提示词建议
+- 协作编辑功能
 
 ---
 
