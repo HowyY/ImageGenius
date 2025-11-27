@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,13 +48,19 @@ interface Style {
 }
 
 export default function CharacterEditor() {
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string>("");
+  // Handle URL params for pre-selection (e.g., from Style Editor's "Generate for this style" button)
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const urlCharacterId = urlParams.get("id");
+  const urlStyleId = urlParams.get("style");
+  
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string>(urlCharacterId || "");
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewCharacterDialog, setShowNewCharacterDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [newCharacterName, setNewCharacterName] = useState("");
   const [editedCharacter, setEditedCharacter] = useState<Partial<UpdateCharacter>>({});
-  const [selectedStyleId, setSelectedStyleId] = useState<string>("");
+  const [selectedStyleId, setSelectedStyleId] = useState<string>(urlStyleId || "");
   const [selectedAngle, setSelectedAngle] = useState<string>("front");
   const [selectedPose, setSelectedPose] = useState<string>("standing");
   const [selectedExpression, setSelectedExpression] = useState<string>("neutral");
@@ -170,6 +177,25 @@ export default function CharacterEditor() {
       });
     },
   });
+
+  // Handle URL param pre-selection after data loads
+  useEffect(() => {
+    if (urlCharacterId && characters.length > 0 && !selectedCharacterId) {
+      const exists = characters.find(c => c.id === urlCharacterId);
+      if (exists) {
+        setSelectedCharacterId(urlCharacterId);
+      }
+    }
+  }, [urlCharacterId, characters, selectedCharacterId]);
+
+  useEffect(() => {
+    if (urlStyleId && styles.length > 0 && !selectedStyleId) {
+      const exists = styles.find(s => s.id === urlStyleId);
+      if (exists) {
+        setSelectedStyleId(urlStyleId);
+      }
+    }
+  }, [urlStyleId, styles, selectedStyleId]);
 
   const handleCreateCharacter = () => {
     if (!newCharacterName.trim()) {

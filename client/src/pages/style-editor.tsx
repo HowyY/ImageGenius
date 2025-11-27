@@ -1539,7 +1539,12 @@ ${negativePrompt}`;
                                   }
                                   
                                   // Use cardId for reliable selection tracking (URLs may change/expire)
-                                  const isSelected = displayCard?.id === selectedCharacterRef?.cardId;
+                                  // Only consider selected if both displayCard and selectedCharacterRef have valid cardIds
+                                  const isSelected = Boolean(
+                                    displayCard?.id && 
+                                    selectedCharacterRef?.cardId && 
+                                    displayCard.id === selectedCharacterRef.cardId
+                                  );
                                   
                                   return (
                                     <div
@@ -1597,9 +1602,27 @@ ${negativePrompt}`;
                                         </Badge>
                                       )}
                                       {!hasStyleMatch && !isSelected && (
-                                        <Badge className="absolute top-2 right-2 bg-amber-500/90">
-                                          Fallback
-                                        </Badge>
+                                        <>
+                                          <Badge className="absolute top-2 right-2 bg-amber-500/90">
+                                            Fallback
+                                          </Badge>
+                                          {/* Generate for this style button - visible on hover */}
+                                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Button
+                                              size="sm"
+                                              variant="secondary"
+                                              className="gap-1"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/characters?id=${character.id}&style=${selectedStyleId}`);
+                                              }}
+                                              data-testid={`button-generate-for-style-${character.id}`}
+                                            >
+                                              <Sparkles className="w-3 h-3" />
+                                              Generate for this style
+                                            </Button>
+                                          </div>
+                                        </>
                                       )}
                                       {hasStyleMatch && styleSpecificCards.length > 1 && !isSelected && (
                                         <Badge className="absolute top-2 right-2" variant="secondary">
@@ -1734,14 +1757,39 @@ ${negativePrompt}`;
                   </Select>
                 </div>
                 <div>
-                  <Label>Test Prompt</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label>Test Prompt</Label>
+                    {selectedCharacterRef && (
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() => {
+                          const placeholder = `[${selectedCharacterRef.characterName}]`;
+                          if (!testPrompt.includes(placeholder)) {
+                            setTestPrompt(prev => `${placeholder} ${prev}`.trim());
+                          }
+                        }}
+                        data-testid="button-insert-character-placeholder"
+                      >
+                        Insert [{selectedCharacterRef.characterName}]
+                      </button>
+                    )}
+                  </div>
                   <Textarea
                     value={testPrompt}
                     onChange={(e) => setTestPrompt(e.target.value)}
-                    placeholder="A girl running in the park..."
+                    placeholder={selectedCharacterRef 
+                      ? `[${selectedCharacterRef.characterName}] running in the park...`
+                      : "A girl running in the park..."
+                    }
                     rows={2}
                     data-testid="textarea-test-prompt"
                   />
+                  {selectedCharacterRef && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Use [{selectedCharacterRef.characterName}] in your prompt to reference the selected character
+                    </p>
+                  )}
                 </div>
                 <Button
                   onClick={handleTestGenerate}
