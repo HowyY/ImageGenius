@@ -35,7 +35,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X, Users, Images, Menu } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -80,6 +87,10 @@ export default function CharacterEditor() {
   
   // Preview dialog state
   const [previewCard, setPreviewCard] = useState<CharacterCard | null>(null);
+  
+  // Mobile panel state
+  const [showMobileCharactersPanel, setShowMobileCharactersPanel] = useState(false);
+  const [showMobileCardsPanel, setShowMobileCardsPanel] = useState(false);
   
   const { toast } = useToast();
 
@@ -446,105 +457,253 @@ export default function CharacterEditor() {
     }
   }, [styles, selectedStyleId]);
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto p-4">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Character Editor</h1>
-          <p className="text-muted-foreground" data-testid="text-page-description">
-            Create characters and generate style-specific character cards
-          </p>
+  // Reusable character list content for both desktop sidebar and mobile sheet
+  const characterListContent = (
+    <>
+      <div className="space-y-3 mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            data-testid="input-search-characters"
+            placeholder="Search characters..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
+        <Button
+          data-testid="button-new-character"
+          onClick={() => setShowNewCharacterDialog(true)}
+          className="w-full"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          New Character
+        </Button>
+      </div>
 
-        <div className="grid grid-cols-12 gap-4">
-          {/* Left Panel - Character List */}
-          <div className="col-span-3">
-            <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
-              <div className="space-y-3 mb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    data-testid="input-search-characters"
-                    placeholder="Search characters..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
+      <ScrollArea className="flex-1">
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-3 rounded-md">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-full" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-24 mb-1" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
                 </div>
-                <Button
-                  data-testid="button-new-character"
-                  onClick={() => setShowNewCharacterDialog(true)}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Character
-                </Button>
               </div>
+            ))}
+          </div>
+        ) : filteredCharacters.length === 0 ? (
+          <div 
+            className="text-center py-8 text-muted-foreground text-sm"
+            data-testid="text-empty-state"
+          >
+            {searchQuery ? "No characters match your search" : "No characters yet. Create your first character!"}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredCharacters.map((char) => {
+              const cards = (char.characterCards || []) as CharacterCard[];
+              const selectedCardImg = cards.find((c: CharacterCard) => c.id === char.selectedCardId);
+              return (
+                <div
+                  key={char.id}
+                  data-testid={`card-character-${char.id}`}
+                  onClick={() => {
+                    setSelectedCharacterId(char.id);
+                    setShowMobileCharactersPanel(false);
+                  }}
+                  className={`p-3 rounded-md cursor-pointer transition-colors ${
+                    selectedCharacterId === char.id
+                      ? "bg-primary/10 border border-primary/30"
+                      : "hover-elevate"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={selectedCardImg?.imageUrl} />
+                      <AvatarFallback>
+                        {char.name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{char.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {cards.length} card{cards.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </ScrollArea>
+    </>
+  );
 
-              <ScrollArea className="flex-1">
-                {isLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="p-3 rounded-md">
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="w-10 h-10 rounded-full" />
-                          <div className="flex-1">
-                            <Skeleton className="h-4 w-24 mb-1" />
-                            <Skeleton className="h-3 w-32" />
+  // Reusable cards panel content for both desktop sidebar and mobile sheet
+  const cardsPanelContent = (
+    <>
+      <h3 className="font-semibold mb-4">Character Cards</h3>
+      {selectedCharacter ? (
+        currentCards.length > 0 ? (
+          <div className="space-y-4">
+            {Object.entries(cardsGroupedByStyle).map(([styleId, cards]) => {
+              const style = styles.find(s => s.id === styleId);
+              return (
+                <div key={styleId}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {style?.label || styleId}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {cards.length} card{cards.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {cards.map((card: CharacterCard) => (
+                      <div 
+                        key={card.id}
+                        className={`relative rounded-md border-2 cursor-pointer group transition-all ${
+                          currentSelectedCardId === card.id 
+                            ? "border-primary ring-2 ring-primary/20" 
+                            : "border-transparent hover:border-muted-foreground/30"
+                        }`}
+                        onClick={() => handleSelectCard(card.id)}
+                        data-testid={`card-image-${card.id}`}
+                      >
+                        <AspectRatio ratio={4/3} className="bg-muted/30">
+                          <img 
+                            src={card.imageUrl} 
+                            alt={`${selectedCharacter.name} - ${style?.label}`}
+                            className="w-full h-full object-contain"
+                          />
+                        </AspectRatio>
+                        {currentSelectedCardId === card.id && (
+                          <div className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full p-1">
+                            <Check className="w-3 h-3" />
                           </div>
+                        )}
+                        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            size="icon"
+                            variant="secondary"
+                            className="w-6 h-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewCard(card);
+                            }}
+                            data-testid={`button-preview-card-${card.id}`}
+                          >
+                            <ZoomIn className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="secondary"
+                            className="w-6 h-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditDialog(card);
+                            }}
+                            data-testid={`button-edit-card-${card.id}`}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            className="w-6 h-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCard(card.id);
+                            }}
+                            data-testid={`button-delete-card-${card.id}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : filteredCharacters.length === 0 ? (
-                  <div 
-                    className="text-center py-8 text-muted-foreground text-sm"
-                    data-testid="text-empty-state"
-                  >
-                    {searchQuery ? "No characters match your search" : "No characters yet. Create your first character!"}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredCharacters.map((char) => {
-                      const cards = (char.characterCards || []) as CharacterCard[];
-                      const selectedCardImg = cards.find((c: CharacterCard) => c.id === char.selectedCardId);
-                      return (
-                        <div
-                          key={char.id}
-                          data-testid={`card-character-${char.id}`}
-                          onClick={() => setSelectedCharacterId(char.id)}
-                          className={`p-3 rounded-md cursor-pointer transition-colors ${
-                            selectedCharacterId === char.id
-                              ? "bg-primary/10 border border-primary/30"
-                              : "hover-elevate"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar>
-                              <AvatarImage src={selectedCardImg?.imageUrl} />
-                              <AvatarFallback>
-                                {char.name.charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{char.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {cards.length} card{cards.length !== 1 ? "s" : ""}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p className="text-sm" data-testid="text-no-cards">No character cards yet</p>
+            <p className="text-xs mt-1">Generate cards using different styles</p>
+          </div>
+        )
+      ) : (
+        <div className="text-center py-12 text-muted-foreground text-sm" data-testid="text-no-preview">
+          Select a character to view cards
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto p-4">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Character Editor</h1>
+            <p className="text-muted-foreground hidden sm:block" data-testid="text-page-description">
+              Create characters and generate style-specific character cards
+            </p>
+          </div>
+          
+          {/* Mobile navigation buttons */}
+          <div className="flex lg:hidden gap-2">
+            <Sheet open={showMobileCharactersPanel} onOpenChange={setShowMobileCharactersPanel}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" data-testid="button-mobile-characters">
+                  <Users className="w-4 h-4 mr-1" />
+                  Characters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-80 p-4 flex flex-col">
+                <SheetHeader className="mb-4">
+                  <SheetTitle>Characters</SheetTitle>
+                </SheetHeader>
+                {characterListContent}
+              </SheetContent>
+            </Sheet>
+            
+            <Sheet open={showMobileCardsPanel} onOpenChange={setShowMobileCardsPanel}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" data-testid="button-mobile-cards">
+                  <Images className="w-4 h-4 mr-1" />
+                  Cards
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-80 p-4 overflow-y-auto">
+                <SheetHeader className="mb-4">
+                  <SheetTitle>Character Cards</SheetTitle>
+                </SheetHeader>
+                {cardsPanelContent}
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-12 gap-4">
+          {/* Left Panel - Character List (Desktop only) */}
+          <div className="hidden lg:block lg:col-span-3">
+            <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
+              {characterListContent}
             </Card>
           </div>
 
           {/* Center Panel - Character Details & Generation */}
-          <div className="col-span-5">
-            <Card className="p-4 h-[calc(100vh-180px)] overflow-y-auto">
+          <div className="col-span-12 lg:col-span-5">
+            <Card className="p-4 h-[calc(100vh-180px)] lg:h-[calc(100vh-180px)] overflow-y-auto">
               {selectedCharacter ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-2">
@@ -733,111 +892,15 @@ export default function CharacterEditor() {
             </Card>
           </div>
 
-          {/* Right Panel - Card Gallery */}
-          <div className="col-span-4">
+          {/* Right Panel - Card Gallery (Desktop only) */}
+          <div className="hidden lg:block lg:col-span-4">
             <Card className="p-4 h-[calc(100vh-180px)] overflow-y-auto">
-              <h3 className="font-semibold mb-4">Character Cards</h3>
-              {selectedCharacter ? (
-                currentCards.length > 0 ? (
-                  <div className="space-y-4">
-                    {Object.entries(cardsGroupedByStyle).map(([styleId, cards]) => {
-                      const style = styles.find(s => s.id === styleId);
-                      return (
-                        <div key={styleId}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {style?.label || styleId}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {cards.length} card{cards.length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {cards.map((card: CharacterCard) => (
-                              <div 
-                                key={card.id}
-                                className={`relative rounded-md border-2 cursor-pointer group transition-all ${
-                                  currentSelectedCardId === card.id 
-                                    ? "border-primary ring-2 ring-primary/20" 
-                                    : "border-transparent hover:border-muted-foreground/30"
-                                }`}
-                                onClick={() => handleSelectCard(card.id)}
-                                data-testid={`card-image-${card.id}`}
-                              >
-                                <AspectRatio ratio={4/3} className="bg-muted/30">
-                                  <img 
-                                    src={card.imageUrl} 
-                                    alt={`${selectedCharacter.name} - ${style?.label}`}
-                                    className="w-full h-full object-contain"
-                                  />
-                                </AspectRatio>
-                                {currentSelectedCardId === card.id && (
-                                  <div className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full p-1">
-                                    <Check className="w-3 h-3" />
-                                  </div>
-                                )}
-                                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Button
-                                    size="icon"
-                                    variant="secondary"
-                                    className="w-6 h-6"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setPreviewCard(card);
-                                    }}
-                                    data-testid={`button-preview-card-${card.id}`}
-                                  >
-                                    <ZoomIn className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="secondary"
-                                    className="w-6 h-6"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenEditDialog(card);
-                                    }}
-                                    data-testid={`button-edit-card-${card.id}`}
-                                  >
-                                    <Pencil className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="destructive"
-                                    className="w-6 h-6"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteCard(card.id);
-                                    }}
-                                    data-testid={`button-delete-card-${card.id}`}
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm" data-testid="text-no-cards">No character cards yet</p>
-                    <p className="text-xs mt-1">Generate cards using different styles</p>
-                  </div>
-                )
-              ) : (
-                <div className="text-center py-12 text-muted-foreground text-sm" data-testid="text-no-preview">
-                  Select a character to view cards
-                </div>
-              )}
+              {cardsPanelContent}
             </Card>
           </div>
         </div>
       </div>
-
+      
       {/* New Character Dialog */}
       <Dialog open={showNewCharacterDialog} onOpenChange={setShowNewCharacterDialog}>
         <DialogContent>
