@@ -28,6 +28,17 @@ Styles can be hidden from regular users while remaining accessible to admins in 
 -   **Style Editor**: Fetches with `includeHidden=1` to show all styles with visibility toggle buttons
 -   **User-facing views**: Filter out hidden styles automatically
 
+### Character Avatar System
+
+Characters have a dedicated avatar card separate from the main selected card:
+-   **Database**: `characters.avatarCardId` field stores the ID of the card designated as the avatar
+-   **Set as Avatar**: UserCircle icon button in Character Cards gallery allows selecting any card as the character's avatar
+-   **Display Priority**: Three-tier fallback for avatar display:
+    1. `avatarCard`: If avatarCardId is set and has a valid image, use it
+    2. `selectedCard` with CSS crop: If no avatarCardId, use selectedCard with `object-position: top center` cropping
+    3. First letter fallback: If no cards available, display the first letter of the character name
+-   **Use Case**: Multi-angle character sheets often have the main card showing full body or multiple poses, which is unsuitable for small avatar display. The avatar system allows users to select a specific face/portrait view for consistent avatar display.
+
 ### Template System Architecture
 
 The application supports three template types for flexible prompt generation:
