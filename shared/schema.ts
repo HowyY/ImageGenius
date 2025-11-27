@@ -78,14 +78,25 @@ export const storyboardScenes = pgTable("storyboard_scenes", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Character card schema - represents a generated character image for a specific style
+export const characterCardSchema = z.object({
+  id: z.string(), // unique card id
+  styleId: z.string(), // which style this card was generated with
+  imageUrl: z.string().url(), // generated character card image
+  prompt: z.string(), // the prompt used to generate this card
+  createdAt: z.string(), // ISO timestamp
+});
+
+export type CharacterCard = z.infer<typeof characterCardSchema>;
+
 // Characters table for managing reusable characters
 export const characters = pgTable("characters", {
-  id: text("id").primaryKey(), // e.g., "protagonist_001"
+  id: text("id").primaryKey(), // e.g., "char_1234567890"
   name: text("name").notNull(),
-  description: text("description").notNull().default(""),
-  appearance: text("appearance").notNull().default(""),
-  features: text("features").notNull().default(""),
-  referenceImageUrls: text("reference_image_urls").array().default([]),
+  visualPrompt: text("visual_prompt").notNull().default(""), // description for generating character cards
+  characterCards: jsonb("character_cards").$type<CharacterCard[]>().default([]), // generated cards by style
+  selectedCardId: text("selected_card_id"), // currently selected card id
+  tags: text("tags").array().default([]), // optional tags for categorization
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -190,22 +201,30 @@ export type SelectStoryboardScene = typeof storyboardScenes.$inferSelect;
 export const insertCharacterSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1, "Character name is required"),
-  description: z.string().default(""),
-  appearance: z.string().default(""),
-  features: z.string().default(""),
-  referenceImageUrls: z.array(z.string().url()).optional().default([]),
+  visualPrompt: z.string().default(""),
+  characterCards: z.array(characterCardSchema).optional().default([]),
+  selectedCardId: z.string().optional().nullable(),
+  tags: z.array(z.string()).optional().default([]),
 });
 
 export const updateCharacterSchema = z.object({
   name: z.string().min(1).optional(),
-  description: z.string().optional(),
-  appearance: z.string().optional(),
-  features: z.string().optional(),
-  referenceImageUrls: z.array(z.string().url()).optional(),
+  visualPrompt: z.string().optional(),
+  characterCards: z.array(characterCardSchema).optional(),
+  selectedCardId: z.string().optional().nullable(),
+  tags: z.array(z.string()).optional(),
+});
+
+// Schema for adding a new character card
+export const addCharacterCardSchema = z.object({
+  styleId: z.string().min(1),
+  imageUrl: z.string().url(),
+  prompt: z.string(),
 });
 
 export type InsertCharacter = z.infer<typeof insertCharacterSchema>;
 export type UpdateCharacter = z.infer<typeof updateCharacterSchema>;
+export type AddCharacterCard = z.infer<typeof addCharacterCardSchema>;
 export type SelectCharacter = typeof characters.$inferSelect;
 
 const colorSchema = z.object({

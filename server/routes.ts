@@ -1924,7 +1924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a new character
   app.post("/api/characters", async (req, res) => {
     try {
-      const { id, name, description, appearance, features, referenceImageUrls } = req.body;
+      const { id, name, visualPrompt, characterCards, selectedCardId, tags } = req.body;
       
       if (!id || !name) {
         return res.status(400).json({
@@ -1945,10 +1945,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const character = await storage.createCharacter({
         id,
         name,
-        description: description || "",
-        appearance: appearance || "",
-        features: features || "",
-        referenceImageUrls: referenceImageUrls || [],
+        visualPrompt: visualPrompt || "",
+        characterCards: characterCards || [],
+        selectedCardId: selectedCardId || null,
+        tags: tags || [],
       });
       
       res.json(character);
@@ -1965,14 +1965,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/characters/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, description, appearance, features, referenceImageUrls } = req.body;
+      const { name, visualPrompt, characterCards, selectedCardId, tags } = req.body;
       
       const character = await storage.updateCharacter(id, {
         name,
-        description,
-        appearance,
-        features,
-        referenceImageUrls,
+        visualPrompt,
+        characterCards,
+        selectedCardId,
+        tags,
       });
 
       if (!character) {
