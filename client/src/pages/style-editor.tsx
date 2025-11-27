@@ -58,6 +58,8 @@ import {
   Menu,
   ChevronUp,
   ChevronDown,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -215,6 +217,8 @@ const DEFAULT_TEMPLATE: StructuredTemplate = {
 
 interface ExtendedStylePreset extends StylePreset {
   isBuiltIn?: boolean;
+  isHidden?: boolean;
+  displayOrder?: number;
   referenceImageUrl?: string;
 }
 
@@ -290,7 +294,12 @@ export default function StyleEditor() {
   const { toast } = useToast();
 
   const { data: styles, isLoading: stylesLoading } = useQuery<ExtendedStylePreset[]>({
-    queryKey: ["/api/styles"],
+    queryKey: ["/api/styles", { includeHidden: true }],
+    queryFn: async () => {
+      const response = await fetch("/api/styles?includeHidden=1");
+      if (!response.ok) throw new Error("Failed to fetch styles");
+      return response.json();
+    },
   });
 
   const { data: characters } = useQuery<SelectCharacter[]>({
@@ -394,6 +403,29 @@ export default function StyleEditor() {
     onError: (error: Error) => {
       toast({
         title: "Delete failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: async ({ styleId, isHidden }: { styleId: string; isHidden: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/styles/${styleId}`, { isHidden });
+      return response.json() as Promise<ExtendedStylePreset>;
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      toast({
+        title: result.isHidden ? "Style hidden" : "Style visible",
+        description: result.isHidden 
+          ? "This style is now hidden from user-facing views." 
+          : "This style is now visible to all users.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update failed",
         description: error.message,
         variant: "destructive",
       });
@@ -977,23 +1009,57 @@ ${negativePrompt}`;
                       setShowMobileStylesPanel(false);
                     }}
                   >
-                    <StyleThumbnail 
-                      src={style.referenceImageUrl} 
-                      label={style.label} 
-                    />
+                    <div className="relative">
+                      <StyleThumbnail 
+                        src={style.referenceImageUrl} 
+                        label={style.label} 
+                      />
+                      {style.isHidden && (
+                        <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
+                          <EyeOff className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm truncate max-w-[100px]">{style.label}</span>
                         {style.isBuiltIn !== false && (
                           <Badge variant="secondary" className="text-xs flex-shrink-0">Built-in</Badge>
                         )}
+                        {style.isHidden && (
+                          <Badge variant="outline" className="text-xs flex-shrink-0 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-600">Hidden</Badge>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{style.id}</p>
                     </div>
-                    {selectedStyleId === style.id && (
-                      <ChevronRight className="w-4 h-4 text-primary flex-shrink-0" />
-                    )}
                   </div>
+                  
+                  {/* Visibility toggle button */}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleVisibilityMutation.mutate({ 
+                        styleId: style.id, 
+                        isHidden: !style.isHidden 
+                      });
+                    }}
+                    disabled={toggleVisibilityMutation.isPending}
+                    data-testid={`button-toggle-visibility-${style.id}`}
+                  >
+                    {style.isHidden ? (
+                      <EyeOff className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                  
+                  {/* Selected indicator */}
+                  {selectedStyleId === style.id && (
+                    <ChevronRight className="w-4 h-4 text-primary flex-shrink-0" />
+                  )}
                 </div>
               </div>
             ))
