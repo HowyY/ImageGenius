@@ -35,10 +35,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw } from "lucide-react";
+import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 import type { SelectCharacter, InsertCharacter, UpdateCharacter, CharacterCard } from "@shared/schema";
 
 interface Style {
@@ -76,6 +77,9 @@ export default function CharacterEditor() {
   const [editExpression, setEditExpression] = useState<string>("neutral");
   const [regeneratedImageUrl, setRegeneratedImageUrl] = useState<string | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  
+  // Preview dialog state
+  const [previewCard, setPreviewCard] = useState<CharacterCard | null>(null);
   
   const { toast } = useToast();
 
@@ -752,7 +756,7 @@ export default function CharacterEditor() {
                             {cards.map((card: CharacterCard) => (
                               <div 
                                 key={card.id}
-                                className={`relative aspect-square rounded-md overflow-hidden border-2 cursor-pointer group transition-all ${
+                                className={`relative rounded-md border-2 cursor-pointer group transition-all ${
                                   currentSelectedCardId === card.id 
                                     ? "border-primary ring-2 ring-primary/20" 
                                     : "border-transparent hover:border-muted-foreground/30"
@@ -760,17 +764,31 @@ export default function CharacterEditor() {
                                 onClick={() => handleSelectCard(card.id)}
                                 data-testid={`card-image-${card.id}`}
                               >
-                                <img 
-                                  src={card.imageUrl} 
-                                  alt={`${selectedCharacter.name} - ${style?.label}`}
-                                  className="w-full h-full object-cover"
-                                />
+                                <AspectRatio ratio={4/3} className="bg-muted/30">
+                                  <img 
+                                    src={card.imageUrl} 
+                                    alt={`${selectedCharacter.name} - ${style?.label}`}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </AspectRatio>
                                 {currentSelectedCardId === card.id && (
                                   <div className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full p-1">
                                     <Check className="w-3 h-3" />
                                   </div>
                                 )}
                                 <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button
+                                    size="icon"
+                                    variant="secondary"
+                                    className="w-6 h-6"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPreviewCard(card);
+                                    }}
+                                    data-testid={`button-preview-card-${card.id}`}
+                                  >
+                                    <ZoomIn className="w-3 h-3" />
+                                  </Button>
                                   <Button
                                     size="icon"
                                     variant="secondary"
@@ -1043,6 +1061,73 @@ export default function CharacterEditor() {
               </>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewCard} onOpenChange={(open) => !open && setPreviewCard(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <div className="relative">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="absolute top-2 right-2 z-10 bg-background/80 backdrop-blur-sm"
+              onClick={() => setPreviewCard(null)}
+              data-testid="button-close-preview"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+            {previewCard && (
+              <div className="flex flex-col">
+                <div className="overflow-auto max-h-[80vh]">
+                  <img 
+                    src={previewCard.imageUrl} 
+                    alt={`${selectedCharacter?.name || "Character"} preview`}
+                    className="w-full h-auto"
+                    data-testid="img-preview-full"
+                  />
+                </div>
+                <div className="p-4 bg-background border-t flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {previewCard.angle && (
+                      <Badge variant="secondary" className="text-xs">{previewCard.angle}</Badge>
+                    )}
+                    {previewCard.pose && (
+                      <Badge variant="secondary" className="text-xs">{previewCard.pose}</Badge>
+                    )}
+                    {previewCard.expression && (
+                      <Badge variant="outline" className="text-xs">{previewCard.expression}</Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        handleOpenEditDialog(previewCard);
+                        setPreviewCard(null);
+                      }}
+                      data-testid="button-edit-from-preview"
+                    >
+                      <Pencil className="w-3 h-3 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        handleSelectCard(previewCard.id);
+                        setPreviewCard(null);
+                      }}
+                      data-testid="button-select-from-preview"
+                    >
+                      <Check className="w-3 h-3 mr-1" />
+                      Select as Reference
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
