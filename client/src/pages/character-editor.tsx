@@ -42,12 +42,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X, Users, Images, Menu } from "lucide-react";
+import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X, Users, Images, Menu, UserCircle, Crop } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
-import type { SelectCharacter, InsertCharacter, UpdateCharacter, CharacterCard } from "@shared/schema";
+import { AvatarCropDialog, CroppedAvatar } from "@/components/AvatarCropDialog";
+import type { SelectCharacter, InsertCharacter, UpdateCharacter, CharacterCard, AvatarProfiles, AvatarCrop, AvatarProfile } from "@shared/schema";
 
 interface Style {
   id: string;
@@ -91,6 +92,11 @@ export default function CharacterEditor() {
   // Mobile panel state
   const [showMobileCharactersPanel, setShowMobileCharactersPanel] = useState(false);
   const [showMobileCardsPanel, setShowMobileCardsPanel] = useState(false);
+  
+  // Avatar crop dialog state
+  const [showAvatarCropDialog, setShowAvatarCropDialog] = useState(false);
+  const [avatarCropCard, setAvatarCropCard] = useState<CharacterCard | null>(null);
+  const [avatarCropStyleId, setAvatarCropStyleId] = useState<string>("");
   
   const { toast } = useToast();
 
@@ -230,6 +236,7 @@ export default function CharacterEditor() {
       visualPrompt: "",
       characterCards: [],
       selectedCardId: null,
+      avatarProfiles: {},
       tags: [],
     });
 
@@ -246,7 +253,7 @@ export default function CharacterEditor() {
     if (editedCharacter.tags !== undefined) updates.tags = editedCharacter.tags;
     if (editedCharacter.characterCards !== undefined) updates.characterCards = editedCharacter.characterCards;
     if (editedCharacter.selectedCardId !== undefined) updates.selectedCardId = editedCharacter.selectedCardId;
-    if (editedCharacter.avatarCardId !== undefined) updates.avatarCardId = editedCharacter.avatarCardId;
+    if (editedCharacter.avatarProfiles !== undefined) updates.avatarProfiles = editedCharacter.avatarProfiles;
 
     if (Object.keys(updates).length === 0) {
       toast({
@@ -329,20 +336,45 @@ export default function CharacterEditor() {
     });
   };
 
-  const handleSetAvatar = (cardId: string) => {
+  const handleSetAvatar = (card: CharacterCard) => {
     if (!selectedCharacter) return;
     
+    // Open the crop dialog for this card
+    setAvatarCropCard(card);
+    setAvatarCropStyleId(card.styleId);
+    setShowAvatarCropDialog(true);
+  };
+
+  const handleSaveAvatarCrop = (crop: AvatarCrop) => {
+    if (!selectedCharacter || !avatarCropCard || !avatarCropStyleId) return;
+    
     const currentCards = editedCharacter.characterCards ?? selectedCharacter.characterCards ?? [];
+    const currentProfiles: AvatarProfiles = editedCharacter.avatarProfiles ?? (selectedCharacter.avatarProfiles as AvatarProfiles) ?? {};
+    
+    // Update the avatar profile for this style
+    const updatedProfiles: AvatarProfiles = {
+      ...currentProfiles,
+      [avatarCropStyleId]: {
+        cardId: avatarCropCard.id,
+        crop: crop,
+      },
+    };
+    
     setEditedCharacter({
       ...editedCharacter,
-      avatarCardId: cardId,
+      avatarProfiles: updatedProfiles,
       characterCards: currentCards,
     });
     
+    const styleName = styles.find(s => s.id === avatarCropStyleId)?.label || avatarCropStyleId;
     toast({
       title: "Avatar Updated",
-      description: "This card will be used as the character's avatar",
+      description: `Avatar set for ${styleName} style`,
     });
+    
+    // Reset crop dialog state
+    setAvatarCropCard(null);
+    setAvatarCropStyleId("");
   };
 
   const handleDeleteCard = (cardId: string) => {
@@ -456,9 +488,20 @@ export default function CharacterEditor() {
   const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
   const currentCards: CharacterCard[] = (editedCharacter.characterCards ?? selectedCharacter?.characterCards ?? []) as CharacterCard[];
   const currentSelectedCardId = editedCharacter.selectedCardId ?? selectedCharacter?.selectedCardId;
-  const currentAvatarCardId = editedCharacter.avatarCardId ?? selectedCharacter?.avatarCardId;
+  const currentAvatarProfiles: AvatarProfiles = editedCharacter.avatarProfiles ?? (selectedCharacter?.avatarProfiles as AvatarProfiles) ?? {};
   const selectedCard = currentCards.find((c: CharacterCard) => c.id === currentSelectedCardId);
-  const avatarCard = currentCards.find((c: CharacterCard) => c.id === currentAvatarCardId);
+
+  // Get avatar for a specific style from the new per-style profiles
+  const getAvatarForStyle = (styleId: string): { card: CharacterCard | undefined; crop: AvatarCrop | undefined } => {
+    const profile = currentAvatarProfiles[styleId];
+    if (profile) {
+      const card = currentCards.find((c: CharacterCard) => c.id === profile.cardId);
+      return { card, crop: profile.crop };
+    }
+    // Fallback to first card of this style
+    const fallbackCard = currentCards.find((c: CharacterCard) => c.styleId === styleId);
+    return { card: fallbackCard, crop: undefined };
+  };
 
   const cardsGroupedByStyle = currentCards.reduce((acc: Record<string, CharacterCard[]>, card: CharacterCard) => {
     if (!acc[card.styleId]) acc[card.styleId] = [];
@@ -526,11 +569,29 @@ export default function CharacterEditor() {
           <div className="space-y-2">
             {filteredCharacters.map((char) => {
               const cards = (char.characterCards || []) as CharacterCard[];
-              // Avatar priority: avatarCard > selectedCard > fallback letter
-              const avatarCardImg = cards.find((c: CharacterCard) => c.id === char.avatarCardId);
-              const selectedCardImg = cards.find((c: CharacterCard) => c.id === char.selectedCardId);
-              const displayImage = avatarCardImg || selectedCardImg;
-              const usesCropping = !avatarCardImg && selectedCardImg; // CSS crop for non-avatar cards
+              const charAvatarProfiles = (char.avatarProfiles as AvatarProfiles) || {};
+              
+              // Get avatar for currently selected style, or use first available avatar
+              const getCharAvatar = (): { imageUrl: string | null; crop: AvatarCrop | undefined } => {
+                // First try the currently selected style
+                if (selectedStyleId && charAvatarProfiles[selectedStyleId]) {
+                  const profile = charAvatarProfiles[selectedStyleId];
+                  const card = cards.find((c: CharacterCard) => c.id === profile.cardId);
+                  if (card) return { imageUrl: card.imageUrl, crop: profile.crop };
+                }
+                // Then try any style that has an avatar profile
+                for (const [_styleId, profile] of Object.entries(charAvatarProfiles)) {
+                  const card = cards.find((c: CharacterCard) => c.id === profile.cardId);
+                  if (card) return { imageUrl: card.imageUrl, crop: profile.crop };
+                }
+                // Fallback to selectedCard or first card
+                const selectedCardImg = cards.find((c: CharacterCard) => c.id === char.selectedCardId);
+                if (selectedCardImg) return { imageUrl: selectedCardImg.imageUrl, crop: undefined };
+                if (cards.length > 0) return { imageUrl: cards[0].imageUrl, crop: undefined };
+                return { imageUrl: null, crop: undefined };
+              };
+              
+              const avatarData = getCharAvatar();
               
               return (
                 <div
@@ -547,17 +608,20 @@ export default function CharacterEditor() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Avatar>
-                      {displayImage ? (
-                        <AvatarImage 
-                          src={displayImage.imageUrl} 
-                          className={usesCropping ? "object-cover object-top" : "object-cover"}
-                        />
-                      ) : null}
-                      <AvatarFallback>
-                        {char.name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    {avatarData.imageUrl ? (
+                      <CroppedAvatar
+                        imageUrl={avatarData.imageUrl}
+                        crop={avatarData.crop}
+                        size={40}
+                        className="shrink-0"
+                      />
+                    ) : (
+                      <Avatar>
+                        <AvatarFallback>
+                          {char.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{char.name}</p>
                       <p className="text-xs text-muted-foreground">
@@ -583,6 +647,9 @@ export default function CharacterEditor() {
           <div className="space-y-4">
             {Object.entries(cardsGroupedByStyle).map(([styleId, cards]) => {
               const style = styles.find(s => s.id === styleId);
+              const avatarProfile = currentAvatarProfiles[styleId];
+              const isAvatarSet = !!avatarProfile;
+              
               return (
                 <div key={styleId}>
                   <div className="flex items-center gap-2 mb-2">
@@ -592,92 +659,102 @@ export default function CharacterEditor() {
                     <span className="text-xs text-muted-foreground">
                       {cards.length} card{cards.length !== 1 ? "s" : ""}
                     </span>
+                    {isAvatarSet && (
+                      <Badge variant="outline" className="text-xs text-amber-600 border-amber-500">
+                        <UserCircle className="w-3 h-3 mr-1" />
+                        Avatar Set
+                      </Badge>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {cards.map((card: CharacterCard) => (
-                      <div 
-                        key={card.id}
-                        className={`relative rounded-md border-2 cursor-pointer group transition-all ${
-                          currentSelectedCardId === card.id 
-                            ? "border-primary ring-2 ring-primary/20" 
-                            : "border-transparent hover:border-muted-foreground/30"
-                        }`}
-                        onClick={() => handleSelectCard(card.id)}
-                        data-testid={`card-image-${card.id}`}
-                      >
-                        <AspectRatio ratio={4/3} className="bg-muted/30">
-                          <img 
-                            src={card.imageUrl} 
-                            alt={`${selectedCharacter.name} - ${style?.label}`}
-                            className="w-full h-full object-contain"
-                          />
-                        </AspectRatio>
-                        {/* Indicators for selected card and avatar */}
-                        <div className="absolute top-1 left-1 flex gap-1">
-                          {currentSelectedCardId === card.id && (
-                            <div className="bg-primary text-primary-foreground rounded-full p-1" title="Reference Card">
-                              <Check className="w-3 h-3" />
-                            </div>
-                          )}
-                          {currentAvatarCardId === card.id && (
-                            <div className="bg-amber-500 text-white rounded-full p-1" title="Avatar Card">
-                              <User className="w-3 h-3" />
-                            </div>
-                          )}
+                    {cards.map((card: CharacterCard) => {
+                      const isAvatarCard = avatarProfile?.cardId === card.id;
+                      
+                      return (
+                        <div 
+                          key={card.id}
+                          className={`relative rounded-md border-2 cursor-pointer group transition-all ${
+                            currentSelectedCardId === card.id 
+                              ? "border-primary ring-2 ring-primary/20" 
+                              : "border-transparent hover:border-muted-foreground/30"
+                          }`}
+                          onClick={() => handleSelectCard(card.id)}
+                          data-testid={`card-image-${card.id}`}
+                        >
+                          <AspectRatio ratio={4/3} className="bg-muted/30">
+                            <img 
+                              src={card.imageUrl} 
+                              alt={`${selectedCharacter.name} - ${style?.label}`}
+                              className="w-full h-full object-contain"
+                            />
+                          </AspectRatio>
+                          {/* Indicators for selected card and avatar */}
+                          <div className="absolute top-1 left-1 flex gap-1">
+                            {currentSelectedCardId === card.id && (
+                              <div className="bg-primary text-primary-foreground rounded-full p-1" title="Reference Card">
+                                <Check className="w-3 h-3" />
+                              </div>
+                            )}
+                            {isAvatarCard && (
+                              <div className="bg-amber-500 text-white rounded-full p-1" title="Avatar for this style">
+                                <UserCircle className="w-3 h-3" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              size="icon"
+                              variant="secondary"
+                              className="w-6 h-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetAvatar(card);
+                              }}
+                              title="Set as Avatar (with crop)"
+                              data-testid={`button-set-avatar-${card.id}`}
+                            >
+                              <Crop className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="secondary"
+                              className="w-6 h-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewCard(card);
+                              }}
+                              data-testid={`button-preview-card-${card.id}`}
+                            >
+                              <ZoomIn className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="secondary"
+                              className="w-6 h-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditDialog(card);
+                              }}
+                              data-testid={`button-edit-card-${card.id}`}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="destructive"
+                              className="w-6 h-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCard(card.id);
+                              }}
+                              data-testid={`button-delete-card-${card.id}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            size="icon"
-                            variant="secondary"
-                            className="w-6 h-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSetAvatar(card.id);
-                            }}
-                            title="Set as Avatar"
-                            data-testid={`button-set-avatar-${card.id}`}
-                          >
-                            <User className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="secondary"
-                            className="w-6 h-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewCard(card);
-                            }}
-                            data-testid={`button-preview-card-${card.id}`}
-                          >
-                            <ZoomIn className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="secondary"
-                            className="w-6 h-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEditDialog(card);
-                            }}
-                            data-testid={`button-edit-card-${card.id}`}
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="destructive"
-                            className="w-6 h-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteCard(card.id);
-                            }}
-                            data-testid={`button-delete-card-${card.id}`}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -1243,6 +1320,19 @@ export default function CharacterEditor() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Avatar Crop Dialog */}
+      {avatarCropCard && (
+        <AvatarCropDialog
+          open={showAvatarCropDialog}
+          onOpenChange={setShowAvatarCropDialog}
+          imageUrl={avatarCropCard.imageUrl}
+          initialCrop={currentAvatarProfiles[avatarCropStyleId]?.crop}
+          onSave={handleSaveAvatarCrop}
+          characterName={selectedCharacter?.name}
+          styleName={styles.find(s => s.id === avatarCropStyleId)?.label}
+        />
+      )}
     </div>
   );
 }

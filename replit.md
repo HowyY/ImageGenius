@@ -28,16 +28,25 @@ Styles can be hidden from regular users while remaining accessible to admins in 
 -   **Style Editor**: Fetches with `includeHidden=1` to show all styles with visibility toggle buttons
 -   **User-facing views**: Filter out hidden styles automatically
 
-### Character Avatar System
+### Per-Style Character Avatar System
 
-Characters have a dedicated avatar card separate from the main selected card:
--   **Database**: `characters.avatarCardId` field stores the ID of the card designated as the avatar
--   **Set as Avatar**: UserCircle icon button in Character Cards gallery allows selecting any card as the character's avatar
--   **Display Priority**: Three-tier fallback for avatar display:
-    1. `avatarCard`: If avatarCardId is set and has a valid image, use it
-    2. `selectedCard` with CSS crop: If no avatarCardId, use selectedCard with `object-position: top center` cropping
-    3. First letter fallback: If no cards available, display the first letter of the character name
--   **Use Case**: Multi-angle character sheets often have the main card showing full body or multiple poses, which is unsuitable for small avatar display. The avatar system allows users to select a specific face/portrait view for consistent avatar display.
+Characters support style-specific avatars with crop functionality to ensure consistent, style-matched avatar display:
+-   **Database**: `characters.avatarProfiles` JSONB field with structure: `{ [styleId]: { cardId: string, crop: { x: number, y: number, zoom: number } } }`
+-   **Avatar Crop Dialog**: When clicking the crop icon on a character card, the AvatarCropDialog opens with:
+    - Pan controls (drag to reposition)
+    - Zoom slider (adjust magnification)
+    - Rotation controls (optional)
+    - Round preview showing final avatar appearance
+-   **Components**:
+    - `AvatarCropDialog`: Modal dialog with react-easy-crop integration for setting crop parameters
+    - `CroppedAvatar`: CSS transform-based avatar display using stored crop coordinates (no image processing, purely visual)
+-   **Display Priority**: Multi-tier fallback for avatar display:
+    1. Per-style avatarProfile: If current style has an avatar profile set, use that card with crop
+    2. Any style avatarProfile: Fallback to first available style avatar
+    3. selectedCard: Use the reference card without cropping
+    4. First card: Use first available character card
+    5. First letter fallback: Display first letter of character name
+-   **Use Case**: Different art styles produce vastly different character representations. Per-style avatars ensure the displayed avatar always matches the current visual style context.
 
 ### Template System Architecture
 
