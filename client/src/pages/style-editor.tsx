@@ -1493,9 +1493,30 @@ ${negativePrompt}`;
                                   const styleSpecificCards = cards.filter((card: CharacterCard) => card.styleId === selectedStyleId);
                                   const hasStyleMatch = styleSpecificCards.length > 0;
                                   
-                                  // Prefer style-matched card, fallback to selected card
-                                  let displayCard: CharacterCard | undefined = styleSpecificCards[0];
-                                  if (!displayCard && character.selectedCardId) {
+                                  // Display card selection priority:
+                                  // 1. If selectedCardId belongs to current style, use it (respects user's "Save changes")
+                                  // 2. Otherwise, use the newest card for this style (sorted by createdAt descending)
+                                  // 3. Fall back to selectedCardId if no style-specific cards
+                                  let displayCard: CharacterCard | undefined;
+                                  
+                                  if (hasStyleMatch) {
+                                    // Check if the user's selected card belongs to this style
+                                    const selectedCardForStyle = styleSpecificCards.find(
+                                      (card: CharacterCard) => card.id === character.selectedCardId
+                                    );
+                                    if (selectedCardForStyle) {
+                                      displayCard = selectedCardForStyle;
+                                    } else {
+                                      // Use the newest card for this style
+                                      const sortedCards = [...styleSpecificCards].sort((a, b) => {
+                                        const dateA = new Date(a.createdAt || 0).getTime();
+                                        const dateB = new Date(b.createdAt || 0).getTime();
+                                        return dateB - dateA; // Newest first
+                                      });
+                                      displayCard = sortedCards[0];
+                                    }
+                                  } else if (character.selectedCardId) {
+                                    // No style-specific cards, use fallback
                                     displayCard = cards.find((card: CharacterCard) => card.id === character.selectedCardId);
                                   }
                                   
