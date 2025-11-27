@@ -8,6 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -26,10 +34,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, User, Search, X, ImagePlus } from "lucide-react";
+import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import type { SelectCharacter, InsertCharacter, UpdateCharacter } from "@shared/schema";
+import type { SelectCharacter, InsertCharacter, UpdateCharacter, CharacterCard } from "@shared/schema";
+
+interface Style {
+  id: string;
+  label: string;
+  description: string;
+}
 
 export default function CharacterEditor() {
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>("");
@@ -37,13 +51,17 @@ export default function CharacterEditor() {
   const [showNewCharacterDialog, setShowNewCharacterDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [newCharacterName, setNewCharacterName] = useState("");
-  const [newCharacterDescription, setNewCharacterDescription] = useState("");
   const [editedCharacter, setEditedCharacter] = useState<Partial<UpdateCharacter>>({});
-  const [newImageUrl, setNewImageUrl] = useState("");
+  const [selectedStyleId, setSelectedStyleId] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
 
   const { data: characters = [], isLoading } = useQuery<SelectCharacter[]>({
     queryKey: ["/api/characters"],
+  });
+
+  const { data: styles = [] } = useQuery<Style[]>({
+    queryKey: ["/api/styles"],
   });
 
   const createCharacterMutation = useMutation({
@@ -126,15 +144,14 @@ export default function CharacterEditor() {
     createCharacterMutation.mutate({
       id,
       name: newCharacterName.trim(),
-      description: newCharacterDescription.trim(),
-      appearance: "",
-      features: "",
-      referenceImageUrls: [],
+      visualPrompt: "",
+      characterCards: [],
+      selectedCardId: null,
+      tags: [],
     });
 
     setShowNewCharacterDialog(false);
     setNewCharacterName("");
-    setNewCharacterDescription("");
   };
 
   const handleSaveCharacter = () => {
@@ -142,10 +159,10 @@ export default function CharacterEditor() {
 
     const updates: UpdateCharacter = {};
     if (editedCharacter.name !== undefined) updates.name = editedCharacter.name;
-    if (editedCharacter.description !== undefined) updates.description = editedCharacter.description;
-    if (editedCharacter.appearance !== undefined) updates.appearance = editedCharacter.appearance;
-    if (editedCharacter.features !== undefined) updates.features = editedCharacter.features;
-    if (editedCharacter.referenceImageUrls !== undefined) updates.referenceImageUrls = editedCharacter.referenceImageUrls;
+    if (editedCharacter.visualPrompt !== undefined) updates.visualPrompt = editedCharacter.visualPrompt;
+    if (editedCharacter.tags !== undefined) updates.tags = editedCharacter.tags;
+    if (editedCharacter.characterCards !== undefined) updates.characterCards = editedCharacter.characterCards;
+    if (editedCharacter.selectedCardId !== undefined) updates.selectedCardId = editedCharacter.selectedCardId;
 
     if (Object.keys(updates).length === 0) {
       toast({
@@ -167,33 +184,101 @@ export default function CharacterEditor() {
     deleteCharacterMutation.mutate(selectedCharacter.id);
   };
 
-  const handleAddReferenceImage = () => {
-    if (!newImageUrl.trim()) return;
-    
-    const currentImages = editedCharacter.referenceImageUrls ?? selectedCharacter?.referenceImageUrls ?? [];
-    const updatedImages = [...currentImages, newImageUrl.trim()];
-    
-    setEditedCharacter({ ...editedCharacter, referenceImageUrls: updatedImages });
-    setNewImageUrl("");
+  const handleGenerateCard = async () => {
+    if (!selectedCharacter || !selectedStyleId) {
+      toast({
+        title: "Error",
+        description: "Please select a style before generating",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const visualPrompt = editedCharacter.visualPrompt ?? selectedCharacter.visualPrompt;
+    if (!visualPrompt.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a visual description first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const res = await apiRequest("POST", "/api/characters/generate-card", {
+        characterId: selectedCharacter.id,
+        styleId: selectedStyleId,
+        visualPrompt: visualPrompt,
+      });
+      const result = await res.json();
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      toast({
+        title: "Success",
+        description: "Character card generated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate character card",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const handleRemoveReferenceImage = (index: number) => {
-    const currentImages = editedCharacter.referenceImageUrls ?? selectedCharacter?.referenceImageUrls ?? [];
-    const updatedImages = currentImages.filter((_, i) => i !== index);
-    setEditedCharacter({ ...editedCharacter, referenceImageUrls: updatedImages });
+  const handleSelectCard = (cardId: string) => {
+    if (!selectedCharacter) return;
+    
+    const currentCards = editedCharacter.characterCards ?? selectedCharacter.characterCards ?? [];
+    setEditedCharacter({
+      ...editedCharacter,
+      selectedCardId: cardId,
+      characterCards: currentCards,
+    });
+  };
+
+  const handleDeleteCard = (cardId: string) => {
+    if (!selectedCharacter) return;
+    
+    const currentCards = editedCharacter.characterCards ?? selectedCharacter.characterCards ?? [];
+    const updatedCards = currentCards.filter((c: CharacterCard) => c.id !== cardId);
+    const currentSelectedId = editedCharacter.selectedCardId ?? selectedCharacter.selectedCardId;
+    
+    setEditedCharacter({
+      ...editedCharacter,
+      characterCards: updatedCards,
+      selectedCardId: currentSelectedId === cardId ? null : currentSelectedId,
+    });
   };
 
   const filteredCharacters = characters.filter(char =>
     char.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (char.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+    (char.visualPrompt?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
   );
 
   const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
-  const currentReferenceImages = editedCharacter.referenceImageUrls ?? selectedCharacter?.referenceImageUrls ?? [];
+  const currentCards: CharacterCard[] = (editedCharacter.characterCards ?? selectedCharacter?.characterCards ?? []) as CharacterCard[];
+  const currentSelectedCardId = editedCharacter.selectedCardId ?? selectedCharacter?.selectedCardId;
+  const selectedCard = currentCards.find((c: CharacterCard) => c.id === currentSelectedCardId);
+
+  const cardsGroupedByStyle = currentCards.reduce((acc: Record<string, CharacterCard[]>, card: CharacterCard) => {
+    if (!acc[card.styleId]) acc[card.styleId] = [];
+    acc[card.styleId].push(card);
+    return acc;
+  }, {} as Record<string, CharacterCard[]>);
 
   useEffect(() => {
     setEditedCharacter({});
   }, [selectedCharacterId]);
+
+  useEffect(() => {
+    if (styles.length > 0 && !selectedStyleId) {
+      setSelectedStyleId(styles[0].id);
+    }
+  }, [styles, selectedStyleId]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -201,7 +286,7 @@ export default function CharacterEditor() {
         <div className="mb-4">
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Character Editor</h1>
           <p className="text-muted-foreground" data-testid="text-page-description">
-            Create and manage characters for your storyboards
+            Create characters and generate style-specific character cards
           </p>
         </div>
 
@@ -254,40 +339,44 @@ export default function CharacterEditor() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {filteredCharacters.map((char) => (
-                      <div
-                        key={char.id}
-                        data-testid={`card-character-${char.id}`}
-                        onClick={() => setSelectedCharacterId(char.id)}
-                        className={`p-3 rounded-md cursor-pointer transition-colors ${
-                          selectedCharacterId === char.id
-                            ? "bg-primary/10 border border-primary/30"
-                            : "hover-elevate"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage src={char.referenceImageUrls?.[0]} />
-                            <AvatarFallback>
-                              {char.name.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{char.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {char.description || "No description"}
-                            </p>
+                    {filteredCharacters.map((char) => {
+                      const cards = (char.characterCards || []) as CharacterCard[];
+                      const selectedCardImg = cards.find((c: CharacterCard) => c.id === char.selectedCardId);
+                      return (
+                        <div
+                          key={char.id}
+                          data-testid={`card-character-${char.id}`}
+                          onClick={() => setSelectedCharacterId(char.id)}
+                          className={`p-3 rounded-md cursor-pointer transition-colors ${
+                            selectedCharacterId === char.id
+                              ? "bg-primary/10 border border-primary/30"
+                              : "hover-elevate"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar>
+                              <AvatarImage src={selectedCardImg?.imageUrl} />
+                              <AvatarFallback>
+                                {char.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{char.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {cards.length} card{cards.length !== 1 ? "s" : ""}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </ScrollArea>
             </Card>
           </div>
 
-          {/* Center Panel - Character Details */}
+          {/* Center Panel - Character Details & Generation */}
           <div className="col-span-5">
             <Card className="p-4 h-[calc(100vh-180px)] overflow-y-auto">
               {selectedCharacter ? (
@@ -317,102 +406,59 @@ export default function CharacterEditor() {
                   </div>
 
                   <div>
-                    <Label htmlFor="char-edit-description">Description</Label>
-                    <Input 
-                      id="char-edit-description"
-                      data-testid="input-character-description"
-                      value={editedCharacter.description ?? selectedCharacter.description ?? ""}
-                      onChange={(e) => setEditedCharacter({ ...editedCharacter, description: e.target.value })}
-                      placeholder="Brief character description"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="char-edit-appearance">Appearance Details</Label>
+                    <Label htmlFor="char-edit-prompt">Visual Description</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Describe the character's appearance for AI generation
+                    </p>
                     <Textarea
-                      id="char-edit-appearance"
-                      data-testid="input-character-appearance"
-                      value={editedCharacter.appearance ?? selectedCharacter.appearance ?? ""}
-                      onChange={(e) => setEditedCharacter({ ...editedCharacter, appearance: e.target.value })}
-                      placeholder="Short brown hair, blue jacket, casual style..."
-                      rows={3}
+                      id="char-edit-prompt"
+                      data-testid="input-visual-prompt"
+                      value={editedCharacter.visualPrompt ?? selectedCharacter.visualPrompt ?? ""}
+                      onChange={(e) => setEditedCharacter({ ...editedCharacter, visualPrompt: e.target.value })}
+                      placeholder="Young woman with long black hair, wearing a red dress, confident expression, athletic build..."
+                      rows={5}
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="char-edit-features">Distinctive Features</Label>
-                    <Textarea
-                      id="char-edit-features"
-                      data-testid="input-character-features"
-                      value={editedCharacter.features ?? selectedCharacter.features ?? ""}
-                      onChange={(e) => setEditedCharacter({ ...editedCharacter, features: e.target.value })}
-                      placeholder="Round glasses, friendly smile, athletic build..."
-                      rows={3}
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Reference Images ({currentReferenceImages.length})</Label>
-                    <div className="space-y-2 mt-2">
-                      {currentReferenceImages.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {currentReferenceImages.map((url, index) => (
-                            <div 
-                              key={index} 
-                              className="relative aspect-square rounded-md overflow-hidden border group"
-                              data-testid={`img-reference-${index}`}
-                            >
-                              <img 
-                                src={url} 
-                                alt={`Reference ${index + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                              <Button
-                                size="icon"
-                                variant="destructive"
-                                className="absolute top-1 right-1 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => handleRemoveReferenceImage(index)}
-                                data-testid={`button-remove-reference-${index}`}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </div>
+                  <div className="border-t pt-4">
+                    <Label>Generate Character Card</Label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Select a style and generate a character card image
+                    </p>
+                    
+                    <div className="flex gap-2">
+                      <Select value={selectedStyleId} onValueChange={setSelectedStyleId}>
+                        <SelectTrigger className="flex-1" data-testid="select-style">
+                          <SelectValue placeholder="Select style..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {styles.map((style) => (
+                            <SelectItem key={style.id} value={style.id}>
+                              {style.label}
+                            </SelectItem>
                           ))}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground py-2">
-                          No reference images added yet
-                        </div>
-                      )}
+                        </SelectContent>
+                      </Select>
                       
-                      <div className="flex gap-2">
-                        <Input
-                          data-testid="input-new-image-url"
-                          placeholder="Paste image URL..."
-                          value={newImageUrl}
-                          onChange={(e) => setNewImageUrl(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleAddReferenceImage()}
-                        />
-                        <Button 
-                          size="icon" 
-                          variant="outline"
-                          onClick={handleAddReferenceImage}
-                          disabled={!newImageUrl.trim()}
-                          data-testid="button-add-image"
-                        >
-                          <ImagePlus className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <Button 
+                        onClick={handleGenerateCard}
+                        disabled={isGenerating || !selectedStyleId}
+                        data-testid="button-generate-card"
+                      >
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        {isGenerating ? "Generating..." : "Generate"}
+                      </Button>
                     </div>
                   </div>
 
                   <Button 
                     className="w-full" 
+                    variant="outline"
                     onClick={handleSaveCharacter}
                     disabled={updateCharacterMutation.isPending || Object.keys(editedCharacter).length === 0}
                     data-testid="button-save-character"
                   >
-                    {updateCharacterMutation.isPending ? "Saving..." : "Save Character"}
+                    {updateCharacterMutation.isPending ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>
               ) : (
@@ -426,56 +472,76 @@ export default function CharacterEditor() {
             </Card>
           </div>
 
-          {/* Right Panel - Preview & Usage */}
+          {/* Right Panel - Card Gallery */}
           <div className="col-span-4">
-            <Card className="p-4 h-[calc(100vh-180px)]">
-              <h3 className="font-semibold mb-4">Preview & Usage</h3>
+            <Card className="p-4 h-[calc(100vh-180px)] overflow-y-auto">
+              <h3 className="font-semibold mb-4">Character Cards</h3>
               {selectedCharacter ? (
-                <div className="space-y-4">
-                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-                    {currentReferenceImages.length > 0 ? (
-                      <img
-                        src={currentReferenceImages[0]}
-                        alt={selectedCharacter.name}
-                        className="w-full h-full object-cover"
-                        data-testid="img-character-preview"
-                      />
-                    ) : (
-                      <User className="w-16 h-16 text-muted-foreground" />
-                    )}
+                currentCards.length > 0 ? (
+                  <div className="space-y-4">
+                    {Object.entries(cardsGroupedByStyle).map(([styleId, cards]) => {
+                      const style = styles.find(s => s.id === styleId);
+                      return (
+                        <div key={styleId}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {style?.label || styleId}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {cards.length} card{cards.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {cards.map((card: CharacterCard) => (
+                              <div 
+                                key={card.id}
+                                className={`relative aspect-square rounded-md overflow-hidden border-2 cursor-pointer group transition-all ${
+                                  currentSelectedCardId === card.id 
+                                    ? "border-primary ring-2 ring-primary/20" 
+                                    : "border-transparent hover:border-muted-foreground/30"
+                                }`}
+                                onClick={() => handleSelectCard(card.id)}
+                                data-testid={`card-image-${card.id}`}
+                              >
+                                <img 
+                                  src={card.imageUrl} 
+                                  alt={`${selectedCharacter.name} - ${style?.label}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                {currentSelectedCardId === card.id && (
+                                  <div className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full p-1">
+                                    <Check className="w-3 h-3" />
+                                  </div>
+                                )}
+                                <Button
+                                  size="icon"
+                                  variant="destructive"
+                                  className="absolute top-1 right-1 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCard(card.id);
+                                  }}
+                                  data-testid={`button-delete-card-${card.id}`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  <div>
-                    <Label className="mb-2 block">Character Identity</Label>
-                    <div className="text-sm bg-muted/50 rounded-md p-3 space-y-1">
-                      <p><span className="text-muted-foreground">Name:</span> {selectedCharacter.name}</p>
-                      {selectedCharacter.appearance && (
-                        <p><span className="text-muted-foreground">Appearance:</span> {selectedCharacter.appearance}</p>
-                      )}
-                      {selectedCharacter.features && (
-                        <p><span className="text-muted-foreground">Features:</span> {selectedCharacter.features}</p>
-                      )}
-                    </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm" data-testid="text-no-cards">No character cards yet</p>
+                    <p className="text-xs mt-1">Generate cards using different styles</p>
                   </div>
-
-                  <div>
-                    <Label className="mb-2 block">Used in Storyboards</Label>
-                    <div className="text-sm text-muted-foreground" data-testid="text-storyboard-usage">
-                      Not used in any storyboard yet
-                    </div>
-                  </div>
-
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    data-testid="button-test-generation"
-                  >
-                    Test with Current Style
-                  </Button>
-                </div>
+                )
               ) : (
-                <div className="text-center text-muted-foreground text-sm" data-testid="text-no-preview">
-                  No character selected
+                <div className="text-center py-12 text-muted-foreground text-sm" data-testid="text-no-preview">
+                  Select a character to view cards
                 </div>
               )}
             </Card>
@@ -489,30 +555,19 @@ export default function CharacterEditor() {
           <DialogHeader>
             <DialogTitle>Create New Character</DialogTitle>
             <DialogDescription>
-              Define a new character for use in your storyboards
+              Enter a name for your new character
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="new-char-name">Character Name</Label>
-              <Input
-                id="new-char-name"
-                data-testid="input-new-character-name"
-                value={newCharacterName}
-                onChange={(e) => setNewCharacterName(e.target.value)}
-                placeholder="Protagonist"
-              />
-            </div>
-            <div>
-              <Label htmlFor="new-char-desc">Description</Label>
-              <Input
-                id="new-char-desc"
-                data-testid="input-new-character-description"
-                value={newCharacterDescription}
-                onChange={(e) => setNewCharacterDescription(e.target.value)}
-                placeholder="Main character of the story"
-              />
-            </div>
+          <div className="py-4">
+            <Label htmlFor="new-char-name">Character Name</Label>
+            <Input
+              id="new-char-name"
+              data-testid="input-new-character-name"
+              value={newCharacterName}
+              onChange={(e) => setNewCharacterName(e.target.value)}
+              placeholder="Protagonist"
+              onKeyDown={(e) => e.key === "Enter" && handleCreateCharacter()}
+            />
           </div>
           <DialogFooter>
             <Button 
@@ -539,7 +594,7 @@ export default function CharacterEditor() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Character</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{selectedCharacter?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{selectedCharacter?.name}"? This will also delete all character cards. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

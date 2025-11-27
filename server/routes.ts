@@ -1992,6 +1992,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate a character card
+  app.post("/api/characters/generate-card", async (req, res) => {
+    try {
+      const { characterId, styleId, visualPrompt } = req.body;
+      
+      if (!characterId || !styleId || !visualPrompt) {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "characterId, styleId, and visualPrompt are required",
+        });
+      }
+
+      // Get the character
+      const character = await storage.getCharacter(characterId);
+      if (!character) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${characterId} not found`,
+        });
+      }
+
+      // Get the style
+      const style = await storage.getStyle(styleId);
+      if (!style) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Style ${styleId} not found`,
+        });
+      }
+
+      // Get the template for this style
+      const template = await storage.getTemplate(styleId);
+      
+      // Build the prompt for character card generation
+      let finalPrompt = "";
+      
+      if (template?.templateData && typeof template.templateData === "object") {
+        const templateData = template.templateData as { templateType?: string; styleKeywords?: string; rules?: string; negativePrompt?: string };
+        
+        if (templateData.templateType === "universal") {
+          // Use universal template format for character card
+          finalPrompt = `CHARACTER PORTRAIT
+
+[SUBJECT]
+${visualPrompt}
+
+[STYLE]
+${templateData.styleKeywords || style.basePrompt}
+
+[RULES]
+- Full body or upper body portrait
+- Clear, well-lit character design
+- Clean background
+- Character should be the main focus
+${templateData.rules || ""}
+
+[NEGATIVE]
+${templateData.negativePrompt || "blurry, low quality, distorted"}`;
+        } else {
+          // Use simple format
+          finalPrompt = `${visualPrompt}, ${style.basePrompt}, character portrait, full body, clean background, high quality`;
+        }
+      } else {
+        // No template, use basic format
+        finalPrompt = `${visualPrompt}, ${style.basePrompt}, character portrait, full body, clean background, high quality`;
+      }
+
+      console.log(`[CharacterCard] Generating card for ${character.name} with style ${style.label}`);
+      console.log(`[CharacterCard] Prompt: ${finalPrompt.substring(0, 200)}...`);
+
+      // Get reference images from the template
+      const referenceImages = template?.referenceImages || [];
+      const styleRefImage = style.referenceImageUrl;
+      
+      // Build image URLs array (style reference first)
+      const imageUrls = styleRefImage ? [styleRefImage, ...referenceImages.slice(0, 2)] : referenceImages.slice(0, 3);
+      
+      // Use the first engine from the style
+      const engine = style.engines[0] || "nano-banana-edit";
+      
+      let generatedImageUrl: string;
+      
+      if (engine === "seedream-v4-edit") {
+        generatedImageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
+      } else if (engine === "nano-pro") {
+        generatedImageUrl = await callNanoProEdit(finalPrompt, imageUrls);
+      } else {
+        generatedImageUrl = await callNanoBananaEdit(finalPrompt, imageUrls);
+      }
+
+      // Create the new character card
+      const newCard = {
+        id: `card_${Date.now()}`,
+        styleId: styleId,
+        imageUrl: generatedImageUrl,
+        prompt: finalPrompt,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Update the character with the new card
+      const existingCards = (character.characterCards || []) as Array<{id: string; styleId: string; imageUrl: string; prompt: string; createdAt: string}>;
+      const updatedCharacter = await storage.updateCharacter(characterId, {
+        characterCards: [...existingCards, newCard],
+        selectedCardId: newCard.id,
+        visualPrompt: visualPrompt,
+      });
+
+      console.log(`[CharacterCard] Successfully generated card ${newCard.id} for character ${character.name}`);
+      
+      res.json({
+        success: true,
+        card: newCard,
+        character: updatedCharacter,
+      });
+    } catch (error) {
+      console.error("Error generating character card:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Failed to generate character card",
+      });
+    }
+  });
+
   // Delete a character
   app.delete("/api/characters/:id", async (req, res) => {
     try {
