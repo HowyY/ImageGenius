@@ -2221,12 +2221,51 @@ ${negativePrompt}`;
       console.log(`[CharacterCard] Angle: ${angle}, Pose: ${pose}`);
       console.log(`[CharacterCard] Prompt: ${finalPrompt.substring(0, 300)}...`);
 
-      // Get reference images from the template
-      const referenceImages = template?.referenceImages || [];
-      const styleRefImage = style.referenceImageUrl;
+      // Get reference images from the template's referenceImages column (not templateData)
+      const templateReferenceImages = template?.referenceImages || [];
+      console.log(`[CharacterCard] Template reference images: ${templateReferenceImages.join(", ") || "None"}`);
       
-      // Build image URLs array (style reference first, then template references)
-      const imageUrls = styleRefImage ? [styleRefImage, ...referenceImages.slice(0, 2)] : referenceImages.slice(0, 3);
+      // Build image URLs array by uploading local paths to get HTTP URLs
+      const imageUrls: string[] = [];
+      
+      // Upload template reference images (these are typically local paths like "/reference-images/...")
+      if (templateReferenceImages.length > 0) {
+        console.log(`[CharacterCard] Uploading ${templateReferenceImages.length} template reference images...`);
+        const uploadPromises = templateReferenceImages.slice(0, 3).map(async (path) => {
+          try {
+            return await uploadImageOnDemand(path, styleId);
+          } catch (error) {
+            console.error(`[CharacterCard] Failed to upload template image ${path}:`, error);
+            return null;
+          }
+        });
+        
+        const uploadedUrls = await Promise.all(uploadPromises);
+        const validUrls = uploadedUrls.filter((url): url is string => url !== null);
+        imageUrls.push(...validUrls);
+      }
+      
+      // If no template images, try to use style's reference image as fallback
+      // But only if it's a local path (not an external URL that might expire)
+      if (imageUrls.length === 0 && style.referenceImageUrl) {
+        const styleRefImage = style.referenceImageUrl;
+        // Only use local paths, skip external URLs that might expire
+        if (styleRefImage.startsWith('/reference-images/') || styleRefImage.startsWith('reference-images/')) {
+          try {
+            const uploadedUrl = await uploadImageOnDemand(styleRefImage, styleId);
+            imageUrls.push(uploadedUrl);
+            console.log(`[CharacterCard] Using style reference image: ${uploadedUrl}`);
+          } catch (error) {
+            console.error(`[CharacterCard] Failed to upload style reference image:`, error);
+          }
+        } else if (styleRefImage.startsWith('https://')) {
+          // External URL - use directly but log a warning
+          console.log(`[CharacterCard] Using external style reference URL: ${styleRefImage}`);
+          imageUrls.push(styleRefImage);
+        }
+      }
+      
+      console.log(`[CharacterCard] Final image URLs: ${imageUrls.join(", ") || "None"}`);
       
       // Use the first engine from the style
       const engine = style.engines[0] || "nano-banana-edit";
