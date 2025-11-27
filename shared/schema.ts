@@ -12,6 +12,7 @@ export const styles = pgTable("styles", {
   defaultColors: jsonb("default_colors"), // ColorPalette object
   referenceImageUrl: text("reference_image_url").notNull(),
   isBuiltIn: boolean("is_built_in").notNull().default(false),
+  isHidden: boolean("is_hidden").notNull().default(false), // Hidden styles are only visible in Style Editor
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -143,9 +144,23 @@ export const insertStyleSchema = z.object({
   defaultColors: z.any().optional(),
   referenceImageUrl: z.string().url(),
   isBuiltIn: z.boolean().optional().default(false),
+  isHidden: z.boolean().optional().default(false),
+});
+
+// Update schema for styles (partial, for PATCH requests)
+export const updateStyleSchema = z.object({
+  label: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+  engines: z.array(z.string()).optional(),
+  basePrompt: z.string().min(1).optional(),
+  defaultColors: z.any().optional(),
+  referenceImageUrl: z.string().url().optional(),
+  isBuiltIn: z.boolean().optional(),
+  isHidden: z.boolean().optional(),
 });
 
 export type InsertStyle = z.infer<typeof insertStyleSchema>;
+export type UpdateStyle = z.infer<typeof updateStyleSchema>;
 export type SelectStyle = typeof styles.$inferSelect;
 
 // Insert schema for storyboards

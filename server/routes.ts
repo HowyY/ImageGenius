@@ -802,15 +802,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/styles - Return available style presets (from database)
   // This endpoint provides the list of style options for the frontend dropdown
   // Uses the first reference image from the style's template as thumbnail
+  // Query params:
+  //   includeHidden=1 - Include hidden styles (for Style Editor only)
   app.get("/api/styles", async (req, res) => {
     try {
-      // Get styles from database
-      const dbStyles = await storage.getAllStyles();
+      const includeHidden = req.query.includeHidden === "1";
+      
+      // Get styles from database with proper ordering
+      const dbStyles = await storage.getStylesWithOrder({ includeHidden });
       
       if (dbStyles.length > 0) {
         // For each style, get its template to find the first reference image
         const stylesForFrontend = await Promise.all(
-          dbStyles.map(async ({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn, referenceImageUrl }) => {
+          dbStyles.map(async ({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn, isHidden, referenceImageUrl, displayOrder }) => {
             // Try to get template's first reference image
             let thumbnailUrl = referenceImageUrl;
             
@@ -834,6 +838,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               basePrompt,
               defaultColors,
               isBuiltIn,
+              isHidden,
+              displayOrder,
               referenceImageUrl: thumbnailUrl,
             };
           })
@@ -859,6 +865,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             basePrompt,
             defaultColors,
             isBuiltIn: true,
+            isHidden: false,
+            displayOrder: 9999,
             referenceImageUrl: thumbnailUrl,
           };
         })
@@ -875,6 +883,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         basePrompt,
         defaultColors,
         isBuiltIn: true,
+        isHidden: false,
+        displayOrder: 9999,
         referenceImageUrl,
       }));
       res.json(stylesForFrontend);
@@ -962,6 +972,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error cloning style:", error);
       res.status(500).json({ error: "Failed to clone style" });
+    }
+  });
+
+  // PATCH /api/styles/:id - Update a style (visibility, label, etc.)
+  app.patch("/api/styles/:id", async (req, res) => {
+    try {
+      const styleId = req.params.id;
+      const { isHidden, label, description } = req.body;
+      
+      const style = await storage.getStyle(styleId);
+      if (!style) {
+        return res.status(404).json({ error: "Style not found" });
+      }
+      
+      const updateData: Partial<{isHidden: boolean; label: string; description: string}> = {};
+      if (typeof isHidden === "boolean") {
+        updateData.isHidden = isHidden;
+      }
+      if (typeof label === "string" && label.trim()) {
+        updateData.label = label.trim();
+      }
+      if (typeof description === "string") {
+        updateData.description = description;
+      }
+      
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+      
+      const updatedStyle = await storage.updateStyle(styleId, updateData);
+      res.json(updatedStyle);
+    } catch (error) {
+      console.error("Error updating style:", error);
+      res.status(500).json({ error: "Failed to update style" });
     }
   });
 

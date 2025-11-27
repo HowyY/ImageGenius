@@ -55,7 +55,8 @@ export interface IStorage {
   deleteTemplate(styleId: string): Promise<void>;
   reorderTemplates(templateOrders: { styleId: string; displayOrder: number }[]): Promise<void>;
   // Style CRUD operations
-  getAllStyles(): Promise<SelectStyle[]>;
+  getAllStyles(options?: { includeHidden?: boolean }): Promise<SelectStyle[]>;
+  getStylesWithOrder(options?: { includeHidden?: boolean }): Promise<(SelectStyle & { displayOrder: number })[]>;
   getStyle(styleId: string): Promise<SelectStyle | null>;
   createStyle(data: InsertStyle): Promise<SelectStyle>;
   updateStyle(styleId: string, data: Partial<InsertStyle>): Promise<SelectStyle | null>;
@@ -228,15 +229,53 @@ export class MemStorage implements IStorage {
   }
 
   // Style CRUD operations
-  async getAllStyles(): Promise<SelectStyle[]> {
+  async getAllStyles(options?: { includeHidden?: boolean }): Promise<SelectStyle[]> {
     if (!db) {
       return [];
     }
 
-    return await db
-      .select()
-      .from(styles)
-      .orderBy(styles.label);
+    const includeHidden = options?.includeHidden ?? false;
+    
+    if (includeHidden) {
+      return await db
+        .select()
+        .from(styles)
+        .orderBy(styles.label);
+    } else {
+      return await db
+        .select()
+        .from(styles)
+        .where(eq(styles.isHidden, false))
+        .orderBy(styles.label);
+    }
+  }
+
+  async getStylesWithOrder(options?: { includeHidden?: boolean }): Promise<(SelectStyle & { displayOrder: number })[]> {
+    if (!db) {
+      return [];
+    }
+
+    const includeHidden = options?.includeHidden ?? false;
+    
+    const allStyles = includeHidden 
+      ? await db.select().from(styles)
+      : await db.select().from(styles).where(eq(styles.isHidden, false));
+    
+    const allTemplates = await db.select().from(promptTemplates);
+    
+    const templateOrderMap = new Map<string, number>();
+    for (const template of allTemplates) {
+      templateOrderMap.set(template.styleId, template.displayOrder);
+    }
+    
+    const stylesWithOrder = allStyles.map(style => ({
+      ...style,
+      displayOrder: templateOrderMap.get(style.id) ?? 9999,
+    }));
+    
+    stylesWithOrder.sort((a, b) => a.displayOrder - b.displayOrder);
+    
+    return stylesWithOrder;
   }
 
   async getStyle(styleId: string): Promise<SelectStyle | null> {
