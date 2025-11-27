@@ -210,12 +210,20 @@ export class MemStorage implements IStorage {
       throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
     }
 
-    // Update each template's displayOrder
+    // Only update displayOrder for templates that already exist
+    // Don't create placeholder records as they would break the template data
     for (const { styleId, displayOrder } of templateOrders) {
-      await db
-        .update(promptTemplates)
-        .set({ displayOrder, updatedAt: new Date() })
-        .where(eq(promptTemplates.styleId, styleId));
+      // Check if template exists
+      const existing = await this.getTemplate(styleId);
+      
+      if (existing) {
+        // Update existing template's displayOrder
+        await db
+          .update(promptTemplates)
+          .set({ displayOrder, updatedAt: new Date() })
+          .where(eq(promptTemplates.styleId, styleId));
+      }
+      // Skip styles without templates - they will keep default order (9999 in frontend)
     }
   }
 

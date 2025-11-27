@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -56,6 +56,8 @@ import {
   Play,
   ChevronRight,
   Menu,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -289,6 +291,35 @@ export default function StyleEditor() {
     queryKey: ["/api/characters"],
   });
 
+  // Fetch all templates to get displayOrder
+  interface TemplateWithOrder {
+    id: number;
+    styleId: string;
+    displayOrder: number;
+  }
+  const { data: allTemplates } = useQuery<TemplateWithOrder[]>({
+    queryKey: ["/api/templates"],
+  });
+
+  // Build a map of styleId -> displayOrder
+  const templateOrderMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    allTemplates?.forEach((t, index) => {
+      map[t.styleId] = t.displayOrder ?? index;
+    });
+    return map;
+  }, [allTemplates]);
+
+  // Sort styles by displayOrder (templates with lower order first)
+  const sortedStyles = useMemo(() => {
+    if (!styles) return [];
+    return [...styles].sort((a, b) => {
+      const orderA = templateOrderMap[a.id] ?? 9999;
+      const orderB = templateOrderMap[b.id] ?? 9999;
+      return orderA - orderB;
+    });
+  }, [styles, templateOrderMap]);
+
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showNewStyleDialog, setShowNewStyleDialog] = useState(false);
@@ -300,10 +331,10 @@ export default function StyleEditor() {
   const selectedStyle = styles?.find(s => s.id === selectedStyleId);
   const isBuiltInStyle = selectedStyle?.isBuiltIn !== false;
 
-  const filteredStyles = styles?.filter(s => 
+  const filteredStyles = sortedStyles.filter(s => 
     s.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.id.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  );
 
   const cloneStyleMutation = useMutation({
     mutationFn: async ({ sourceId, newLabel }: { sourceId: string; newLabel: string }) => {
@@ -432,6 +463,42 @@ export default function StyleEditor() {
       });
     },
   });
+
+  const reorderTemplatesMutation = useMutation({
+    mutationFn: async (templateOrders: { styleId: string; displayOrder: number }[]) => {
+      await apiRequest("POST", "/api/templates/reorder", { templateOrders });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Reorder failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleMoveStyle = (styleId: string, direction: "up" | "down") => {
+    const currentIndex = sortedStyles.findIndex(s => s.id === styleId);
+    if (currentIndex === -1) return;
+    
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= sortedStyles.length) return;
+
+    // Create new order
+    const newOrder = [...sortedStyles];
+    [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]];
+    
+    // Build templateOrders array
+    const templateOrders = newOrder.map((s, index) => ({
+      styleId: s.id,
+      displayOrder: index,
+    }));
+
+    reorderTemplatesMutation.mutate(templateOrders);
+  };
 
   useEffect(() => {
     if (styles && styles.length > 0 && !selectedStyleId) {
@@ -843,37 +910,72 @@ ${negativePrompt}`;
               {searchQuery ? "No styles match your search" : "No styles available"}
             </div>
           ) : (
-            filteredStyles.map((style) => (
+            filteredStyles.map((style, index) => (
               <div
                 key={style.id}
-                onClick={() => {
-                  setSelectedStyleId(style.id);
-                  setShowMobileStylesPanel(false);
-                }}
-                className={`p-2 rounded-md cursor-pointer transition-colors ${
+                className={`p-2 rounded-md transition-colors ${
                   selectedStyleId === style.id
                     ? "bg-primary/10 border border-primary/30"
                     : "hover-elevate"
                 }`}
                 data-testid={`style-item-${style.id}`}
               >
-                <div className="flex items-center gap-3">
-                  <StyleThumbnail 
-                    src={style.referenceImageUrl} 
-                    label={style.label} 
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm truncate max-w-[120px]">{style.label}</span>
-                      {style.isBuiltIn !== false && (
-                        <Badge variant="secondary" className="text-xs flex-shrink-0">Built-in</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{style.id}</p>
+                <div className="flex items-center gap-2">
+                  {/* Reorder buttons */}
+                  <div className="flex flex-col gap-0.5">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5"
+                      disabled={index === 0 || reorderTemplatesMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveStyle(style.id, "up");
+                      }}
+                      data-testid={`button-move-up-${style.id}`}
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5"
+                      disabled={index === filteredStyles.length - 1 || reorderTemplatesMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveStyle(style.id, "down");
+                      }}
+                      data-testid={`button-move-down-${style.id}`}
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </Button>
                   </div>
-                  {selectedStyleId === style.id && (
-                    <ChevronRight className="w-4 h-4 text-primary flex-shrink-0" />
-                  )}
+                  
+                  {/* Clickable content area */}
+                  <div 
+                    className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                    onClick={() => {
+                      setSelectedStyleId(style.id);
+                      setShowMobileStylesPanel(false);
+                    }}
+                  >
+                    <StyleThumbnail 
+                      src={style.referenceImageUrl} 
+                      label={style.label} 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm truncate max-w-[100px]">{style.label}</span>
+                        {style.isBuiltIn !== false && (
+                          <Badge variant="secondary" className="text-xs flex-shrink-0">Built-in</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{style.id}</p>
+                    </div>
+                    {selectedStyleId === style.id && (
+                      <ChevronRight className="w-4 h-4 text-primary flex-shrink-0" />
+                    )}
+                  </div>
                 </div>
               </div>
             ))

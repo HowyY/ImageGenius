@@ -1334,6 +1334,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Template reorder must come before :styleId routes to avoid matching "reorder" as a styleId
+  app.post("/api/templates/reorder", async (req, res) => {
+    try {
+      const { templateOrders } = req.body;
+      
+      if (!templateOrders || !Array.isArray(templateOrders)) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "templateOrders array is required",
+        });
+      }
+
+      await storage.reorderTemplates(templateOrders);
+      
+      res.json({
+        message: "Templates reordered successfully",
+      });
+    } catch (error) {
+      console.error("Error reordering templates:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reorder templates",
+      });
+    }
+  });
+
   app.get("/api/templates/:styleId", async (req, res) => {
     try {
       const { styleId } = req.params;
@@ -1480,31 +1506,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to reset all templates",
-      });
-    }
-  });
-
-  app.post("/api/templates/reorder", async (req, res) => {
-    try {
-      const { templateOrders } = req.body;
-      
-      if (!templateOrders || !Array.isArray(templateOrders)) {
-        return res.status(400).json({
-          error: "Missing required fields",
-          message: "templateOrders array is required",
-        });
-      }
-
-      await storage.reorderTemplates(templateOrders);
-      
-      res.json({
-        message: "Templates reordered successfully",
-      });
-    } catch (error) {
-      console.error("Error reordering templates:", error);
-      res.status(500).json({
-        error: "Internal server error",
-        message: "Failed to reorder templates",
       });
     }
   });
