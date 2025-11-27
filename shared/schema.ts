@@ -84,6 +84,10 @@ export const characterCardSchema = z.object({
   styleId: z.string(), // which style this card was generated with
   imageUrl: z.string().url(), // generated character card image
   prompt: z.string(), // the prompt used to generate this card
+  angle: z.string().optional(), // view angle: front, three-quarter, side, back, or "sheet" for character sheet
+  pose: z.string().optional(), // pose type: standing, sitting, walking, action, portrait, or "sheet" for character sheet
+  expression: z.string().optional(), // expression: neutral, happy, sad, angry, surprised, thoughtful
+  isCharacterSheet: z.boolean().optional(), // true if this is a multi-angle character sheet
   createdAt: z.string(), // ISO timestamp
 });
 

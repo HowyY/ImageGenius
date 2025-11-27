@@ -2082,7 +2082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate a character card
   app.post("/api/characters/generate-card", async (req, res) => {
     try {
-      const { characterId, styleId, visualPrompt, angle = "front", pose = "standing" } = req.body;
+      const { characterId, styleId, visualPrompt, angle = "front", pose = "standing", expression = "neutral", isCharacterSheet = false } = req.body;
       
       if (!characterId || !styleId || !visualPrompt) {
         return res.status(400).json({
@@ -2112,7 +2112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get the template for this style
       const template = await storage.getTemplate(styleId);
       
-      // Map angle/pose to descriptive text
+      // Map angle/pose/expression to descriptive text
       const angleDescriptions: Record<string, string> = {
         "front": "front view, facing camera directly",
         "three-quarter": "three-quarter view, slight angle",
@@ -2128,11 +2128,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "portrait": "upper body portrait, shoulders and head",
       };
       
+      const expressionDescriptions: Record<string, string> = {
+        "neutral": "neutral expression, calm and composed",
+        "happy": "happy expression, smiling warmly",
+        "sad": "sad expression, melancholic look",
+        "angry": "angry expression, intense gaze",
+        "surprised": "surprised expression, wide eyes",
+        "thoughtful": "thoughtful expression, contemplative look",
+      };
+      
       const angleText = angleDescriptions[angle] || angleDescriptions["front"];
       const poseText = poseDescriptions[pose] || poseDescriptions["standing"];
+      const expressionText = expressionDescriptions[expression] || expressionDescriptions["neutral"];
       
-      // Build framing instruction based on angle and pose
-      const framingInstruction = `Character card, ${angleText}, ${poseText}, clean simple background, well-lit, character is the main focus`;
+      // Build framing instruction based on mode (character sheet vs single card)
+      let framingInstruction: string;
+      if (isCharacterSheet) {
+        // Character sheet mode: multiple angles in one image
+        framingInstruction = `Character turnaround reference sheet, multiple views of the same character in a single image, arranged horizontally or in a grid layout:
+- Front view (facing camera)
+- Three-quarter view (slight angle)
+- Side view (profile)
+- Back view (facing away)
+All views show the same character in the same outfit, consistent proportions, clean simple background, well-lit, professional character design sheet layout`;
+      } else {
+        // Single card mode: specific angle, pose, and expression
+        framingInstruction = `Character card, ${angleText}, ${poseText}, ${expressionText}, clean simple background, well-lit, character is the main focus`;
+      }
       
       // Build the prompt using Universal template structure (same as main image generation)
       let finalPrompt = "";
@@ -2217,8 +2239,8 @@ ${negativePrompt}`;
         finalPrompt = `${visualPrompt}, ${style.basePrompt}, ${framingInstruction}, high quality, detailed`;
       }
 
-      console.log(`[CharacterCard] Generating card for ${character.name} with style ${style.label}`);
-      console.log(`[CharacterCard] Angle: ${angle}, Pose: ${pose}`);
+      console.log(`[CharacterCard] Generating ${isCharacterSheet ? 'character sheet' : 'card'} for ${character.name} with style ${style.label}`);
+      console.log(`[CharacterCard] Mode: ${isCharacterSheet ? 'Character Sheet' : 'Single Card'}, Angle: ${angle}, Pose: ${pose}, Expression: ${expression}`);
       console.log(`[CharacterCard] Prompt: ${finalPrompt.substring(0, 300)}...`);
 
       // Get reference images from the template's referenceImages column (not templateData)
@@ -2286,8 +2308,10 @@ ${negativePrompt}`;
         styleId: styleId,
         imageUrl: generatedImageUrl,
         prompt: finalPrompt,
-        angle: angle,
-        pose: pose,
+        angle: isCharacterSheet ? "sheet" : angle,
+        pose: isCharacterSheet ? "sheet" : pose,
+        expression: isCharacterSheet ? "neutral" : expression,
+        isCharacterSheet: isCharacterSheet,
         createdAt: new Date().toISOString(),
       };
 

@@ -34,7 +34,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon } from "lucide-react";
+import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import type { SelectCharacter, InsertCharacter, UpdateCharacter, CharacterCard } from "@shared/schema";
@@ -55,7 +56,19 @@ export default function CharacterEditor() {
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [selectedAngle, setSelectedAngle] = useState<string>("front");
   const [selectedPose, setSelectedPose] = useState<string>("standing");
+  const [selectedExpression, setSelectedExpression] = useState<string>("neutral");
+  const [isCharacterSheet, setIsCharacterSheet] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Edit card state
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingCard, setEditingCard] = useState<CharacterCard | null>(null);
+  const [editAngle, setEditAngle] = useState<string>("front");
+  const [editPose, setEditPose] = useState<string>("standing");
+  const [editExpression, setEditExpression] = useState<string>("neutral");
+  const [regeneratedImageUrl, setRegeneratedImageUrl] = useState<string | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  
   const { toast } = useToast();
 
   const angleOptions = [
@@ -71,6 +84,17 @@ export default function CharacterEditor() {
     { value: "walking", label: "Walking" },
     { value: "action", label: "Action Pose" },
     { value: "portrait", label: "Portrait (Upper Body)" },
+  ];
+
+  const expressionOptions = [
+    { value: "neutral", label: "Neutral" },
+    { value: "happy", label: "Happy" },
+    { value: "sad", label: "Sad" },
+    { value: "angry", label: "Angry" },
+    { value: "surprised", label: "Surprised" },
+    { value: "excited", label: "Excited" },
+    { value: "serious", label: "Serious" },
+    { value: "tired", label: "Tired" },
   ];
 
   const { data: characters = [], isLoading } = useQuery<SelectCharacter[]>({
@@ -227,15 +251,17 @@ export default function CharacterEditor() {
         characterId: selectedCharacter.id,
         styleId: selectedStyleId,
         visualPrompt: visualPrompt,
-        angle: selectedAngle,
-        pose: selectedPose,
+        angle: isCharacterSheet ? "sheet" : selectedAngle,
+        pose: isCharacterSheet ? "sheet" : selectedPose,
+        expression: isCharacterSheet ? "neutral" : selectedExpression,
+        isCharacterSheet: isCharacterSheet,
       });
       const result = await res.json();
       
       queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
       toast({
         title: "Success",
-        description: "Character card generated successfully",
+        description: isCharacterSheet ? "Character sheet generated successfully" : "Character card generated successfully",
       });
     } catch (error) {
       toast({
@@ -271,6 +297,95 @@ export default function CharacterEditor() {
       characterCards: updatedCards,
       selectedCardId: currentSelectedId === cardId ? null : currentSelectedId,
     });
+  };
+
+  const handleOpenEditDialog = (card: CharacterCard) => {
+    setEditingCard(card);
+    setEditAngle(card.angle || "front");
+    setEditPose(card.pose || "standing");
+    setEditExpression(card.expression || "neutral");
+    setRegeneratedImageUrl(null);
+    setShowEditDialog(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setShowEditDialog(false);
+    setEditingCard(null);
+    setRegeneratedImageUrl(null);
+  };
+
+  const handleRegenerateCard = async () => {
+    if (!selectedCharacter || !editingCard) return;
+    
+    const visualPrompt = editedCharacter.visualPrompt ?? selectedCharacter.visualPrompt;
+    if (!visualPrompt?.trim()) {
+      toast({
+        title: "Error",
+        description: "Character has no visual description",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRegenerating(true);
+    try {
+      const res = await apiRequest("POST", "/api/characters/generate-card", {
+        characterId: selectedCharacter.id,
+        styleId: editingCard.styleId,
+        visualPrompt: visualPrompt,
+        angle: editAngle,
+        pose: editPose,
+        expression: editExpression,
+        isCharacterSheet: false,
+      });
+      const result = await res.json();
+      
+      if (result.card?.imageUrl) {
+        setRegeneratedImageUrl(result.card.imageUrl);
+        toast({
+          title: "Regenerated",
+          description: "New card generated. Compare and choose to keep or discard.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to regenerate card",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleKeepRegenerated = () => {
+    if (!selectedCharacter || !editingCard || !regeneratedImageUrl) return;
+    
+    const currentCards = editedCharacter.characterCards ?? selectedCharacter.characterCards ?? [];
+    const updatedCards = currentCards.map((c: CharacterCard) => {
+      if (c.id === editingCard.id) {
+        return {
+          ...c,
+          imageUrl: regeneratedImageUrl,
+          angle: editAngle,
+          pose: editPose,
+          expression: editExpression,
+        };
+      }
+      return c;
+    });
+    
+    setEditedCharacter({
+      ...editedCharacter,
+      characterCards: updatedCards,
+    });
+    
+    toast({
+      title: "Success",
+      description: "Card updated with new image",
+    });
+    
+    handleCloseEditDialog();
   };
 
   const filteredCharacters = characters.filter(char =>
@@ -440,14 +555,30 @@ export default function CharacterEditor() {
                   </div>
 
                   <div className="border-t pt-4 space-y-4">
-                    <div>
-                      <Label>Generate Character Card</Label>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Select style, angle, and pose for the character card
-                      </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <Label>Generate Character Card</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {isCharacterSheet 
+                            ? "Generate a turnaround sheet with multiple angles" 
+                            : "Select style, angle, pose, and expression"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="character-sheet-toggle" className="text-xs text-muted-foreground cursor-pointer">
+                          <LayoutGrid className="w-4 h-4 inline mr-1" />
+                          Sheet
+                        </Label>
+                        <Switch
+                          id="character-sheet-toggle"
+                          checked={isCharacterSheet}
+                          onCheckedChange={setIsCharacterSheet}
+                          data-testid="switch-character-sheet"
+                        />
+                      </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-2">
                       <div>
                         <Label className="text-xs text-muted-foreground mb-1 block">Style</Label>
                         <Select value={selectedStyleId} onValueChange={setSelectedStyleId}>
@@ -464,37 +595,63 @@ export default function CharacterEditor() {
                         </Select>
                       </div>
                       
-                      <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Angle</Label>
-                        <Select value={selectedAngle} onValueChange={setSelectedAngle}>
-                          <SelectTrigger data-testid="select-angle">
-                            <SelectValue placeholder="Angle..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {angleOptions.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {!isCharacterSheet && (
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Angle</Label>
+                            <Select value={selectedAngle} onValueChange={setSelectedAngle}>
+                              <SelectTrigger data-testid="select-angle">
+                                <SelectValue placeholder="Angle..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {angleOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Pose</Label>
+                            <Select value={selectedPose} onValueChange={setSelectedPose}>
+                              <SelectTrigger data-testid="select-pose">
+                                <SelectValue placeholder="Pose..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {poseOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Expression</Label>
+                            <Select value={selectedExpression} onValueChange={setSelectedExpression}>
+                              <SelectTrigger data-testid="select-expression">
+                                <SelectValue placeholder="Expression..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {expressionOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      )}
                       
-                      <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Pose</Label>
-                        <Select value={selectedPose} onValueChange={setSelectedPose}>
-                          <SelectTrigger data-testid="select-pose">
-                            <SelectValue placeholder="Pose..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {poseOptions.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {isCharacterSheet && (
+                        <div className="bg-muted/50 rounded-md p-3 text-sm text-muted-foreground">
+                          Character sheet will include: Front view, 3/4 view, Side view, and Back view in a single image
+                        </div>
+                      )}
                     </div>
                     
                     <Button 
@@ -503,8 +660,8 @@ export default function CharacterEditor() {
                       disabled={isGenerating || !selectedStyleId}
                       data-testid="button-generate-card"
                     >
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      {isGenerating ? "Generating..." : "Generate Card"}
+                      {isCharacterSheet ? <LayoutGrid className="w-4 h-4 mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                      {isGenerating ? "Generating..." : (isCharacterSheet ? "Generate Character Sheet" : "Generate Card")}
                     </Button>
                   </div>
 
@@ -570,18 +727,32 @@ export default function CharacterEditor() {
                                     <Check className="w-3 h-3" />
                                   </div>
                                 )}
-                                <Button
-                                  size="icon"
-                                  variant="destructive"
-                                  className="absolute top-1 right-1 w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteCard(card.id);
-                                  }}
-                                  data-testid={`button-delete-card-${card.id}`}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
+                                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button
+                                    size="icon"
+                                    variant="secondary"
+                                    className="w-6 h-6"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEditDialog(card);
+                                    }}
+                                    data-testid={`button-edit-card-${card.id}`}
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="destructive"
+                                    className="w-6 h-6"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteCard(card.id);
+                                    }}
+                                    data-testid={`button-delete-card-${card.id}`}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -666,6 +837,171 @@ export default function CharacterEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Card Dialog with Comparison View */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Edit Character Card</DialogTitle>
+            <DialogDescription>
+              Adjust settings and regenerate. Compare the new result with the original.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-2 gap-6 py-4">
+            {/* Left Side - Original Image */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium">Original</h4>
+                {editingCard && (
+                  <div className="flex gap-1">
+                    {editingCard.angle && (
+                      <Badge variant="outline" className="text-xs">{editingCard.angle}</Badge>
+                    )}
+                    {editingCard.pose && (
+                      <Badge variant="outline" className="text-xs">{editingCard.pose}</Badge>
+                    )}
+                    {editingCard.expression && (
+                      <Badge variant="outline" className="text-xs">{editingCard.expression}</Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
+                {editingCard && (
+                  <img 
+                    src={editingCard.imageUrl} 
+                    alt="Original card"
+                    className="w-full h-full object-cover"
+                    data-testid="img-original-card"
+                  />
+                )}
+              </div>
+            </div>
+            
+            {/* Right Side - Regenerated or Controls */}
+            <div className="space-y-3">
+              <h4 className="font-medium">
+                {regeneratedImageUrl ? "Regenerated" : "New Settings"}
+              </h4>
+              
+              {regeneratedImageUrl ? (
+                <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
+                  <img 
+                    src={regeneratedImageUrl} 
+                    alt="Regenerated card"
+                    className="w-full h-full object-cover"
+                    data-testid="img-regenerated-card"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Angle Selector */}
+                  <div className="space-y-2">
+                    <Label>Angle</Label>
+                    <Select value={editAngle} onValueChange={setEditAngle}>
+                      <SelectTrigger data-testid="select-edit-angle">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {angleOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Pose Selector */}
+                  <div className="space-y-2">
+                    <Label>Pose</Label>
+                    <Select value={editPose} onValueChange={setEditPose}>
+                      <SelectTrigger data-testid="select-edit-pose">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {poseOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Expression Selector */}
+                  <div className="space-y-2">
+                    <Label>Expression</Label>
+                    <Select value={editExpression} onValueChange={setEditExpression}>
+                      <SelectTrigger data-testid="select-edit-expression">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {expressionOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Placeholder for regenerated image */}
+                  <div className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/50">
+                    <div className="text-center text-muted-foreground">
+                      <RefreshCw className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Click Regenerate to preview</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter className="gap-2">
+            {regeneratedImageUrl ? (
+              <>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setRegeneratedImageUrl(null)}
+                  data-testid="button-discard-regenerated"
+                >
+                  Discard
+                </Button>
+                <Button 
+                  onClick={handleKeepRegenerated}
+                  data-testid="button-keep-regenerated"
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Keep New Version
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button 
+                  variant="outline" 
+                  onClick={handleCloseEditDialog}
+                  data-testid="button-cancel-edit"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleRegenerateCard}
+                  disabled={isRegenerating}
+                  data-testid="button-regenerate-card"
+                >
+                  {isRegenerating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Regenerate
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
