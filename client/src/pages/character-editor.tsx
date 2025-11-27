@@ -65,6 +65,7 @@ export default function CharacterEditor() {
   const [selectedPose, setSelectedPose] = useState<string>("standing");
   const [selectedExpression, setSelectedExpression] = useState<string>("neutral");
   const [isCharacterSheet, setIsCharacterSheet] = useState(false);
+  const [cleanBackground, setCleanBackground] = useState(true); // Default to clean/no background for reference images
   const [isGenerating, setIsGenerating] = useState(false);
   
   // Edit card state
@@ -281,6 +282,7 @@ export default function CharacterEditor() {
         pose: isCharacterSheet ? "sheet" : selectedPose,
         expression: isCharacterSheet ? "neutral" : selectedExpression,
         isCharacterSheet: isCharacterSheet,
+        cleanBackground: cleanBackground,
       });
       const result = await res.json();
       
@@ -678,6 +680,21 @@ export default function CharacterEditor() {
                           Character sheet will include: Front view, 3/4 view, Side view, and Back view in a single image
                         </div>
                       )}
+                      
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="clean-bg-toggle" className="text-sm cursor-pointer">
+                            Clean Background
+                          </Label>
+                          <span className="text-xs text-muted-foreground">(recommended for reference)</span>
+                        </div>
+                        <Switch
+                          id="clean-bg-toggle"
+                          checked={cleanBackground}
+                          onCheckedChange={setCleanBackground}
+                          data-testid="switch-clean-background"
+                        />
+                      </div>
                     </div>
                     
                     <Button 

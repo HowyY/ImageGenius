@@ -2108,7 +2108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate a character card
   app.post("/api/characters/generate-card", async (req, res) => {
     try {
-      const { characterId, styleId, visualPrompt, angle = "front", pose = "standing", expression = "neutral", isCharacterSheet = false } = req.body;
+      const { characterId, styleId, visualPrompt, angle = "front", pose = "standing", expression = "neutral", isCharacterSheet = false, cleanBackground = true } = req.body;
       
       if (!characterId || !styleId || !visualPrompt) {
         return res.status(400).json({
@@ -2167,6 +2167,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const poseText = poseDescriptions[pose] || poseDescriptions["standing"];
       const expressionText = expressionDescriptions[expression] || expressionDescriptions["neutral"];
       
+      // Build background instruction based on cleanBackground flag
+      const backgroundInstruction = cleanBackground 
+        ? "solid white background, no environment, no scenery, studio lighting, character isolated"
+        : "simple contextual background, well-lit";
+      
       // Build framing instruction based on mode (character sheet vs single card)
       let framingInstruction: string;
       if (isCharacterSheet) {
@@ -2176,10 +2181,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 - Three-quarter view (slight angle)
 - Side view (profile)
 - Back view (facing away)
-All views show the same character in the same outfit, consistent proportions, clean simple background, well-lit, professional character design sheet layout`;
+All views show the same character in the same outfit, consistent proportions, ${backgroundInstruction}, professional character design sheet layout`;
       } else {
         // Single card mode: specific angle, pose, and expression
-        framingInstruction = `Character card, ${angleText}, ${poseText}, ${expressionText}, clean simple background, well-lit, character is the main focus`;
+        framingInstruction = `Character card, ${angleText}, ${poseText}, ${expressionText}, ${backgroundInstruction}, character is the main focus`;
       }
       
       // Build the prompt using Universal template structure (same as main image generation)
@@ -2200,7 +2205,12 @@ All views show the same character in the same outfit, consistent proportions, cl
         const styleName = style.label;
         const styleKeywords = templateData.styleKeywords || style.basePrompt || "";
         const rules = templateData.rules || "";
-        const negativePrompt = templateData.negativePrompt || "blurry, low quality, distorted, multiple characters, group shot";
+        let negativePrompt = templateData.negativePrompt || "blurry, low quality, distorted, multiple characters, group shot";
+        
+        // Add background-related negatives when clean background is requested
+        if (cleanBackground) {
+          negativePrompt += ", complex background, environmental elements, scenery, gradient background, outdoor scene, indoor scene, landscape";
+        }
         
         // Build prompt following Universal structure: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
         finalPrompt = `[SCENE]
@@ -2266,7 +2276,7 @@ ${negativePrompt}`;
       }
 
       console.log(`[CharacterCard] Generating ${isCharacterSheet ? 'character sheet' : 'card'} for ${character.name} with style ${style.label}`);
-      console.log(`[CharacterCard] Mode: ${isCharacterSheet ? 'Character Sheet' : 'Single Card'}, Angle: ${angle}, Pose: ${pose}, Expression: ${expression}`);
+      console.log(`[CharacterCard] Mode: ${isCharacterSheet ? 'Character Sheet' : 'Single Card'}, Angle: ${angle}, Pose: ${pose}, Expression: ${expression}, CleanBG: ${cleanBackground}`);
       console.log(`[CharacterCard] Prompt: ${finalPrompt.substring(0, 300)}...`);
 
       // Get reference images from the template's referenceImages column (not templateData)
