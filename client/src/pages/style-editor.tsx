@@ -280,7 +280,12 @@ export default function StyleEditor() {
   const [testEngine, setTestEngine] = useState<string>("nanobanana");
   const [activeTab, setActiveTab] = useState("template");
   const [testResultUrl, setTestResultUrl] = useState<string | null>(null);
-  const [selectedCharacterCardUrl, setSelectedCharacterCardUrl] = useState<string | null>(null);
+  // Store selected character reference with cardId for reliable tracking
+  const [selectedCharacterRef, setSelectedCharacterRef] = useState<{
+    cardId: string;
+    imageUrl: string;
+    characterName: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -517,7 +522,7 @@ export default function StyleEditor() {
 
   // Reset character card selection when style changes
   useEffect(() => {
-    setSelectedCharacterCardUrl(null);
+    setSelectedCharacterRef(null);
   }, [selectedStyleId]);
 
   const generateSimplePreview = (simpleTemplate: SimpleTemplate, basePrompt: string) => {
@@ -759,8 +764,8 @@ ${negativePrompt}`;
     };
     
     // Include selected character card as a user reference image
-    if (selectedCharacterCardUrl) {
-      payload.userReferenceImages = [selectedCharacterCardUrl];
+    if (selectedCharacterRef?.imageUrl) {
+      payload.userReferenceImages = [selectedCharacterRef.imageUrl];
     }
     
     generateMutation.mutate(payload);
@@ -1533,7 +1538,8 @@ ${negativePrompt}`;
                                     displayCard = cards.find((card: CharacterCard) => card.id === character.selectedCardId);
                                   }
                                   
-                                  const isSelected = displayCard?.imageUrl === selectedCharacterCardUrl;
+                                  // Use cardId for reliable selection tracking (URLs may change/expire)
+                                  const isSelected = displayCard?.id === selectedCharacterRef?.cardId;
                                   
                                   return (
                                     <div
@@ -1544,12 +1550,16 @@ ${negativePrompt}`;
                                           : "border border-border hover-elevate"
                                       }`}
                                       onClick={() => {
-                                        if (displayCard?.imageUrl) {
+                                        if (displayCard?.id && displayCard?.imageUrl) {
                                           // Toggle selection: click to select, click again to deselect
                                           if (isSelected) {
-                                            setSelectedCharacterCardUrl(null);
+                                            setSelectedCharacterRef(null);
                                           } else {
-                                            setSelectedCharacterCardUrl(displayCard.imageUrl);
+                                            setSelectedCharacterRef({
+                                              cardId: displayCard.id,
+                                              imageUrl: displayCard.imageUrl,
+                                              characterName: character.name,
+                                            });
                                           }
                                         }
                                       }}
@@ -1664,13 +1674,13 @@ ${negativePrompt}`;
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-medium">Test Generation</h3>
-                  {selectedCharacterCardUrl && (
+                  {selectedCharacterRef && (
                     <Badge 
                       variant="outline" 
                       className="text-xs cursor-pointer"
-                      onClick={() => setSelectedCharacterCardUrl(null)}
+                      onClick={() => setSelectedCharacterRef(null)}
                     >
-                      Character ref
+                      {selectedCharacterRef.characterName}
                       <X className="w-3 h-3 ml-1" />
                     </Badge>
                   )}
