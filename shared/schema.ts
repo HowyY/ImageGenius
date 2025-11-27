@@ -95,6 +95,28 @@ export const characterCardSchema = z.object({
 
 export type CharacterCard = z.infer<typeof characterCardSchema>;
 
+// Avatar crop data for precise avatar positioning
+export const avatarCropSchema = z.object({
+  x: z.number(), // crop x position (0-100%)
+  y: z.number(), // crop y position (0-100%)
+  zoom: z.number().min(1).max(3).default(1), // zoom level
+});
+
+export type AvatarCrop = z.infer<typeof avatarCropSchema>;
+
+// Per-style avatar profile with card ID and crop settings
+export const avatarProfileSchema = z.object({
+  cardId: z.string(), // which card to use as avatar for this style
+  crop: avatarCropSchema.optional(), // crop/positioning data
+});
+
+export type AvatarProfile = z.infer<typeof avatarProfileSchema>;
+
+// Map of styleId to avatar profile
+export const avatarProfilesSchema = z.record(z.string(), avatarProfileSchema);
+
+export type AvatarProfiles = z.infer<typeof avatarProfilesSchema>;
+
 // Characters table for managing reusable characters
 export const characters = pgTable("characters", {
   id: text("id").primaryKey(), // e.g., "char_1234567890"
@@ -102,7 +124,8 @@ export const characters = pgTable("characters", {
   visualPrompt: text("visual_prompt").notNull().default(""), // description for generating character cards
   characterCards: jsonb("character_cards").$type<CharacterCard[]>().default([]), // generated cards by style
   selectedCardId: text("selected_card_id"), // currently selected card id for style reference
-  avatarCardId: text("avatar_card_id"), // card id specifically for avatar display (separate from main card)
+  avatarCardId: text("avatar_card_id"), // LEGACY: global avatar card id (migrated to avatarProfiles)
+  avatarProfiles: jsonb("avatar_profiles").$type<AvatarProfiles>().default({}), // per-style avatar profiles with crop data
   tags: text("tags").array().default([]), // optional tags for categorization
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -225,7 +248,8 @@ export const insertCharacterSchema = z.object({
   visualPrompt: z.string().default(""),
   characterCards: z.array(characterCardSchema).optional().default([]),
   selectedCardId: z.string().optional().nullable(),
-  avatarCardId: z.string().optional().nullable(), // separate card for avatar display
+  avatarCardId: z.string().optional().nullable(), // LEGACY: global avatar card id
+  avatarProfiles: avatarProfilesSchema.optional().default({}), // per-style avatar profiles with crop data
   tags: z.array(z.string()).optional().default([]),
 });
 
@@ -234,7 +258,8 @@ export const updateCharacterSchema = z.object({
   visualPrompt: z.string().optional(),
   characterCards: z.array(characterCardSchema).optional(),
   selectedCardId: z.string().optional().nullable(),
-  avatarCardId: z.string().optional().nullable(), // separate card for avatar display
+  avatarCardId: z.string().optional().nullable(), // LEGACY: global avatar card id
+  avatarProfiles: avatarProfilesSchema.optional(), // per-style avatar profiles with crop data
   tags: z.array(z.string()).optional(),
 });
 
