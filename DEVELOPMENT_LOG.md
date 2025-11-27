@@ -192,11 +192,28 @@ Build an AI-powered image generation tool for ORAMA's storyboard feature, suppor
   - _Implementation: Individual character references with multiple variations approach (Plan B from character_editor_plan.md)_
 
 ### Medium Priority
+- [ ] **Character Integration in Style Editor**: Enable character card selection as references
+  - Add backend functionality to attach selected character cards as reference images
+  - Update generation API to include character card images in reference list
+  - Test character consistency across different styles
+
 - [ ] **Character Integration in Storyboard**: Connect characters to scene generation
   - Add character selection UI in storyboard scenes
   - Integrate character variations as reference images
   - Implement character-aware prompt building
   - Test multi-character scene generation
+
+- [ ] **Storyboard Edit Dialog Improvements**: Add image comparison feature
+  - Show side-by-side comparison of original vs edited image
+  - Add before/after toggle view in edit dialog
+  - Display edit prompt alongside comparison
+
+- [ ] **Character Card Organization**: Improve card management and discovery
+  - Group cards by style (show style-specific cards together)
+  - Group cards by angle/pose (front, three-quarter, side, etc.)
+  - Add card favoriting/bookmarking system
+  - Quick filter to show only favorite cards
+  - Sort cards by creation date or custom order
 
 - [ ] **New Styles**: Continue debugging and adding new visual styles
   - Test and refine existing templates
@@ -211,6 +228,9 @@ Build an AI-powered image generation tool for ORAMA's storyboard feature, suppor
 ### Future Ideas / Backlog
 - [ ] Character combination sheets (pre-generated multi-character references)
 - [ ] Character pose/expression library
+- [ ] Card metadata and tagging system (add custom tags to cards)
+- [ ] Batch card generation (generate multiple angles/poses at once)
+- [ ] Card quality rating system (rate cards 1-5 stars)
 - [ ] Batch image generation for multiple scenes
 - [ ] Export storyboard as PDF/image sequence
 - [ ] AI-assisted prompt suggestions
