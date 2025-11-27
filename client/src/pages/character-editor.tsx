@@ -53,8 +53,25 @@ export default function CharacterEditor() {
   const [newCharacterName, setNewCharacterName] = useState("");
   const [editedCharacter, setEditedCharacter] = useState<Partial<UpdateCharacter>>({});
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
+  const [selectedAngle, setSelectedAngle] = useState<string>("front");
+  const [selectedPose, setSelectedPose] = useState<string>("standing");
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+
+  const angleOptions = [
+    { value: "front", label: "Front View" },
+    { value: "three-quarter", label: "3/4 View" },
+    { value: "side", label: "Side View (Profile)" },
+    { value: "back", label: "Back View" },
+  ];
+
+  const poseOptions = [
+    { value: "standing", label: "Standing" },
+    { value: "sitting", label: "Sitting" },
+    { value: "walking", label: "Walking" },
+    { value: "action", label: "Action Pose" },
+    { value: "portrait", label: "Portrait (Upper Body)" },
+  ];
 
   const { data: characters = [], isLoading } = useQuery<SelectCharacter[]>({
     queryKey: ["/api/characters"],
@@ -210,6 +227,8 @@ export default function CharacterEditor() {
         characterId: selectedCharacter.id,
         styleId: selectedStyleId,
         visualPrompt: visualPrompt,
+        angle: selectedAngle,
+        pose: selectedPose,
       });
       const result = await res.json();
       
@@ -420,35 +439,73 @@ export default function CharacterEditor() {
                     />
                   </div>
 
-                  <div className="border-t pt-4">
-                    <Label>Generate Character Card</Label>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Select a style and generate a character card image
-                    </p>
-                    
-                    <div className="flex gap-2">
-                      <Select value={selectedStyleId} onValueChange={setSelectedStyleId}>
-                        <SelectTrigger className="flex-1" data-testid="select-style">
-                          <SelectValue placeholder="Select style..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {styles.map((style) => (
-                            <SelectItem key={style.id} value={style.id}>
-                              {style.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      
-                      <Button 
-                        onClick={handleGenerateCard}
-                        disabled={isGenerating || !selectedStyleId}
-                        data-testid="button-generate-card"
-                      >
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        {isGenerating ? "Generating..." : "Generate"}
-                      </Button>
+                  <div className="border-t pt-4 space-y-4">
+                    <div>
+                      <Label>Generate Character Card</Label>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Select style, angle, and pose for the character card
+                      </p>
                     </div>
+                    
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Style</Label>
+                        <Select value={selectedStyleId} onValueChange={setSelectedStyleId}>
+                          <SelectTrigger data-testid="select-style">
+                            <SelectValue placeholder="Style..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {styles.map((style) => (
+                              <SelectItem key={style.id} value={style.id}>
+                                {style.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Angle</Label>
+                        <Select value={selectedAngle} onValueChange={setSelectedAngle}>
+                          <SelectTrigger data-testid="select-angle">
+                            <SelectValue placeholder="Angle..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {angleOptions.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Pose</Label>
+                        <Select value={selectedPose} onValueChange={setSelectedPose}>
+                          <SelectTrigger data-testid="select-pose">
+                            <SelectValue placeholder="Pose..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {poseOptions.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      className="w-full"
+                      onClick={handleGenerateCard}
+                      disabled={isGenerating || !selectedStyleId}
+                      data-testid="button-generate-card"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      {isGenerating ? "Generating..." : "Generate Card"}
+                    </Button>
                   </div>
 
                   <Button 

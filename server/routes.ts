@@ -2082,7 +2082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate a character card
   app.post("/api/characters/generate-card", async (req, res) => {
     try {
-      const { characterId, styleId, visualPrompt } = req.body;
+      const { characterId, styleId, visualPrompt, angle = "front", pose = "standing" } = req.body;
       
       if (!characterId || !styleId || !visualPrompt) {
         return res.status(400).json({
@@ -2112,48 +2112,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get the template for this style
       const template = await storage.getTemplate(styleId);
       
-      // Build the prompt for character card generation
+      // Map angle/pose to descriptive text
+      const angleDescriptions: Record<string, string> = {
+        "front": "front view, facing camera directly",
+        "three-quarter": "three-quarter view, slight angle",
+        "side": "side view profile, looking left or right",
+        "back": "back view, facing away from camera",
+      };
+      
+      const poseDescriptions: Record<string, string> = {
+        "standing": "standing pose, natural posture",
+        "sitting": "sitting pose, relaxed position",
+        "walking": "walking pose, mid-stride movement",
+        "action": "dynamic action pose, expressive movement",
+        "portrait": "upper body portrait, shoulders and head",
+      };
+      
+      const angleText = angleDescriptions[angle] || angleDescriptions["front"];
+      const poseText = poseDescriptions[pose] || poseDescriptions["standing"];
+      
+      // Build framing instruction based on angle and pose
+      const framingInstruction = `Character card, ${angleText}, ${poseText}, clean simple background, well-lit, character is the main focus`;
+      
+      // Build the prompt using Universal template structure (same as main image generation)
       let finalPrompt = "";
       
       if (template?.templateData && typeof template.templateData === "object") {
-        const templateData = template.templateData as { templateType?: string; styleKeywords?: string; rules?: string; negativePrompt?: string };
+        const templateData = template.templateData as { 
+          templateType?: string; 
+          styleKeywords?: string; 
+          rules?: string; 
+          negativePrompt?: string;
+          loosePalette?: string;
+          strictPalette?: string[];
+          defaultPalette?: string[];
+          paletteMode?: string;
+        };
         
-        if (templateData.templateType === "universal") {
-          // Use universal template format for character card
-          finalPrompt = `CHARACTER PORTRAIT
-
-[SUBJECT]
+        const styleName = style.label;
+        const styleKeywords = templateData.styleKeywords || style.basePrompt || "";
+        const rules = templateData.rules || "";
+        const negativePrompt = templateData.negativePrompt || "blurry, low quality, distorted, multiple characters, group shot";
+        
+        // Build prompt following Universal structure: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
+        finalPrompt = `[SCENE]
 ${visualPrompt}
 
+[FRAMING]
+${framingInstruction}
+
 [STYLE]
-${templateData.styleKeywords || style.basePrompt}
+In ${styleName} style:
+${styleKeywords}`;
+
+        // Add color palette section (same logic as buildUniversalPrompt)
+        // Determine palette mode: default to "loose" for better results
+        const paletteMode = templateData.paletteMode || "loose";
+        
+        // Loose mode: Use descriptive color text (if available)
+        if (paletteMode === "loose" && templateData.loosePalette) {
+          finalPrompt += `
+
+[COLORS]
+${templateData.loosePalette}`;
+        } else {
+          // Strict mode or fallback: Use HEX palette
+          // This matches buildUniversalPrompt's fallback chain
+          let palette: string[] = [];
+          if (templateData.strictPalette && templateData.strictPalette.length > 0) {
+            palette = templateData.strictPalette;
+          } else if (templateData.defaultPalette && templateData.defaultPalette.length > 0) {
+            // Legacy support: use defaultPalette if strictPalette not defined
+            palette = templateData.defaultPalette;
+          } else if (style.defaultColors && (style.defaultColors as any).colors) {
+            // Fallback to style's default colors
+            palette = ((style.defaultColors as any).colors as any[]).map((c: any) => c.hex);
+          }
+          
+          if (palette.length > 0) {
+            const paletteColors = palette.join(", ");
+            finalPrompt += `
+
+[COLORS]
+Use the following palette:
+${paletteColors}.
+Follow the palette's saturation and contrast.`;
+          }
+        }
+        
+        // Add rules section with character-specific additions
+        finalPrompt += `
 
 [RULES]
-- Full body or upper body portrait
-- Clear, well-lit character design
-- Clean background
-- Character should be the main focus
-${templateData.rules || ""}
+- Single character only, no other people
+- Character should be clearly visible and recognizable
+- Consistent with the visual description provided
+${rules}
 
 [NEGATIVE]
-${templateData.negativePrompt || "blurry, low quality, distorted"}`;
-        } else {
-          // Use simple format
-          finalPrompt = `${visualPrompt}, ${style.basePrompt}, character portrait, full body, clean background, high quality`;
-        }
+${negativePrompt}`;
+        
       } else {
-        // No template, use basic format
-        finalPrompt = `${visualPrompt}, ${style.basePrompt}, character portrait, full body, clean background, high quality`;
+        // No template available, use basic format with angle/pose
+        finalPrompt = `${visualPrompt}, ${style.basePrompt}, ${framingInstruction}, high quality, detailed`;
       }
 
       console.log(`[CharacterCard] Generating card for ${character.name} with style ${style.label}`);
-      console.log(`[CharacterCard] Prompt: ${finalPrompt.substring(0, 200)}...`);
+      console.log(`[CharacterCard] Angle: ${angle}, Pose: ${pose}`);
+      console.log(`[CharacterCard] Prompt: ${finalPrompt.substring(0, 300)}...`);
 
       // Get reference images from the template
       const referenceImages = template?.referenceImages || [];
       const styleRefImage = style.referenceImageUrl;
       
-      // Build image URLs array (style reference first)
+      // Build image URLs array (style reference first, then template references)
       const imageUrls = styleRefImage ? [styleRefImage, ...referenceImages.slice(0, 2)] : referenceImages.slice(0, 3);
       
       // Use the first engine from the style
@@ -2169,12 +2241,14 @@ ${templateData.negativePrompt || "blurry, low quality, distorted"}`;
         generatedImageUrl = await callNanoBananaEdit(finalPrompt, imageUrls);
       }
 
-      // Create the new character card
+      // Create the new character card with angle/pose metadata
       const newCard = {
         id: `card_${Date.now()}`,
         styleId: styleId,
         imageUrl: generatedImageUrl,
         prompt: finalPrompt,
+        angle: angle,
+        pose: pose,
         createdAt: new Date().toISOString(),
       };
 
