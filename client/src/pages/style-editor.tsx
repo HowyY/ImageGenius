@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
@@ -64,10 +65,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { StylePreset, Color } from "@shared/schema";
+import type { StylePreset, Color, SelectCharacter, CharacterCard } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { ColorPaletteManager } from "@/components/ColorPaletteManager";
 import { normalizeTemplateColors } from "@/lib/templateUtils";
+import { User, Check } from "lucide-react";
 
 interface ImageReference {
   id: string;
@@ -262,6 +264,7 @@ function StyleThumbnail({ src, label }: { src?: string; label: string }) {
 }
 
 export default function StyleEditor() {
+  const [, navigate] = useLocation();
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [template, setTemplate] = useState<PromptTemplate>(DEFAULT_TEMPLATE);
@@ -280,6 +283,10 @@ export default function StyleEditor() {
 
   const { data: styles, isLoading: stylesLoading } = useQuery<ExtendedStylePreset[]>({
     queryKey: ["/api/styles"],
+  });
+
+  const { data: characters } = useQuery<SelectCharacter[]>({
+    queryKey: ["/api/characters"],
   });
 
   const [showCloneDialog, setShowCloneDialog] = useState(false);
@@ -1323,16 +1330,120 @@ ${negativePrompt}`;
                       </TabsContent>
 
                       <TabsContent value="characters" className="mt-0 space-y-4">
-                        <div className="text-center py-8 space-y-4">
-                          <div className="text-muted-foreground">
-                            <p className="text-sm mb-2">Test how characters look with this style</p>
-                            <p className="text-xs">Characters will be managed in a dedicated Character Editor</p>
-                          </div>
-                          <Button variant="outline" size="sm" onClick={() => window.location.href = '/characters'}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Open Character Editor
-                          </Button>
-                        </div>
+                        {(() => {
+                          // Filter characters: either have a card for this style, or have a selected card
+                          // Then sort: style-matched first, fallback last
+                          const relevantCharacters = (characters?.filter(c => {
+                            const cards = (c.characterCards as CharacterCard[] | null) || [];
+                            const hasStyleCard = cards.some((card: CharacterCard) => card.styleId === selectedStyleId);
+                            const hasSelectedCard = c.selectedCardId && cards.some((card: CharacterCard) => card.id === c.selectedCardId);
+                            return hasStyleCard || hasSelectedCard;
+                          }) || []).sort((a, b) => {
+                            const aCards = (a.characterCards as CharacterCard[] | null) || [];
+                            const bCards = (b.characterCards as CharacterCard[] | null) || [];
+                            const aHasStyleMatch = aCards.some((card: CharacterCard) => card.styleId === selectedStyleId);
+                            const bHasStyleMatch = bCards.some((card: CharacterCard) => card.styleId === selectedStyleId);
+                            if (aHasStyleMatch && !bHasStyleMatch) return -1;
+                            if (!aHasStyleMatch && bHasStyleMatch) return 1;
+                            return 0;
+                          });
+                          
+                          if (relevantCharacters.length === 0) {
+                            return (
+                              <div className="text-center py-8 space-y-4" data-testid="characters-empty-state">
+                                <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center">
+                                  <User className="w-8 h-8 text-muted-foreground" />
+                                </div>
+                                <div className="text-muted-foreground">
+                                  <p className="text-sm mb-2">No character cards for this style yet</p>
+                                  <p className="text-xs">Create character cards in the Character Editor</p>
+                                </div>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => navigate('/characters')}
+                                  data-testid="button-open-character-editor"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Open Character Editor
+                                </Button>
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <div className="space-y-4" data-testid="characters-list">
+                              <div className="flex items-center justify-between gap-2">
+                                <Label>Characters ({relevantCharacters.length})</Label>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => navigate('/characters')}
+                                  data-testid="button-add-more-characters"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Add More
+                                </Button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                {relevantCharacters.map((character) => {
+                                  const cards = (character.characterCards as CharacterCard[] | null) || [];
+                                  const styleSpecificCards = cards.filter((card: CharacterCard) => card.styleId === selectedStyleId);
+                                  const hasStyleMatch = styleSpecificCards.length > 0;
+                                  
+                                  // Prefer style-matched card, fallback to selected card
+                                  let displayCard: CharacterCard | undefined = styleSpecificCards[0];
+                                  if (!displayCard && character.selectedCardId) {
+                                    displayCard = cards.find((card: CharacterCard) => card.id === character.selectedCardId);
+                                  }
+                                  
+                                  return (
+                                    <div
+                                      key={character.id}
+                                      className="relative group rounded-lg overflow-hidden border border-border hover-elevate cursor-pointer"
+                                      onClick={() => displayCard?.imageUrl && setPreviewImageUrl(displayCard.imageUrl)}
+                                      data-testid={`character-card-${character.id}`}
+                                    >
+                                      <div className="aspect-square bg-muted">
+                                        {displayCard?.imageUrl ? (
+                                          <ImageWithFallback
+                                            src={displayCard.imageUrl}
+                                            alt={character.name}
+                                            className="w-full h-full object-cover"
+                                            fallbackText={character.name.charAt(0).toUpperCase()}
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center">
+                                            <User className="w-8 h-8 text-muted-foreground" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                                        <p className="text-white text-sm font-medium truncate">{character.name}</p>
+                                        <p className="text-white/70 text-xs">
+                                          {hasStyleMatch 
+                                            ? `${styleSpecificCards.length} card${styleSpecificCards.length !== 1 ? 's' : ''}`
+                                            : 'Using fallback card'
+                                          }
+                                        </p>
+                                      </div>
+                                      {!hasStyleMatch && (
+                                        <Badge className="absolute top-2 right-2 bg-amber-500/90">
+                                          Fallback
+                                        </Badge>
+                                      )}
+                                      {hasStyleMatch && styleSpecificCards.length > 1 && (
+                                        <Badge className="absolute top-2 right-2" variant="secondary">
+                                          +{styleSpecificCards.length - 1}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </TabsContent>
 
                       <TabsContent value="meta" className="mt-0 space-y-4">

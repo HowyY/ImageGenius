@@ -1005,6 +1005,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages, sceneId } = validationResult.data;
       
+      // Parse character placeholders from prompt (format: [角色名] or [CharacterName])
+      // Only process placeholders that match known character names (with normalization)
+      // This automatically adds character cards as reference images and enriches the prompt
+      let processedPrompt = prompt;
+      const characterReferenceImages: string[] = [];
+      
+      // First, get all characters to build a lookup map (case-insensitive, trimmed)
+      const allCharacters = await storage.getAllCharacters();
+      const characterLookup = new Map<string, typeof allCharacters[0]>();
+      for (const c of allCharacters) {
+        characterLookup.set(c.name.toLowerCase().trim(), c);
+      }
+      
+      // Find all bracket expressions in the prompt using global regex
+      const characterPlaceholderRegex = /\[([^\]]+)\]/g;
+      let match;
+      const processedPlaceholders = new Set<string>(); // Track already processed to avoid duplicates
+      
+      while ((match = characterPlaceholderRegex.exec(prompt)) !== null) {
+        const fullPlaceholder = match[0]; // e.g., "[Alice]"
+        const rawName = match[1]; // e.g., "Alice" or " Alice "
+        const normalizedName = rawName.toLowerCase().trim();
+        
+        // Skip if already processed this exact placeholder
+        if (processedPlaceholders.has(fullPlaceholder)) continue;
+        
+        // Only process if this matches a known character name (case-insensitive, trimmed)
+        const character = characterLookup.get(normalizedName);
+        if (!character) {
+          // Not a known character - leave this bracket expression untouched
+          continue;
+        }
+        
+        console.log(`\n=== Character Placeholder Detection ===`);
+        console.log(`✓ Found character: ${character.name} (from placeholder "${fullPlaceholder}")`);
+        
+        // Find character card matching the current style
+        const characterCards = character.characterCards as { id: string; styleId: string; imageUrl: string; prompt: string; createdAt: string }[] || [];
+        const styleCard = characterCards.find(card => card.styleId === styleId);
+        
+        let usedCard: { id: string; styleId: string; imageUrl: string } | null = null;
+        
+        if (styleCard) {
+          console.log(`  → Using style-matched card: ${styleCard.id}`);
+          usedCard = styleCard;
+        } else {
+          // No matching style card, use selected card if available
+          const selectedCard = characterCards.find(card => card.id === character.selectedCardId);
+          if (selectedCard) {
+            console.log(`  → Using selected card (different style): ${selectedCard.id}`);
+            usedCard = selectedCard;
+          }
+        }
+        
+        if (usedCard) {
+          characterReferenceImages.push(usedCard.imageUrl);
+          
+          // Replace ALL occurrences of this placeholder with character's visual description
+          if (character.visualPrompt) {
+            const escapedPlaceholder = fullPlaceholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            processedPrompt = processedPrompt.replace(new RegExp(escapedPlaceholder, 'g'), character.visualPrompt);
+            console.log(`  → Replaced all occurrences of placeholder with visual prompt`);
+          }
+        } else {
+          console.log(`  → No usable card for style ${styleId}, keeping placeholder as-is`);
+        }
+        
+        processedPlaceholders.add(fullPlaceholder);
+        console.log(`=== End Character Placeholder Detection ===\n`);
+      }
+      
+      if (characterReferenceImages.length > 0) {
+        console.log(`Total character reference images: ${characterReferenceImages.length}`);
+      }
+      
       // Get style from database (or fallback to static)
       const selectedStyle = await getStyleById(styleId);
 
@@ -1023,6 +1098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hasUserReference = !!(userReferenceImages && userReferenceImages.length > 0);
+      const hasCharacterReference = characterReferenceImages.length > 0;
       
       // Try to load template from database if no customTemplate provided
       let templateToUse: any = customTemplate;
@@ -1043,13 +1119,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Use the template (from request, database, or default)
-      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, templateToUse);
+      // Note: we use processedPrompt (with character placeholders replaced) instead of raw prompt
+      const hasReference = hasUserReference || hasCharacterReference;
+      const finalPrompt = buildPrompt(processedPrompt, selectedStyle, hasReference, templateToUse);
 
       // Build image URLs array with priority order:
-      // 1. User-selected reference images (highest priority)
-      // 2. Template reference images (from Prompt Editor)
-      // 3. Style preset reference images (uploaded from public/reference-images)
+      // 1. Character card reference images (from placeholder parsing, highest priority)
+      // 2. User-selected reference images
+      // 3. Template reference images (from Prompt Editor)
+      // 4. Style preset reference images (uploaded from public/reference-images)
       const imageUrls: string[] = [];
+      
+      // Add character reference images first (highest priority for character consistency)
+      if (characterReferenceImages.length > 0) {
+        imageUrls.push(...characterReferenceImages);
+        console.log(`Added ${characterReferenceImages.length} character reference image(s)`);
+      }
       
       if (userReferenceImages && userReferenceImages.length > 0) {
         imageUrls.push(...userReferenceImages);
@@ -1157,6 +1242,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Engine: ${engine}`);
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
       console.log(`User Prompt: ${prompt}`);
+      console.log(`Processed Prompt: ${processedPrompt !== prompt ? processedPrompt : "(same as user prompt)"}`);
+      console.log(`Character Reference Images: ${characterReferenceImages.join(", ") || "None"}`);
       console.log(`User Reference Images: ${userReferenceImages?.join(", ") || "None"}`);
       console.log(`Template Reference Images: ${templateReferenceImages?.join(", ") || "None"}`);
       console.log(`Image URLs (priority order): ${imageUrls.join(", ")}`);
