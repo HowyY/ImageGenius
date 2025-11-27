@@ -19,6 +19,15 @@ The frontend is a React 18+ and TypeScript single-page application, built with V
 
 The backend is an Express.js application on Node.js with TypeScript, providing a RESTful API for styles, image generation, and history. All incoming requests are validated using Zod schemas. It supports custom request logging and serves static files. A robust Style Preset System centrally defines visual styles, AI engines, and associated reference images.
 
+### Style Visibility System
+
+Styles can be hidden from regular users while remaining accessible to admins in the Style Editor:
+-   **Database**: `styles.isHidden` boolean field (defaults to false)
+-   **API**: `GET /api/styles?includeHidden=1` returns all styles including hidden ones
+-   **API**: `PATCH /api/styles/:id` updates style properties including visibility
+-   **Style Editor**: Fetches with `includeHidden=1` to show all styles with visibility toggle buttons
+-   **User-facing views**: Filter out hidden styles automatically
+
 ### Template System Architecture
 
 The application supports three template types for flexible prompt generation:

@@ -941,8 +941,8 @@ ${negativePrompt}`;
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="space-y-1 pr-2">
+      <ScrollArea className="flex-1 overflow-visible">
+        <div className="space-y-1">
           {stylesLoading ? (
             Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="p-2 rounded-md">
@@ -963,23 +963,28 @@ ${negativePrompt}`;
             filteredStyles.map((style, index) => (
               <div
                 key={style.id}
-                className={`p-2 rounded-md transition-colors ${
+                className={`group p-2 rounded-md transition-colors cursor-pointer ${
                   selectedStyleId === style.id
                     ? "bg-primary/10 border border-primary/30"
                     : "hover-elevate"
                 }`}
+                onClick={() => {
+                  setSelectedStyleId(style.id);
+                  setShowMobileStylesPanel(false);
+                }}
                 data-testid={`style-item-${style.id}`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-1">
                   {/* Reorder buttons */}
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col relative z-[1000]">
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-5 w-5"
+                      className="h-4 w-4"
                       disabled={index === 0 || reorderTemplatesMutation.isPending}
                       onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         handleMoveStyle(style.id, "up");
                       }}
                       data-testid={`button-move-up-${style.id}`}
@@ -989,10 +994,11 @@ ${negativePrompt}`;
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-5 w-5"
+                      className="h-4 w-4"
                       disabled={index === filteredStyles.length - 1 || reorderTemplatesMutation.isPending}
                       onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         handleMoveStyle(style.id, "down");
                       }}
                       data-testid={`button-move-down-${style.id}`}
@@ -1001,65 +1007,49 @@ ${negativePrompt}`;
                     </Button>
                   </div>
                   
-                  {/* Clickable content area */}
-                  <div 
-                    className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                    onClick={() => {
-                      setSelectedStyleId(style.id);
-                      setShowMobileStylesPanel(false);
-                    }}
-                  >
-                    <div className="relative">
-                      <StyleThumbnail 
-                        src={style.referenceImageUrl} 
-                        label={style.label} 
-                      />
-                      {style.isHidden && (
-                        <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
-                          <EyeOff className="w-4 h-4 text-white" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm truncate max-w-[100px]">{style.label}</span>
-                        {style.isBuiltIn !== false && (
-                          <Badge variant="secondary" className="text-xs flex-shrink-0">Built-in</Badge>
-                        )}
-                        {style.isHidden && (
-                          <Badge variant="outline" className="text-xs flex-shrink-0 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-600">Hidden</Badge>
-                        )}
+                  {/* Thumbnail */}
+                  <div className="relative flex-shrink-0">
+                    <StyleThumbnail 
+                      src={style.referenceImageUrl} 
+                      label={style.label} 
+                    />
+                    {style.isHidden && (
+                      <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center pointer-events-none">
+                        <EyeOff className="w-4 h-4 text-white" />
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{style.id}</p>
-                    </div>
+                    )}
                   </div>
                   
-                  {/* Visibility toggle button */}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleVisibilityMutation.mutate({ 
-                        styleId: style.id, 
-                        isHidden: !style.isHidden 
-                      });
-                    }}
-                    disabled={toggleVisibilityMutation.isPending}
-                    data-testid={`button-toggle-visibility-${style.id}`}
-                  >
-                    {style.isHidden ? (
-                      <EyeOff className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                    ) : (
-                      <Eye className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </Button>
-                  
-                  {/* Selected indicator */}
-                  {selectedStyleId === style.id && (
-                    <ChevronRight className="w-4 h-4 text-primary flex-shrink-0" />
-                  )}
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium text-sm truncate">{style.label}</span>
+                      {style.isHidden && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 flex-shrink-0 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-600">Hidden</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <p className="text-xs text-muted-foreground truncate">{style.id}</p>
+                      <Button 
+                        size="sm"
+                        variant={style.isHidden ? "outline" : "ghost"}
+                        className={`flex-shrink-0 h-5 px-1.5 text-[10px] relative z-[1000] ${style.isHidden ? "border-orange-400 text-orange-600 dark:text-orange-400" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          toggleVisibilityMutation.mutate({ 
+                            styleId: style.id, 
+                            isHidden: !style.isHidden 
+                          });
+                        }}
+                        disabled={toggleVisibilityMutation.isPending}
+                        title={style.isHidden ? "Show this style to users" : "Hide this style from users"}
+                        data-testid={`button-toggle-visibility-${style.id}`}
+                      >
+                        {style.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))
