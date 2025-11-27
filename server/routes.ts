@@ -1484,6 +1484,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/templates/reorder", async (req, res) => {
+    try {
+      const { templateOrders } = req.body;
+      
+      if (!templateOrders || !Array.isArray(templateOrders)) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "templateOrders array is required",
+        });
+      }
+
+      await storage.reorderTemplates(templateOrders);
+      
+      res.json({
+        message: "Templates reordered successfully",
+      });
+    } catch (error) {
+      console.error("Error reordering templates:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reorder templates",
+      });
+    }
+  });
+
   app.post("/api/upload-reference-image", async (req, res) => {
     try {
       const { styleId, imageBase64, fileName } = req.body;

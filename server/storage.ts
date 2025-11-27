@@ -53,6 +53,7 @@ export interface IStorage {
   getAllTemplates(): Promise<SelectPromptTemplate[]>;
   saveTemplate(styleId: string, templateData: any, referenceImages?: string[]): Promise<SelectPromptTemplate>;
   deleteTemplate(styleId: string): Promise<void>;
+  reorderTemplates(templateOrders: { styleId: string; displayOrder: number }[]): Promise<void>;
   // Style CRUD operations
   getAllStyles(): Promise<SelectStyle[]>;
   getStyle(styleId: string): Promise<SelectStyle | null>;
@@ -159,7 +160,7 @@ export class MemStorage implements IStorage {
     return await db
       .select()
       .from(promptTemplates)
-      .orderBy(promptTemplates.styleId);
+      .orderBy(promptTemplates.displayOrder, promptTemplates.styleId);
   }
 
   async saveTemplate(styleId: string, templateData: any, referenceImages: string[] = []): Promise<SelectPromptTemplate> {
@@ -202,6 +203,20 @@ export class MemStorage implements IStorage {
     }
 
     await db.delete(promptTemplates).where(eq(promptTemplates.styleId, styleId));
+  }
+
+  async reorderTemplates(templateOrders: { styleId: string; displayOrder: number }[]): Promise<void> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Update each template's displayOrder
+    for (const { styleId, displayOrder } of templateOrders) {
+      await db
+        .update(promptTemplates)
+        .set({ displayOrder, updatedAt: new Date() })
+        .where(eq(promptTemplates.styleId, styleId));
+    }
   }
 
   // Style CRUD operations

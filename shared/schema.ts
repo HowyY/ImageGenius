@@ -36,6 +36,7 @@ export const promptTemplates = pgTable("prompt_templates", {
   styleId: text("style_id").notNull().unique(),
   templateData: jsonb("template_data").notNull(),
   referenceImages: text("reference_images").array().default([]),
+  displayOrder: integer("display_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
