@@ -328,6 +328,22 @@ export default function CharacterEditor() {
     });
   };
 
+  const handleSetAvatar = (cardId: string) => {
+    if (!selectedCharacter) return;
+    
+    const currentCards = editedCharacter.characterCards ?? selectedCharacter.characterCards ?? [];
+    setEditedCharacter({
+      ...editedCharacter,
+      avatarCardId: cardId,
+      characterCards: currentCards,
+    });
+    
+    toast({
+      title: "Avatar Updated",
+      description: "This card will be used as the character's avatar",
+    });
+  };
+
   const handleDeleteCard = (cardId: string) => {
     if (!selectedCharacter) return;
     
@@ -439,7 +455,9 @@ export default function CharacterEditor() {
   const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
   const currentCards: CharacterCard[] = (editedCharacter.characterCards ?? selectedCharacter?.characterCards ?? []) as CharacterCard[];
   const currentSelectedCardId = editedCharacter.selectedCardId ?? selectedCharacter?.selectedCardId;
+  const currentAvatarCardId = editedCharacter.avatarCardId ?? selectedCharacter?.avatarCardId;
   const selectedCard = currentCards.find((c: CharacterCard) => c.id === currentSelectedCardId);
+  const avatarCard = currentCards.find((c: CharacterCard) => c.id === currentAvatarCardId);
 
   const cardsGroupedByStyle = currentCards.reduce((acc: Record<string, CharacterCard[]>, card: CharacterCard) => {
     if (!acc[card.styleId]) acc[card.styleId] = [];
@@ -507,7 +525,12 @@ export default function CharacterEditor() {
           <div className="space-y-2">
             {filteredCharacters.map((char) => {
               const cards = (char.characterCards || []) as CharacterCard[];
+              // Avatar priority: avatarCard > selectedCard > fallback letter
+              const avatarCardImg = cards.find((c: CharacterCard) => c.id === char.avatarCardId);
               const selectedCardImg = cards.find((c: CharacterCard) => c.id === char.selectedCardId);
+              const displayImage = avatarCardImg || selectedCardImg;
+              const usesCropping = !avatarCardImg && selectedCardImg; // CSS crop for non-avatar cards
+              
               return (
                 <div
                   key={char.id}
@@ -524,7 +547,12 @@ export default function CharacterEditor() {
                 >
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={selectedCardImg?.imageUrl} />
+                      {displayImage ? (
+                        <AvatarImage 
+                          src={displayImage.imageUrl} 
+                          className={usesCropping ? "object-cover object-top" : "object-cover"}
+                        />
+                      ) : null}
                       <AvatarFallback>
                         {char.name.charAt(0).toUpperCase()}
                       </AvatarFallback>
@@ -583,12 +611,33 @@ export default function CharacterEditor() {
                             className="w-full h-full object-contain"
                           />
                         </AspectRatio>
-                        {currentSelectedCardId === card.id && (
-                          <div className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full p-1">
-                            <Check className="w-3 h-3" />
-                          </div>
-                        )}
+                        {/* Indicators for selected card and avatar */}
+                        <div className="absolute top-1 left-1 flex gap-1">
+                          {currentSelectedCardId === card.id && (
+                            <div className="bg-primary text-primary-foreground rounded-full p-1" title="Reference Card">
+                              <Check className="w-3 h-3" />
+                            </div>
+                          )}
+                          {currentAvatarCardId === card.id && (
+                            <div className="bg-amber-500 text-white rounded-full p-1" title="Avatar Card">
+                              <User className="w-3 h-3" />
+                            </div>
+                          )}
+                        </div>
                         <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            size="icon"
+                            variant="secondary"
+                            className="w-6 h-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSetAvatar(card.id);
+                            }}
+                            title="Set as Avatar"
+                            data-testid={`button-set-avatar-${card.id}`}
+                          >
+                            <User className="w-3 h-3" />
+                          </Button>
                           <Button
                             size="icon"
                             variant="secondary"
