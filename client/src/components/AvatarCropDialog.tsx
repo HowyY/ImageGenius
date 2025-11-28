@@ -220,7 +220,7 @@ export function CroppedAvatar({
     width: "100%",
     height: "100%",
     backgroundImage: `url(${imageUrl})`,
-    backgroundSize: `${bgSizeValue}%`,
+    backgroundSize: `${bgSizeValue}% ${bgSizeValue}%`,
     backgroundPosition: `${isFinite(bgPosX) ? bgPosX : 0}% ${isFinite(bgPosY) ? bgPosY : 0}%`,
     backgroundRepeat: "no-repeat",
   };
