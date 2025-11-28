@@ -73,6 +73,7 @@ import type { StylePreset, Color, SelectCharacter, CharacterCard } from "@shared
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { ColorPaletteManager } from "@/components/ColorPaletteManager";
 import { normalizeTemplateColors } from "@/lib/templateUtils";
+import { CroppedAvatar, type AvatarCrop, type AvatarProfile } from "@/components/AvatarCropDialog";
 import { User, Check } from "lucide-react";
 
 interface ImageReference {
@@ -1524,6 +1525,51 @@ ${negativePrompt}`;
                             return 0;
                           });
                           
+                          // Helper function to get avatar for a character based on current style
+                          // Returns { imageUrl: string, crop?: AvatarCrop } or null
+                          const getCharacterAvatar = (character: SelectCharacter): { imageUrl: string; crop?: AvatarCrop } | null => {
+                            const cards = (character.characterCards as CharacterCard[] | null) || [];
+                            const avatarProfiles = (character.avatarProfiles as Record<string, AvatarProfile> | null) || {};
+                            
+                            // Priority 1: Per-style avatar profile for current style
+                            if (selectedStyleId && avatarProfiles[selectedStyleId]) {
+                              const profile = avatarProfiles[selectedStyleId];
+                              if (profile?.cardId) {
+                                const avatarCard = cards.find((c: CharacterCard) => c.id === profile.cardId);
+                                if (avatarCard && avatarCard.imageUrl) {
+                                  return { imageUrl: avatarCard.imageUrl, crop: profile.crop };
+                                }
+                              }
+                            }
+                            
+                            // Priority 2: Any style's avatar profile (iterate to find first valid one)
+                            for (const profileKey of Object.keys(avatarProfiles)) {
+                              const profile = avatarProfiles[profileKey];
+                              if (profile?.cardId) {
+                                const avatarCard = cards.find((c: CharacterCard) => c.id === profile.cardId);
+                                if (avatarCard && avatarCard.imageUrl) {
+                                  return { imageUrl: avatarCard.imageUrl, crop: profile.crop };
+                                }
+                              }
+                            }
+                            
+                            // Priority 3: Selected card
+                            if (character.selectedCardId) {
+                              const selectedCard = cards.find((c: CharacterCard) => c.id === character.selectedCardId);
+                              if (selectedCard && selectedCard.imageUrl) {
+                                return { imageUrl: selectedCard.imageUrl, crop: undefined };
+                              }
+                            }
+                            
+                            // Priority 4: First card with valid imageUrl
+                            const cardWithImage = cards.find((c: CharacterCard) => c.imageUrl);
+                            if (cardWithImage && cardWithImage.imageUrl) {
+                              return { imageUrl: cardWithImage.imageUrl, crop: undefined };
+                            }
+                            
+                            return null;
+                          };
+                          
                           if (relevantCharacters.length === 0) {
                             return (
                               <div className="text-center py-8 space-y-4" data-testid="characters-empty-state">
@@ -1561,7 +1607,7 @@ ${negativePrompt}`;
                                   Add More
                                 </Button>
                               </div>
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="flex flex-wrap gap-3">
                                 {relevantCharacters.map((character) => {
                                   const cards = (character.characterCards as CharacterCard[] | null) || [];
                                   const styleSpecificCards = cards.filter((card: CharacterCard) => card.styleId === selectedStyleId);
@@ -1602,14 +1648,13 @@ ${negativePrompt}`;
                                     displayCard.id === selectedCharacterRef.cardId
                                   );
                                   
+                                  // Get avatar with crop info
+                                  const avatarInfo = getCharacterAvatar(character);
+                                  
                                   return (
                                     <div
                                       key={character.id}
-                                      className={`relative group rounded-lg overflow-hidden cursor-pointer transition-all ${
-                                        isSelected 
-                                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background border-primary" 
-                                          : "border border-border hover-elevate"
-                                      }`}
+                                      className="flex flex-col items-center gap-1 group cursor-pointer"
                                       onClick={() => {
                                         if (displayCard?.id && displayCard?.imageUrl) {
                                           // Toggle selection: click to select, click again to deselect
@@ -1627,68 +1672,56 @@ ${negativePrompt}`;
                                       onDoubleClick={() => displayCard?.imageUrl && setPreviewImageUrl(displayCard.imageUrl)}
                                       data-testid={`character-card-${character.id}`}
                                     >
-                                      <div className="aspect-square bg-muted">
-                                        {displayCard?.imageUrl ? (
-                                          <ImageWithFallback
-                                            src={displayCard.imageUrl}
-                                            alt={character.name}
-                                            className="w-full h-full object-cover"
-                                            fallbackText={character.name.charAt(0).toUpperCase()}
+                                      <div className={`relative rounded-full transition-all ${
+                                        isSelected 
+                                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background" 
+                                          : "hover-elevate"
+                                      }`}>
+                                        {avatarInfo ? (
+                                          <CroppedAvatar
+                                            imageUrl={avatarInfo.imageUrl}
+                                            crop={avatarInfo.crop}
+                                            size={56}
                                           />
                                         ) : (
-                                          <div className="w-full h-full flex items-center justify-center">
-                                            <User className="w-8 h-8 text-muted-foreground" />
+                                          <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
+                                            <span className="text-lg font-medium text-muted-foreground">
+                                              {character.name.charAt(0).toUpperCase()}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {isSelected && (
+                                          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                            <Check className="w-3 h-3 text-primary-foreground" />
+                                          </div>
+                                        )}
+                                        {!hasStyleMatch && !isSelected && (
+                                          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center" title="Fallback">
+                                            <span className="text-[10px] text-white font-bold">!</span>
                                           </div>
                                         )}
                                       </div>
-                                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                                        <p className="text-white text-sm font-medium truncate">{character.name}</p>
-                                        <p className="text-white/70 text-xs">
-                                          {isSelected 
-                                            ? 'Selected as reference'
-                                            : hasStyleMatch 
-                                              ? `${styleSpecificCards.length} card${styleSpecificCards.length !== 1 ? 's' : ''}`
-                                              : 'Using fallback card'
-                                          }
-                                        </p>
-                                      </div>
-                                      {isSelected && (
-                                        <Badge className="absolute top-2 left-2 bg-primary">
-                                          Reference
-                                        </Badge>
-                                      )}
-                                      {!hasStyleMatch && !isSelected && (
-                                        <>
-                                          <Badge className="absolute top-2 right-2 bg-amber-500/90">
-                                            Fallback
-                                          </Badge>
-                                          {/* Generate for this style button - visible on hover */}
-                                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <Button
-                                              size="sm"
-                                              variant="secondary"
-                                              className="gap-1"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                navigate(`/characters?id=${character.id}&style=${selectedStyleId}`);
-                                              }}
-                                              data-testid={`button-generate-for-style-${character.id}`}
-                                            >
-                                              <Sparkles className="w-3 h-3" />
-                                              Generate for this style
-                                            </Button>
-                                          </div>
-                                        </>
-                                      )}
-                                      {hasStyleMatch && styleSpecificCards.length > 1 && !isSelected && (
-                                        <Badge className="absolute top-2 right-2" variant="secondary">
-                                          +{styleSpecificCards.length - 1}
-                                        </Badge>
-                                      )}
+                                      <span className={`text-xs text-center max-w-16 truncate ${
+                                        isSelected ? "text-primary font-medium" : "text-muted-foreground"
+                                      }`}>
+                                        {character.name}
+                                      </span>
                                     </div>
                                   );
                                 })}
                               </div>
+                              {/* Fallback character generate option */}
+                              {relevantCharacters.some(c => {
+                                const cards = (c.characterCards as CharacterCard[] | null) || [];
+                                return !cards.some((card: CharacterCard) => card.styleId === selectedStyleId);
+                              }) && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <div className="w-3 h-3 rounded-full bg-amber-500 flex items-center justify-center">
+                                    <span className="text-[8px] text-white font-bold">!</span>
+                                  </div>
+                                  <span>Characters with fallback cards - click to go to Character Editor to generate for this style</span>
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
