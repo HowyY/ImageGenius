@@ -15,6 +15,13 @@ This web application enables users to generate AI-driven images from text prompt
 
 The frontend is a React 18+ and TypeScript single-page application, built with Vite. It uses shadcn/ui (Radix UI primitives) and Tailwind CSS for a "new-york" themed design. State management is handled by React Hook Form with Zod for validation, and TanStack Query for server state. Wouter manages client-side routing. The UI features a two-column layout, adapting to a single column on mobile.
 
+### Mobile-Responsive Navigation
+
+-   **Desktop (md+ screens)**: Horizontal navigation bar with icon+text links
+-   **Mobile (< md screens)**: Hamburger menu using shadcn Sheet component (slide-in drawer)
+-   **Component**: `Navigation` in `client/src/components/navigation.tsx`
+-   **Breakpoint**: `md` (768px) for switching between desktop and mobile layouts
+
 ### Backend Architecture
 
 The backend is an Express.js application on Node.js with TypeScript, providing a RESTful API for styles, image generation, and history. All incoming requests are validated using Zod schemas. It supports custom request logging and serves static files. A robust Style Preset System centrally defines visual styles, AI engines, and associated reference images.
@@ -81,9 +88,9 @@ Palette fallback hierarchy: User override → Template default → Style default
 -   **Storyboard Scenes**: Script-driven scene cards in a 3-column grid layout. Each scene has:
     - Image area (clickable to generate) with amber placeholder for empty scenes
     - Status line showing "Generated Images (1)" or "No images generated yet"
-    - Scene Description text field (used as generation prompt)
+    - Scene Description textarea with 120px minimum height and auto-grow on typing
     - Generate and Edit buttons for inline image generation
-    Scenes belong to a specific storyboard via `storyboardId` foreign key.
+    Scenes belong to a specific storyboard via `storyboardId` foreign key. Grid uses `items-start` alignment to allow cards with different heights based on content.
 -   **Client-Side Persistence**: localStorage is used for user preferences like style lock status, selected reference images, and current storyboard ID. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
 -   **Reference Image Storage**: The KIE File Upload API stores reference images, uploading them on-demand with temporary URLs and promise-based caching to prevent duplicate uploads.
 -   **Migration Logic**: On server startup, orphan scenes (without a storyboard) are automatically migrated to a "Default Storyboard" for backward compatibility.

@@ -82,6 +82,7 @@ export default function Storyboard() {
   const [versionDescription, setVersionDescription] = useState("");
   const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; prompt: string; style: string; engine: string; date: string } | null>(null);
+  
 
   const { data: storyboards, isLoading: storyboardsLoading } = useQuery<SelectStoryboard[]>({
     queryKey: ["/api/storyboards"],
@@ -150,7 +151,7 @@ export default function Storyboard() {
       }
     }
   }, [styles, selectedStyle]);
-
+  
   const handleStyleChange = (value: string) => {
     setSelectedStyle(value);
     setSelectedStyleId(value);
@@ -843,7 +844,7 @@ export default function Storyboard() {
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
             {scenes.map((scene) => (
               <Card 
                 key={scene.id} 
@@ -918,17 +919,23 @@ export default function Storyboard() {
                   </Tooltip>
                 </div>
                 
-                <div className="p-3 flex-1 flex flex-col">
-                  <div className="flex-1">
+                <div className="p-3">
+                  <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">
                       Scene Description
                     </label>
                     <Textarea
                       placeholder="Enter scene description for image generation..."
                       value={getSceneDescription(scene)}
-                      onChange={(e) => handleDescriptionChange(scene.id, e.target.value)}
+                      onChange={(e) => {
+                        handleDescriptionChange(scene.id, e.target.value);
+                        const el = e.target;
+                        el.style.height = 'auto';
+                        el.style.height = `${Math.max(120, el.scrollHeight)}px`;
+                      }}
                       onBlur={() => handleDescriptionBlur(scene)}
-                      className="min-h-[80px] resize-none text-sm"
+                      className="text-sm"
+                      style={{ minHeight: '120px', resize: 'none' }}
                       data-testid={`textarea-scene-description-${scene.id}`}
                     />
                   </div>
