@@ -31,15 +31,21 @@ Styles can be hidden from regular users while remaining accessible to admins in 
 ### Per-Style Character Avatar System
 
 Characters support style-specific avatars with crop functionality to ensure consistent, style-matched avatar display:
--   **Database**: `characters.avatarProfiles` JSONB field with structure: `{ [styleId]: { cardId: string, crop: { x: number, y: number, zoom: number } } }`
+-   **Database**: `characters.avatarProfiles` JSONB field with structure:
+    ```
+    { [styleId]: { cardId: string, crop: { x: number, y: number, width: number, height: number } } }
+    ```
+    - `x, y`: Crop position as percentage of image dimensions (0-100)
+    - `width, height`: Crop area size as percentage of image dimensions (properly handles non-square source images)
+    - Legacy format with `zoom` field is supported for backward compatibility
 -   **Avatar Crop Dialog**: When clicking the crop icon on a character card, the AvatarCropDialog opens with:
     - Pan controls (drag to reposition)
-    - Zoom slider (adjust magnification)
-    - Rotation controls (optional)
+    - Zoom slider (adjust magnification, 1x-3x)
+    - Reset button to restore defaults
     - Round preview showing final avatar appearance
 -   **Components**:
-    - `AvatarCropDialog`: Modal dialog with react-easy-crop integration for setting crop parameters
-    - `CroppedAvatar`: CSS transform-based avatar display using stored crop coordinates (no image processing, purely visual)
+    - `AvatarCropDialog`: Modal dialog with react-easy-crop integration for setting crop parameters. Saves `croppedAreaPercentages` (x, y, width, height) directly for accurate rendering of non-square images.
+    - `CroppedAvatar`: CSS background-based avatar display using stored crop coordinates. Normalizes legacy (zoom) and new (width/height) formats automatically.
 -   **Display Priority**: Multi-tier fallback for avatar display:
     1. Per-style avatarProfile: If current style has an avatar profile set, use that card with crop
     2. Any style avatarProfile: Fallback to first available style avatar
