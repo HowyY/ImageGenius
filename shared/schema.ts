@@ -96,10 +96,14 @@ export const characterCardSchema = z.object({
 export type CharacterCard = z.infer<typeof characterCardSchema>;
 
 // Avatar crop data for precise avatar positioning
+// Stores the croppedAreaPercentages from react-easy-crop for accurate rendering
+// Supports both new format (width/height) and legacy format (zoom) for backward compatibility
 export const avatarCropSchema = z.object({
-  x: z.number(), // crop x position (0-100%)
-  y: z.number(), // crop y position (0-100%)
-  zoom: z.number().min(1).max(3).default(1), // zoom level
+  x: z.number(), // crop x position as % of image width (0-100)
+  y: z.number(), // crop y position as % of image height (0-100)
+  width: z.number().optional(), // crop width as % of image width (new format)
+  height: z.number().optional(), // crop height as % of image height (new format)
+  zoom: z.number().optional(), // legacy zoom level (deprecated, for backward compatibility)
 });
 
 export type AvatarCrop = z.infer<typeof avatarCropSchema>;

@@ -40,12 +40,27 @@ export function AvatarCropDialog({
   useEffect(() => {
     if (open && !isInitialized) {
       if (initialCrop) {
-        setZoom(initialCrop.zoom);
+        // Handle both new format (width/height) and legacy format (zoom)
+        let width = initialCrop.width;
+        let height = initialCrop.height;
+        
+        // If using legacy format, derive width/height from zoom
+        if (width === undefined || height === undefined) {
+          const legacyZoom = initialCrop.zoom ?? 1;
+          width = 100 / legacyZoom;
+          height = 100 / legacyZoom;
+        }
+        
+        // Calculate zoom from the crop dimensions
+        const zoomFromWidth = 100 / width;
+        const zoomFromHeight = 100 / height;
+        const estimatedZoom = Math.min(zoomFromWidth, zoomFromHeight);
+        setZoom(Math.min(3, Math.max(1, estimatedZoom)));
         setCroppedArea({
           x: initialCrop.x,
           y: initialCrop.y,
-          width: 100 / initialCrop.zoom,
-          height: 100 / initialCrop.zoom,
+          width: width,
+          height: height,
         });
       } else {
         setZoom(1);
@@ -58,15 +73,29 @@ export function AvatarCropDialog({
     }
   }, [open, initialCrop, isInitialized]);
 
-  const initialCroppedAreaPercentages = 
-    !isInitialized && initialCrop
-      ? {
-          x: initialCrop.x,
-          y: initialCrop.y,
-          width: 100 / initialCrop.zoom,
-          height: 100 / initialCrop.zoom,
-        }
-      : undefined;
+  // Prepare initialCroppedAreaPercentages with legacy format handling
+  const getInitialCroppedAreaPercentages = () => {
+    if (isInitialized || !initialCrop) return undefined;
+    
+    let width = initialCrop.width;
+    let height = initialCrop.height;
+    
+    // If using legacy format, derive width/height from zoom
+    if (width === undefined || height === undefined) {
+      const legacyZoom = initialCrop.zoom ?? 1;
+      width = 100 / legacyZoom;
+      height = 100 / legacyZoom;
+    }
+    
+    return {
+      x: initialCrop.x,
+      y: initialCrop.y,
+      width: width,
+      height: height,
+    };
+  };
+  
+  const initialCroppedAreaPercentages = getInitialCroppedAreaPercentages();
 
   const onCropComplete = useCallback(
     (croppedAreaResult: Area, _croppedAreaPixels: Area) => {
@@ -79,7 +108,8 @@ export function AvatarCropDialog({
     const cropData: AvatarCrop = {
       x: croppedArea?.x ?? 0,
       y: croppedArea?.y ?? 0,
-      zoom: zoom,
+      width: croppedArea?.width ?? 100,
+      height: croppedArea?.height ?? 100,
     };
     onSave(cropData);
     onOpenChange(false);
@@ -200,7 +230,23 @@ export function CroppedAvatar({
     objectPosition: "top center",
   };
 
-  if (!crop || (crop.x === 0 && crop.y === 0 && crop.zoom === 1)) {
+  // Normalize crop data - handle both new format (width/height) and legacy (zoom)
+  let cropWidth = crop?.width;
+  let cropHeight = crop?.height;
+  
+  // If using legacy zoom format, convert to width/height
+  // For square images (legacy assumption), width = height = 100/zoom
+  if (cropWidth === undefined || cropHeight === undefined) {
+    const zoom = crop?.zoom ?? 1;
+    cropWidth = 100 / zoom;
+    cropHeight = 100 / zoom;
+  }
+
+  // Check if no crop or default values (width/height >= 100 means no zoom)
+  const isDefaultCrop = !crop || 
+    (crop.x === 0 && crop.y === 0 && cropWidth >= 100 && cropHeight >= 100);
+  
+  if (isDefaultCrop) {
     return (
       <div style={containerStyle} className={className}>
         <img src={imageUrl} alt="Avatar" style={defaultImageStyle} />
@@ -208,19 +254,25 @@ export function CroppedAvatar({
     );
   }
 
-  const cropWidthPct = 100 / crop.zoom;
-  const cropPosXPct = crop.x;
-  const cropPosYPct = crop.y;
+  // Calculate background size based on actual crop dimensions
+  // If crop.width is 33.33%, we need to scale to 300% (100 / 33.33 = 3)
+  const bgSizeX = (100 / cropWidth) * 100;
+  const bgSizeY = (100 / cropHeight) * 100;
   
-  const bgSizeValue = crop.zoom * 100;
-  const bgPosX = (cropPosXPct / (100 - cropWidthPct)) * 100;
-  const bgPosY = (cropPosYPct / (100 - cropWidthPct)) * 100;
+  // Calculate background position
+  // crop.x is the left edge of the crop as % of image width
+  // We need to convert this to CSS background-position percentage
+  // At x=0, bgPos=0%; at x=(100-crop.width), bgPos=100%
+  const maxX = 100 - cropWidth;
+  const maxY = 100 - cropHeight;
+  const bgPosX = maxX > 0 ? (crop.x / maxX) * 100 : 0;
+  const bgPosY = maxY > 0 ? (crop.y / maxY) * 100 : 0;
 
   const bgStyle: React.CSSProperties = {
     width: "100%",
     height: "100%",
     backgroundImage: `url(${imageUrl})`,
-    backgroundSize: `${bgSizeValue}% ${bgSizeValue}%`,
+    backgroundSize: `${bgSizeX}% ${bgSizeY}%`,
     backgroundPosition: `${isFinite(bgPosX) ? bgPosX : 0}% ${isFinite(bgPosY) ? bgPosY : 0}%`,
     backgroundRepeat: "no-repeat",
   };
