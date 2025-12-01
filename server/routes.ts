@@ -767,6 +767,7 @@ async function seedBuiltInStyles() {
       defaultColors,
       referenceImageUrl,
       isBuiltIn: true,
+      isHidden: false,
     }));
     await storage.seedBuiltInStyles(builtInStyles);
     console.log("Built-in styles seeded to database");
@@ -915,6 +916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         defaultColors,
         referenceImageUrl: referenceImageUrl || DEFAULT_REFERENCE_IMAGE,
         isBuiltIn: false,
+        isHidden: false,
       });
       
       res.status(201).json(newStyle);
@@ -956,6 +958,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         defaultColors: sourceStyle.defaultColors,
         referenceImageUrl: sourceStyle.referenceImageUrl,
         isBuiltIn: false,
+        isHidden: false,
       });
       
       // Clone template if exists
