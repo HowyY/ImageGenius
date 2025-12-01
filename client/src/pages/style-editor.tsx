@@ -1477,12 +1477,12 @@ ${negativePrompt}`;
                                   />
                                 </div>
                                 {/* Control overlay: always visible on mobile, hover on desktop */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent sm:bg-black/50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-end sm:items-center justify-center pb-3 sm:pb-0">
-                                  <div className="flex gap-2">
+                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/70 to-transparent sm:absolute sm:inset-0 sm:h-auto sm:bg-black/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-end sm:items-center justify-center pb-2 sm:pb-0 pointer-events-none">
+                                  <div className="flex gap-2 pointer-events-auto">
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      className="text-white bg-black/30 sm:bg-transparent"
+                                      className="text-white bg-black/40 sm:bg-transparent"
                                       onClick={() => setPreviewImageUrl(image.url)}
                                       data-testid={`button-preview-reference-${index}`}
                                     >
@@ -1491,7 +1491,7 @@ ${negativePrompt}`;
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      className="text-white bg-black/30 sm:bg-transparent"
+                                      className="text-white bg-black/40 sm:bg-transparent"
                                       onClick={() => handleRemoveImage(image.id)}
                                       data-testid={`button-remove-reference-${index}`}
                                     >
