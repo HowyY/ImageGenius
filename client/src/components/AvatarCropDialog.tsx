@@ -254,39 +254,37 @@ export function CroppedAvatar({
     );
   }
 
-  // Use an img element with transform for precise positioning
-  // This avoids the complexity of CSS background-position math
+  // Use an img element for precise crop positioning
+  // react-easy-crop provides crop.x, crop.y as top-left percentages
+  // and cropWidth, cropHeight as the crop area size in percentages
   
-  // Calculate the scale factor: how much to enlarge the image
-  // so that the crop area fills the container
+  // Calculate scale factors for each axis
+  // scaleX: scale to make cropWidth fill container width (100%)
+  // scaleY: scale to make cropHeight fill container height (100%)
   const scaleX = 100 / cropWidth;
   const scaleY = 100 / cropHeight;
   
-  // Use the smaller scale to ensure the crop fits (like object-fit: contain for the crop)
-  // But since we want to fill, use the larger scale
-  const scale = Math.max(scaleX, scaleY);
+  // ALWAYS use scaleX for the image width. With height:auto, this gives:
+  // - displayed_width = scaleX * 100%
+  // - displayed_height = scaleX * 100% * (imageHeight/imageWidth)
+  //                    = scaleX * 100% * (cropWidth/cropHeight)
+  //                    = scaleY * 100% (due to square crop relationship)
+  // This ensures the square crop exactly fills the square container.
   
-  // Calculate offset: position the image so the crop area's top-left is at container's top-left
-  // Then adjust to center the crop within the container
-  // After scaling, crop.x% of original = crop.x * scale in container %
-  const offsetX = -crop.x * scale;
-  const offsetY = -crop.y * scale;
+  // Calculate offsets to position crop at container origin
+  // X: crop.x% of displayed_width = crop.x * scaleX in container units
+  // Y: crop.y% of displayed_height = crop.y * scaleY in container units
+  const offsetX = -crop.x * scaleX;
+  const offsetY = -crop.y * scaleY;
   
-  // Center adjustment: if one dimension is larger than container, center it
-  // The crop dimensions after scaling:
-  const scaledCropWidth = cropWidth * scale; // Should be 100 when scale = scaleX
-  const scaledCropHeight = cropHeight * scale; // Should be 100 when scale = scaleY
-  
-  // Center offset for the dimension that's larger than 100%
-  const centerOffsetX = (100 - scaledCropWidth) / 2;
-  const centerOffsetY = (100 - scaledCropHeight) / 2;
+  // No centering needed: the crop exactly fills the container (100% x 100%)
   
   const imgStyle: React.CSSProperties = {
     position: "absolute",
-    width: `${scale * 100}%`,
+    width: `${scaleX * 100}%`,
     height: "auto",
-    left: `${offsetX + centerOffsetX}%`,
-    top: `${offsetY + centerOffsetY}%`,
+    left: `${offsetX}%`,
+    top: `${offsetY}%`,
     maxWidth: "none",
   };
 
