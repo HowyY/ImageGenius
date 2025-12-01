@@ -254,32 +254,45 @@ export function CroppedAvatar({
     );
   }
 
-  // Calculate background size based on actual crop dimensions
-  // If crop.width is 33.33%, we need to scale to 300% (100 / 33.33 = 3)
-  const bgSizeX = (100 / cropWidth) * 100;
-  const bgSizeY = (100 / cropHeight) * 100;
+  // Use an img element with transform for precise positioning
+  // This avoids the complexity of CSS background-position math
   
-  // Calculate background position
-  // crop.x is the left edge of the crop as % of image width
-  // We need to convert this to CSS background-position percentage
-  // At x=0, bgPos=0%; at x=(100-crop.width), bgPos=100%
-  const maxX = 100 - cropWidth;
-  const maxY = 100 - cropHeight;
-  const bgPosX = maxX > 0 ? (crop.x / maxX) * 100 : 0;
-  const bgPosY = maxY > 0 ? (crop.y / maxY) * 100 : 0;
-
-  const bgStyle: React.CSSProperties = {
-    width: "100%",
-    height: "100%",
-    backgroundImage: `url(${imageUrl})`,
-    backgroundSize: `${bgSizeX}% ${bgSizeY}%`,
-    backgroundPosition: `${isFinite(bgPosX) ? bgPosX : 0}% ${isFinite(bgPosY) ? bgPosY : 0}%`,
-    backgroundRepeat: "no-repeat",
+  // Calculate the scale factor: how much to enlarge the image
+  // so that the crop area fills the container
+  const scaleX = 100 / cropWidth;
+  const scaleY = 100 / cropHeight;
+  
+  // Use the smaller scale to ensure the crop fits (like object-fit: contain for the crop)
+  // But since we want to fill, use the larger scale
+  const scale = Math.max(scaleX, scaleY);
+  
+  // Calculate offset: position the image so the crop area's top-left is at container's top-left
+  // Then adjust to center the crop within the container
+  // After scaling, crop.x% of original = crop.x * scale in container %
+  const offsetX = -crop.x * scale;
+  const offsetY = -crop.y * scale;
+  
+  // Center adjustment: if one dimension is larger than container, center it
+  // The crop dimensions after scaling:
+  const scaledCropWidth = cropWidth * scale; // Should be 100 when scale = scaleX
+  const scaledCropHeight = cropHeight * scale; // Should be 100 when scale = scaleY
+  
+  // Center offset for the dimension that's larger than 100%
+  const centerOffsetX = (100 - scaledCropWidth) / 2;
+  const centerOffsetY = (100 - scaledCropHeight) / 2;
+  
+  const imgStyle: React.CSSProperties = {
+    position: "absolute",
+    width: `${scale * 100}%`,
+    height: "auto",
+    left: `${offsetX + centerOffsetX}%`,
+    top: `${offsetY + centerOffsetY}%`,
+    maxWidth: "none",
   };
 
   return (
     <div style={containerStyle} className={className}>
-      <div style={bgStyle} />
+      <img src={imageUrl} alt="Avatar" style={imgStyle} />
     </div>
   );
 }
