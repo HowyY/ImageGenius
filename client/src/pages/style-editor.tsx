@@ -1804,19 +1804,19 @@ ${negativePrompt}`;
                 {/* Test Result Area */}
                 <div className="rounded-lg border overflow-hidden bg-muted/30">
                   {generateMutation.isPending ? (
-                    <div className="aspect-square flex flex-col items-center justify-center gap-3">
+                    <div className="aspect-video flex flex-col items-center justify-center gap-3">
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
                       <p className="text-sm text-muted-foreground">Generating image...</p>
                     </div>
                   ) : testResultUrl ? (
                     <div 
-                      className="aspect-square cursor-pointer relative group"
+                      className="cursor-pointer relative group"
                       onClick={() => setPreviewImageUrl(testResultUrl)}
                     >
                       <ImageWithFallback
                         src={testResultUrl}
                         alt="Test result"
-                        className="w-full h-full object-cover"
+                        className="w-full h-auto"
                         fallbackText="Failed to load"
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1824,7 +1824,7 @@ ${negativePrompt}`;
                       </div>
                     </div>
                   ) : (
-                    <div className="aspect-square flex flex-col items-center justify-center gap-2">
+                    <div className="aspect-video flex flex-col items-center justify-center gap-2">
                       <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
                       <p className="text-xs text-muted-foreground">No test result yet</p>
                     </div>
