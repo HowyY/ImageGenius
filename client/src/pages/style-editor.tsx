@@ -1468,16 +1468,14 @@ ${negativePrompt}`;
                                   dragOverImageId === image.id ? "border-primary" : "border-border"
                                 } ${draggedImageId === image.id ? "opacity-50" : ""}`}
                               >
-                                <div className="aspect-square">
-                                  <ImageWithFallback
-                                    src={image.url}
-                                    alt={`Reference ${index + 1}`}
-                                    className="w-full h-full object-cover"
-                                    fallbackText="Failed to load"
-                                  />
-                                </div>
+                                <ImageWithFallback
+                                  src={image.url}
+                                  alt={`Reference ${index + 1}`}
+                                  className="w-full h-auto"
+                                  fallbackText="Failed to load"
+                                />
                                 {/* Control overlay: always visible on mobile, hover on desktop */}
-                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/70 to-transparent sm:absolute sm:inset-0 sm:h-auto sm:bg-black/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-end sm:items-center justify-center pb-2 sm:pb-0 pointer-events-none">
+                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/70 to-transparent sm:absolute sm:inset-0 sm:h-auto sm:bg-black/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-end sm:items-center justify-center pb-2 sm:pb-0 pointer-events-none">
                                   <div className="flex gap-2 pointer-events-auto">
                                     <Button
                                       size="icon"
