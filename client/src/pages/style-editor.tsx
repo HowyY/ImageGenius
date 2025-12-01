@@ -896,10 +896,10 @@ ${negativePrompt}`;
       <div className="min-h-screen bg-background p-4">
         <div className="max-w-7xl mx-auto">
           <Skeleton className="h-8 w-48 mb-4" />
-          <div className="grid grid-cols-12 gap-4">
-            <Skeleton className="col-span-3 h-[600px]" />
-            <Skeleton className="col-span-5 h-[600px]" />
-            <Skeleton className="col-span-4 h-[600px]" />
+          <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4">
+            <Skeleton className="hidden lg:block lg:col-span-3 h-[600px]" />
+            <Skeleton className="lg:col-span-5 h-[400px] lg:h-[600px]" />
+            <Skeleton className="lg:col-span-4 h-[400px] lg:h-[600px]" />
           </div>
         </div>
       </div>
@@ -1101,7 +1101,7 @@ ${negativePrompt}`;
           </Sheet>
         </div>
 
-        <div className="grid grid-cols-12 gap-4">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4">
           {/* Left Panel - Styles Navigator (Hidden on mobile, shown on lg+) */}
           <div className="hidden lg:block lg:col-span-3">
             <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
@@ -1110,8 +1110,8 @@ ${negativePrompt}`;
           </div>
 
           {/* Center Panel - Editor Tabs */}
-          <div className="col-span-12 md:col-span-7 lg:col-span-5">
-            <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
+          <div className="lg:col-span-5">
+            <Card className="p-4 min-h-[400px] lg:h-[calc(100vh-180px)] flex flex-col">
               {selectedStyle ? (
                 <>
                   <div className="flex items-center justify-between mb-4">
@@ -1768,8 +1768,8 @@ ${negativePrompt}`;
           </div>
 
           {/* Right Panel - Preview */}
-          <div className="col-span-12 md:col-span-5 lg:col-span-4">
-            <Card className="p-4 h-[calc(100vh-180px)] flex flex-col">
+          <div className="lg:col-span-4">
+            <Card className="p-4 min-h-[400px] lg:h-[calc(100vh-180px)] flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Preview</h2>
                 <Button size="sm" variant="outline" onClick={handleCopyPreview}>
