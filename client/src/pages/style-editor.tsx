@@ -440,7 +440,7 @@ export default function StyleEditor() {
         id,
         label,
         description,
-        engines: ["nanobanana", "seedream"],
+        engines: ["nanobanana", "seedream", "nanopro"],
         basePrompt: "clean vector art style",
         referenceImageUrl: "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png",
       });
