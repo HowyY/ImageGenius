@@ -827,10 +827,10 @@ ${negativePrompt}`;
         });
 
         const result = await response.json();
-        if (result.success && result.url) {
+        if (result.success && result.localPath) {
           newImages.push({
             id: crypto.randomUUID(),
-            url: result.url,
+            url: result.localPath,
           });
         }
       } catch (error) {
