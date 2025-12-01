@@ -69,11 +69,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { StylePreset, Color, SelectCharacter, CharacterCard } from "@shared/schema";
+import type { StylePreset, Color, SelectCharacter, CharacterCard, AvatarCrop, AvatarProfile } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { ColorPaletteManager } from "@/components/ColorPaletteManager";
 import { normalizeTemplateColors } from "@/lib/templateUtils";
-import { CroppedAvatar, type AvatarCrop, type AvatarProfile } from "@/components/AvatarCropDialog";
+import { CroppedAvatar } from "@/components/AvatarCropDialog";
 import { User, Check } from "lucide-react";
 
 interface ImageReference {
@@ -1452,7 +1452,7 @@ ${negativePrompt}`;
                             </p>
                           </div>
                         ) : (
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {referenceImages.map((image, index) => (
                               <div
                                 key={image.id}
@@ -1476,25 +1476,30 @@ ${negativePrompt}`;
                                     fallbackText="Failed to load"
                                   />
                                 </div>
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="text-white"
-                                    onClick={() => setPreviewImageUrl(image.url)}
-                                  >
-                                    <Maximize2 className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="text-white"
-                                    onClick={() => handleRemoveImage(image.id)}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
+                                {/* Control overlay: always visible on mobile, hover on desktop */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent sm:bg-black/50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-end sm:items-center justify-center pb-3 sm:pb-0">
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="text-white bg-black/30 sm:bg-transparent"
+                                      onClick={() => setPreviewImageUrl(image.url)}
+                                      data-testid={`button-preview-reference-${index}`}
+                                    >
+                                      <Maximize2 className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="text-white bg-black/30 sm:bg-transparent"
+                                      onClick={() => handleRemoveImage(image.id)}
+                                      data-testid={`button-remove-reference-${index}`}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div className="absolute top-2 left-2 cursor-grab">
+                                <div className="absolute top-2 left-2 cursor-grab hidden sm:block">
                                   <GripVertical className="w-4 h-4 text-white drop-shadow-lg" />
                                 </div>
                                 <Badge className="absolute top-2 right-2" variant="secondary">
@@ -1906,14 +1911,14 @@ ${negativePrompt}`;
 
       {/* Image Preview Dialog */}
       <Dialog open={previewImageUrl !== null} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl p-2 sm:p-6">
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
           {previewImageUrl && (
             <div className="relative w-full">
               <ImageWithFallback
                 src={previewImageUrl}
                 alt="Preview"
-                className="w-full h-auto rounded-lg"
+                className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
                 loading="lazy"
                 fallbackText="Failed to load preview image"
               />
