@@ -663,6 +663,7 @@ export class MemStorage implements IStorage {
     if (data.generatedImageUrl !== undefined) updateData.generatedImageUrl = data.generatedImageUrl;
     if (data.styleId !== undefined) updateData.styleId = data.styleId;
     if (data.engine !== undefined) updateData.engine = data.engine;
+    if (data.selectedCharacterIds !== undefined) updateData.selectedCharacterIds = data.selectedCharacterIds;
 
     const [result] = await db
       .update(storyboardScenes)

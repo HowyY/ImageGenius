@@ -1963,7 +1963,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      const { voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex, selectedCharacterIds } = req.body;
       
       const scene = await storage.updateScene(id, {
         voiceOver,
@@ -1972,6 +1972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         styleId,
         engine,
         orderIndex,
+        selectedCharacterIds,
       });
 
       if (!scene) {

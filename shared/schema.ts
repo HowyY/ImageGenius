@@ -76,6 +76,7 @@ export const storyboardScenes = pgTable("storyboard_scenes", {
   generatedImageUrl: text("generated_image_url"),
   styleId: text("style_id"),
   engine: text("engine"),
+  selectedCharacterIds: text("selected_character_ids").array().default([]), // character IDs for this scene
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -239,6 +240,7 @@ export const updateStoryboardSceneSchema = z.object({
   generatedImageUrl: z.string().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
+  selectedCharacterIds: z.array(z.string()).optional(),
 });
 
 export type InsertStoryboardScene = z.infer<typeof insertStoryboardSceneSchema>;

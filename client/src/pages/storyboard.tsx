@@ -21,9 +21,12 @@ import {
   MoreHorizontal,
   Check,
   Eye,
-  X
+  X,
+  Users
 } from "lucide-react";
-import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion } from "@shared/schema";
+import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CroppedAvatar } from "@/components/AvatarCropDialog";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -83,6 +86,7 @@ export default function Storyboard() {
   const [versionDescription, setVersionDescription] = useState("");
   const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; prompt: string; style: string; engine: string; date: string } | null>(null);
+  const [characterPopoverOpen, setCharacterPopoverOpen] = useState<number | null>(null);
   
 
   const { data: storyboards, isLoading: storyboardsLoading } = useQuery<SelectStoryboard[]>({
@@ -103,6 +107,10 @@ export default function Storyboard() {
 
   const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
     queryKey: ["/api/styles"],
+  });
+
+  const { data: characters } = useQuery<SelectCharacter[]>({
+    queryKey: ["/api/characters"],
   });
 
   const { data: sceneHistory, isLoading: historyLoading } = useQuery<SelectGenerationHistory[]>({
@@ -428,6 +436,98 @@ export default function Storyboard() {
     }
   }, [editingScenes, updateSceneMutation]);
 
+  const getCharacterAvatar = useCallback((character: SelectCharacter): { imageUrl: string; crop?: AvatarCrop } | null => {
+    const cards = (character.characterCards as CharacterCard[] | null) || [];
+    const avatarProfiles = (character.avatarProfiles as Record<string, AvatarProfile> | null) || {};
+    
+    if (selectedStyle && avatarProfiles[selectedStyle]) {
+      const profile = avatarProfiles[selectedStyle];
+      if (profile?.cardId) {
+        const avatarCard = cards.find((c: CharacterCard) => c.id === profile.cardId);
+        if (avatarCard && avatarCard.imageUrl) {
+          return { imageUrl: avatarCard.imageUrl, crop: profile.crop };
+        }
+      }
+    }
+    
+    for (const profileKey of Object.keys(avatarProfiles)) {
+      const profile = avatarProfiles[profileKey];
+      if (profile?.cardId) {
+        const avatarCard = cards.find((c: CharacterCard) => c.id === profile.cardId);
+        if (avatarCard && avatarCard.imageUrl) {
+          return { imageUrl: avatarCard.imageUrl, crop: profile.crop };
+        }
+      }
+    }
+    
+    if (character.selectedCardId) {
+      const selectedCard = cards.find((c: CharacterCard) => c.id === character.selectedCardId);
+      if (selectedCard && selectedCard.imageUrl) {
+        return { imageUrl: selectedCard.imageUrl, crop: undefined };
+      }
+    }
+    
+    const cardWithImage = cards.find((c: CharacterCard) => c.imageUrl);
+    if (cardWithImage && cardWithImage.imageUrl) {
+      return { imageUrl: cardWithImage.imageUrl, crop: undefined };
+    }
+    
+    return null;
+  }, [selectedStyle]);
+
+  const getSceneCharacterRefs = useCallback((scene: SelectStoryboardScene) => {
+    const selectedIds = scene.selectedCharacterIds || [];
+    if (!characters || selectedIds.length === 0) return [];
+    
+    const refs: { characterId: string; characterName: string; visualPrompt?: string; imageUrl: string }[] = [];
+    
+    for (const charId of selectedIds) {
+      const character = characters.find(c => c.id === charId);
+      if (!character) continue;
+      
+      const cards = (character.characterCards as CharacterCard[] | null) || [];
+      const styleCard = cards.find((c: CharacterCard) => c.styleId === selectedStyle);
+      const fallbackCard = character.selectedCardId 
+        ? cards.find((c: CharacterCard) => c.id === character.selectedCardId)
+        : cards[0];
+      const displayCard = styleCard || fallbackCard;
+      
+      if (displayCard?.imageUrl) {
+        refs.push({
+          characterId: character.id,
+          characterName: character.name,
+          visualPrompt: character.visualPrompt || undefined,
+          imageUrl: displayCard.imageUrl,
+        });
+      }
+    }
+    
+    return refs;
+  }, [characters, selectedStyle]);
+
+  const updateSceneCharactersMutation = useMutation({
+    mutationFn: async ({ sceneId, characterIds }: { sceneId: number; characterIds: string[] }) => {
+      return apiRequest("PATCH", `/api/scenes/${sceneId}`, { selectedCharacterIds: characterIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update scene characters",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleSceneCharacter = useCallback((sceneId: number, characterId: string, currentIds: string[]) => {
+    const newIds = currentIds.includes(characterId)
+      ? currentIds.filter(id => id !== characterId)
+      : [...currentIds, characterId];
+    updateSceneCharactersMutation.mutate({ sceneId, characterIds: newIds });
+  }, [updateSceneCharactersMutation]);
+
   const handleGenerateClick = async (scene: SelectStoryboardScene) => {
     const editing = editingScenes[scene.id];
     const sceneDescription = editing?.sceneDescription ?? scene.visualDescription;
@@ -450,13 +550,25 @@ export default function Storyboard() {
       return;
     }
 
+    const characterRefs = getSceneCharacterRefs(scene);
+    let finalPrompt = sceneDescription;
+    
+    if (characterRefs.length > 1) {
+      const characterMappings = characterRefs.map((ref, index) => {
+        const desc = ref.visualPrompt ? ` (${ref.visualPrompt})` : '';
+        return `Reference image ${index + 1} is ${ref.characterName}${desc}`;
+      }).join('. ');
+      finalPrompt = `${characterMappings}. ${sceneDescription}`;
+    }
+
     try {
       const generateData = await startGeneration({
-        prompt: sceneDescription,
+        prompt: finalPrompt,
         styleId: selectedStyle,
         engine: selectedEngine as "nanobanana" | "seedream" | "nanopro",
         sceneId: scene.id,
         sceneName: `Scene ${scene.orderIndex + 1}`,
+        userReferenceImages: characterRefs.length > 0 ? characterRefs.map(r => r.imageUrl) : undefined,
       });
 
       await apiRequest("PATCH", `/api/scenes/${scene.id}`, {
@@ -904,6 +1016,121 @@ export default function Storyboard() {
                     </TooltipTrigger>
                     <TooltipContent>View History</TooltipContent>
                   </Tooltip>
+                </div>
+                
+                <div className="flex items-center gap-2 px-3 py-2 border-b">
+                  <Popover 
+                    open={characterPopoverOpen === scene.id} 
+                    onOpenChange={(open) => setCharacterPopoverOpen(open ? scene.id : null)}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto py-1 px-2 gap-2"
+                        data-testid={`button-scene-characters-${scene.id}`}
+                      >
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        {(() => {
+                          const selectedIds = scene.selectedCharacterIds || [];
+                          const selectedChars = characters?.filter(c => selectedIds.includes(c.id)) || [];
+                          if (selectedChars.length === 0) {
+                            return <span className="text-xs text-muted-foreground">No characters</span>;
+                          }
+                          return (
+                            <div className="flex items-center gap-1">
+                              {selectedChars.slice(0, 3).map((char) => {
+                                const avatarInfo = getCharacterAvatar(char);
+                                return avatarInfo ? (
+                                  <CroppedAvatar
+                                    key={char.id}
+                                    imageUrl={avatarInfo.imageUrl}
+                                    crop={avatarInfo.crop}
+                                    size={20}
+                                  />
+                                ) : (
+                                  <div key={char.id} className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
+                                    <span className="text-[10px] font-medium">{char.name.charAt(0)}</span>
+                                  </div>
+                                );
+                              })}
+                              {selectedChars.length > 3 && (
+                                <span className="text-xs text-muted-foreground">+{selectedChars.length - 3}</span>
+                              )}
+                              <span className="text-xs">{selectedChars.map(c => c.name).join(', ')}</span>
+                            </div>
+                          );
+                        })()}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3" align="start">
+                      <div className="space-y-3">
+                        <div className="font-medium text-sm">Select Characters</div>
+                        {!characters || characters.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No characters available. Create characters in the Character Editor.</p>
+                        ) : (
+                          <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {characters.map((char) => {
+                              const selectedIds = scene.selectedCharacterIds || [];
+                              const isSelected = selectedIds.includes(char.id);
+                              const avatarInfo = getCharacterAvatar(char);
+                              const cards = (char.characterCards as CharacterCard[] | null) || [];
+                              const hasStyleCard = cards.some((c: CharacterCard) => c.styleId === selectedStyle);
+                              
+                              return (
+                                <button
+                                  key={char.id}
+                                  className={`w-full flex items-center gap-2 p-2 rounded-md text-left transition-colors ${
+                                    isSelected 
+                                      ? 'bg-primary/10 ring-1 ring-primary' 
+                                      : 'hover:bg-muted'
+                                  }`}
+                                  onClick={() => toggleSceneCharacter(scene.id, char.id, selectedIds)}
+                                  data-testid={`button-toggle-char-${char.id}-scene-${scene.id}`}
+                                >
+                                  <div className="relative">
+                                    {avatarInfo ? (
+                                      <CroppedAvatar
+                                        imageUrl={avatarInfo.imageUrl}
+                                        crop={avatarInfo.crop}
+                                        size={32}
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                                        <span className="text-sm font-medium">{char.name.charAt(0)}</span>
+                                      </div>
+                                    )}
+                                    {isSelected && (
+                                      <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                        <Check className="w-3 h-3 text-primary-foreground" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium truncate">{char.name}</div>
+                                    {!hasStyleCard && (
+                                      <div className="text-[10px] text-amber-500">No card for this style</div>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {(scene.selectedCharacterIds || []).length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-xs"
+                            onClick={() => updateSceneCharactersMutation.mutate({ sceneId: scene.id, characterIds: [] })}
+                            data-testid={`button-clear-chars-scene-${scene.id}`}
+                          >
+                            Clear all characters
+                          </Button>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 
                 <div className="p-3">
