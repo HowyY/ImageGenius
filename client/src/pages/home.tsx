@@ -6,7 +6,6 @@ import { useSearch } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -28,7 +27,7 @@ import {
 import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Download, Lock, Unlock, Plus, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateRequestSchema } from "@shared/schema";
-import type { StylePreset, GenerateRequest, GenerateResponse } from "@shared/schema";
+import type { StylePreset, GenerateRequest } from "@shared/schema";
 import { 
   getStyleLock, 
   setStyleLock, 
@@ -49,6 +48,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { useGeneration } from "@/contexts/GenerationContext";
 
 export default function Home() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -57,8 +57,11 @@ export default function Home() {
   const [lastToastId, setLastToastId] = useState<string | undefined>(undefined);
   const [referenceImagesKey, setReferenceImagesKey] = useState(0);
   const [userRefCount, setUserRefCount] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generationError, setGenerationError] = useState<Error | null>(null);
   const { toast, dismiss } = useToast();
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const { startGeneration } = useGeneration();
   
   const searchString = useSearch();
   const sceneId = new URLSearchParams(searchString).get("sceneId");
@@ -164,43 +167,6 @@ export default function Home() {
     },
   });
 
-  const generateMutation = useMutation({
-    mutationFn: async (data: GenerateRequest) => {
-      const response = await apiRequest("POST", "/api/generate", data);
-      const result = await response.json() as GenerateResponse;
-      return { ...result, requestData: data };
-    },
-    onMutate: () => {
-      if (lastToastId) {
-        dismiss(lastToastId);
-      }
-    },
-    onSuccess: (data) => {
-      setGeneratedImage(data.imageUrl);
-      setLastGeneratedImage(data.imageUrl);
-      queryClient.invalidateQueries({ queryKey: ["/api/history"] });
-      
-      if (sceneId) {
-        updateSceneMutation.mutate({
-          id: parseInt(sceneId, 10),
-          generatedImageUrl: data.imageUrl,
-          styleId: data.requestData.styleId,
-          engine: data.requestData.engine,
-        });
-        const { id } = toast({
-          title: "Scene image updated!",
-          description: "Image generated and added to your storyboard scene.",
-        });
-        setLastToastId(id);
-      } else {
-        const { id } = toast({
-          title: "Image generated successfully!",
-          description: "Your image is ready. Generate another or try a different style.",
-        });
-        setLastToastId(id);
-      }
-    },
-  });
 
   const handleStyleChange = (value: string, onChange: (value: string) => void) => {
     onChange(value);
@@ -218,7 +184,14 @@ export default function Home() {
     setStyleLock(newLocked, newLocked ? currentStyleId : null);
   };
 
-  const onSubmit = (data: GenerateRequest) => {
+  const onSubmit = async (data: GenerateRequest) => {
+    if (lastToastId) {
+      dismiss(lastToastId);
+    }
+    
+    setIsSubmitting(true);
+    setGenerationError(null);
+    
     const userReferenceImages = getUserReferenceImages();
     
     // Load style-specific custom template from localStorage if exists
@@ -249,8 +222,40 @@ export default function Home() {
       userReferenceImages: userReferenceImages.length > 0 ? userReferenceImages : undefined,
       customTemplate,
       templateReferenceImages: templateReferenceImages.length > 0 ? templateReferenceImages : undefined,
+      sceneId: sceneId ? parseInt(sceneId, 10) : undefined,
     };
-    generateMutation.mutate(requestData);
+    
+    try {
+      const result = await startGeneration(requestData);
+      
+      setGeneratedImage(result.imageUrl);
+      setLastGeneratedImage(result.imageUrl);
+      queryClient.invalidateQueries({ queryKey: ["/api/history"] });
+      
+      if (sceneId) {
+        updateSceneMutation.mutate({
+          id: parseInt(sceneId, 10),
+          generatedImageUrl: result.imageUrl,
+          styleId: data.styleId,
+          engine: data.engine,
+        });
+        const { id } = toast({
+          title: "Scene image updated!",
+          description: "Image generated and added to your storyboard scene.",
+        });
+        setLastToastId(id);
+      } else {
+        const { id } = toast({
+          title: "Image generated successfully!",
+          description: "Your image is ready. Generate another or try a different style.",
+        });
+        setLastToastId(id);
+      }
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error : new Error("Generation failed"));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAddAsReference = () => {
@@ -274,8 +279,8 @@ export default function Home() {
     }
   };
 
-  const isGenerating = generateMutation.isPending;
-  const error = generateMutation.error;
+  const isGenerating = isSubmitting;
+  const error = generationError;
 
   const handleDownload = async () => {
     if (!generatedImage) return;

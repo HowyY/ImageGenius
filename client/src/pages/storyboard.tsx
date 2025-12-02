@@ -23,7 +23,7 @@ import {
   Eye,
   X
 } from "lucide-react";
-import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, GenerateResponse, SelectStoryboard, SelectStoryboardVersion } from "@shared/schema";
+import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion } from "@shared/schema";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
+import { useGeneration } from "@/contexts/GenerationContext";
 
 interface EditingState {
   sceneDescription: string;
@@ -62,12 +63,12 @@ function clearCurrentStoryboardId() {
 
 export default function Storyboard() {
   const { toast } = useToast();
+  const { startGeneration, isGenerating } = useGeneration();
   const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
   const [selectedStyle, setSelectedStyle] = useState<string>(getSelectedStyleId() || "");
   const [selectedEngine, setSelectedEngineState] = useState<string>(getEngine() || "nanobanana");
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historySceneId, setHistorySceneId] = useState<number | null>(null);
-  const [generatingScenes, setGeneratingScenes] = useState<Set<number>>(new Set());
   const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
   
   const [currentStoryboardId, setCurrentStoryboardIdState] = useState<number | null>(getCurrentStoryboardId());
@@ -449,16 +450,14 @@ export default function Storyboard() {
       return;
     }
 
-    setGeneratingScenes(prev => new Set(prev).add(scene.id));
-
     try {
-      const generateRes = await apiRequest("POST", "/api/generate", {
+      const generateData = await startGeneration({
         prompt: sceneDescription,
         styleId: selectedStyle,
-        engine: selectedEngine,
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro",
         sceneId: scene.id,
+        sceneName: `Scene ${scene.orderIndex + 1}`,
       });
-      const generateData = await generateRes.json() as GenerateResponse;
 
       await apiRequest("PATCH", `/api/scenes/${scene.id}`, {
         generatedImageUrl: generateData.imageUrl,
@@ -479,12 +478,6 @@ export default function Storyboard() {
         title: "Generation failed",
         description: error instanceof Error ? error.message : "Failed to generate image",
         variant: "destructive",
-      });
-    } finally {
-      setGeneratingScenes(prev => {
-        const next = new Set(prev);
-        next.delete(scene.id);
-        return next;
       });
     }
   };
@@ -530,18 +523,17 @@ export default function Storyboard() {
     const editPrompt = editDialog.editPrompt;
     const imageUrl = editDialog.imageUrl;
     
-    setGeneratingScenes(prev => new Set(prev).add(sceneIdToEdit));
     setEditDialog(null);
 
     try {
-      const generateRes = await apiRequest("POST", "/api/generate", {
+      const generateData = await startGeneration({
         prompt: editPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine,
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro",
         userReferenceImages: [imageUrl],
         sceneId: sceneIdToEdit,
+        sceneName: `Scene Edit`,
       });
-      const generateData = await generateRes.json() as GenerateResponse;
 
       await apiRequest("PATCH", `/api/scenes/${sceneIdToEdit}`, {
         generatedImageUrl: generateData.imageUrl,
@@ -562,12 +554,6 @@ export default function Storyboard() {
         title: "Edit failed",
         description: error instanceof Error ? error.message : "Failed to edit image",
         variant: "destructive",
-      });
-    } finally {
-      setGeneratingScenes(prev => {
-        const next = new Set(prev);
-        next.delete(sceneIdToEdit);
-        return next;
       });
     }
   };
@@ -858,7 +844,7 @@ export default function Storyboard() {
                       : 'bg-amber-50 dark:bg-amber-950/30 border-2 border-dashed border-amber-400 dark:border-amber-600'
                   }`}
                 >
-                  {generatingScenes.has(scene.id) ? (
+                  {isGenerating(scene.id) ? (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
                       <Loader2 className="w-10 h-10 animate-spin" />
                       <span className="text-sm font-medium">Generating...</span>
@@ -889,7 +875,7 @@ export default function Storyboard() {
                           e.stopPropagation();
                           deleteSceneMutation.mutate(scene.id);
                         }}
-                        disabled={deleteSceneMutation.isPending || generatingScenes.has(scene.id)}
+                        disabled={deleteSceneMutation.isPending || isGenerating(scene.id)}
                         data-testid={`button-delete-scene-${scene.id}`}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -943,11 +929,11 @@ export default function Storyboard() {
                   <div className="flex gap-2 mt-3">
                     <Button
                       onClick={() => handleGenerateClick(scene)}
-                      disabled={generatingScenes.has(scene.id) || !getSceneDescription(scene).trim()}
+                      disabled={isGenerating(scene.id) || !getSceneDescription(scene).trim()}
                       className="flex-1"
                       data-testid={`button-generate-scene-${scene.id}`}
                     >
-                      {generatingScenes.has(scene.id) ? (
+                      {isGenerating(scene.id) ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           Generating...
@@ -966,7 +952,7 @@ export default function Storyboard() {
                           variant="outline"
                           size="icon"
                           onClick={() => handleEditClick(scene)}
-                          disabled={generatingScenes.has(scene.id) || !scene.generatedImageUrl}
+                          disabled={isGenerating(scene.id) || !scene.generatedImageUrl}
                           data-testid={`button-edit-scene-${scene.id}`}
                         >
                           <Pencil className="w-4 h-4" />

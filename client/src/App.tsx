@@ -4,6 +4,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navigation } from "@/components/navigation";
+import { GenerationProvider } from "@/contexts/GenerationContext";
+import { GenerationStatusPanel } from "@/components/GenerationStatusPanel";
 import Home from "@/pages/home";
 import History from "@/pages/history";
 import Storyboard from "@/pages/storyboard";
@@ -30,9 +32,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Navigation />
-        <Toaster />
-        <Router />
+        <GenerationProvider>
+          <Navigation />
+          <Toaster />
+          <Router />
+          <GenerationStatusPanel />
+        </GenerationProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
