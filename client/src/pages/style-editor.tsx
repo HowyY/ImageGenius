@@ -290,6 +290,7 @@ export default function StyleEditor() {
     cardId: string;
     imageUrl: string;
     characterName: string;
+    visualPrompt?: string;
   }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const testPromptRef = useRef<HTMLTextAreaElement>(null);
@@ -791,8 +792,22 @@ ${negativePrompt}`;
   const handleTestGenerate = () => {
     if (!selectedStyleId || !testPrompt.trim()) return;
     
+    let finalPrompt = testPrompt;
+    
+    // When multiple characters are selected, prepend character-to-reference mapping
+    if (selectedCharacterRefs.length > 1) {
+      const characterMappings = selectedCharacterRefs.map((ref, index) => {
+        const desc = ref.visualPrompt 
+          ? ` (${ref.visualPrompt})` 
+          : '';
+        return `Reference image ${index + 1} is ${ref.characterName}${desc}`;
+      }).join('. ');
+      
+      finalPrompt = `${characterMappings}. ${testPrompt}`;
+    }
+    
     const payload: { prompt: string; styleId: string; engine: string; userReferenceImages?: string[] } = {
-      prompt: testPrompt,
+      prompt: finalPrompt,
       styleId: selectedStyleId,
       engine: testEngine,
     };
@@ -1672,6 +1687,7 @@ ${negativePrompt}`;
                                                 cardId: displayCard.id,
                                                 imageUrl: displayCard.imageUrl,
                                                 characterName: character.name,
+                                                visualPrompt: character.visualPrompt || undefined,
                                               }
                                             ]);
                                           }
