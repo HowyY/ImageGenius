@@ -292,6 +292,7 @@ export default function StyleEditor() {
     characterName: string;
   }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const testPromptRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
   const { data: styles, isLoading: stylesLoading } = useQuery<ExtendedStylePreset[]>({
@@ -1882,7 +1883,22 @@ ${negativePrompt}`;
                             onClick={() => {
                               const placeholder = `[${ref.characterName}]`;
                               if (!testPrompt.includes(placeholder)) {
-                                setTestPrompt(prev => `${placeholder} ${prev}`.trim());
+                                const textarea = testPromptRef.current;
+                                if (textarea) {
+                                  const start = textarea.selectionStart;
+                                  const end = textarea.selectionEnd;
+                                  const before = testPrompt.substring(0, start);
+                                  const after = testPrompt.substring(end);
+                                  const newValue = before + placeholder + after;
+                                  setTestPrompt(newValue);
+                                  setTimeout(() => {
+                                    textarea.focus();
+                                    const newCursorPos = start + placeholder.length;
+                                    textarea.setSelectionRange(newCursorPos, newCursorPos);
+                                  }, 0);
+                                } else {
+                                  setTestPrompt(prev => `${prev} ${placeholder}`.trim());
+                                }
                               }
                             }}
                             data-testid={`button-insert-${ref.cardId}`}
@@ -1894,6 +1910,7 @@ ${negativePrompt}`;
                     )}
                   </div>
                   <Textarea
+                    ref={testPromptRef}
                     value={testPrompt}
                     onChange={(e) => setTestPrompt(e.target.value)}
                     placeholder={selectedCharacterRefs.length > 0 
