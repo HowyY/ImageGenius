@@ -54,6 +54,7 @@ interface Style {
   id: string;
   label: string;
   description: string;
+  engines: string[];
 }
 
 export default function CharacterEditor() {
@@ -431,11 +432,15 @@ export default function CharacterEditor() {
       let imageUrl: string;
       
       if (hasEditPrompt) {
-        // Edit mode: Use main /api/generate with current image as reference
+        // Edit mode: Use direct API call for local preview without global task tracking
+        // Get the style's engines to select an appropriate engine
+        const style = styles.find(s => s.id === editingCard.styleId);
+        const engine = style?.engines?.[0] || "nanobanana";
+        
         const res = await apiRequest("POST", "/api/generate", {
           prompt: editPrompt,
           styleId: editingCard.styleId,
-          engine: "nanobanana",
+          engine: engine,
           userReferenceImages: [editingCard.imageUrl],
           isEditMode: true,
         });
