@@ -42,12 +42,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X, Users, Images, Menu, UserCircle, Crop } from "lucide-react";
+import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X, Users, Images, Menu, UserCircle, Crop, Maximize2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { AvatarCropDialog, CroppedAvatar } from "@/components/AvatarCropDialog";
+import { PreviewImage } from "@/components/ImageLightbox";
 import type { SelectCharacter, InsertCharacter, UpdateCharacter, CharacterCard, AvatarProfiles, AvatarCrop, AvatarProfile } from "@shared/schema";
 
 interface Style {
@@ -1174,12 +1175,12 @@ export default function CharacterEditor() {
                   </div>
                 )}
               </div>
-              <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
+              <div className="rounded-lg overflow-hidden border bg-muted min-h-[200px] max-h-[400px] flex items-center justify-center">
                 {editingCard && (
-                  <img 
+                  <PreviewImage 
                     src={editingCard.imageUrl} 
                     alt="Original card"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full"
                     data-testid="img-original-card"
                   />
                 )}
@@ -1193,11 +1194,11 @@ export default function CharacterEditor() {
               </h4>
               
               {regeneratedImageUrl ? (
-                <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
-                  <img 
+                <div className="rounded-lg overflow-hidden border bg-muted min-h-[200px] max-h-[400px] flex items-center justify-center">
+                  <PreviewImage 
                     src={regeneratedImageUrl} 
                     alt="Regenerated card"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full"
                     data-testid="img-regenerated-card"
                   />
                 </div>
@@ -1258,7 +1259,7 @@ export default function CharacterEditor() {
                   )}
                   
                   {/* Placeholder for regenerated image */}
-                  <div className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/50">
+                  <div className="min-h-[200px] max-h-[400px] rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/50">
                     <div className="text-center text-muted-foreground">
                       {editPrompt.trim() ? (
                         <>
