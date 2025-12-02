@@ -1,4 +1,3 @@
-
 # AI Image Generator - Development Log
 
 ## Project Overview
@@ -193,16 +192,17 @@ Build an AI-powered image generation tool for ORAMA's storyboard feature, suppor
   - _Implementation: Individual character references with multiple variations approach (Plan B from character_editor_plan.md)_
 
 ### Medium Priority
-- [ ] **Character Integration in Style Editor**: Enable character card selection as references
-  - Add backend functionality to attach selected character cards as reference images
-  - Update generation API to include character card images in reference list
-  - Test character consistency across different styles
+- [x] **Character Integration in Style Editor**: Enable character card selection as references ✅ (Nov 26, 2025)
+  - ✅ Added Characters tab in Style Editor showing character cards filtered by current style
+  - ✅ Implemented character card selection functionality with visual feedback
+  - ✅ Backend integration to include selected character card URL as `userReferenceImages` in generation API
+  - ✅ Test generation now uses selected character card as reference image
+  - _Implementation: Character cards are displayed when they match the current style, can be selected with "Selected as reference" indicator_
 
 - [ ] **Character Integration in Storyboard**: Connect characters to scene generation
   - Add character selection UI in storyboard scenes
-  - Integrate character variations as reference images
-  - Implement character-aware prompt building
-  - Test multi-character scene generation
+  - Integrate character cards as reference images in scene generation
+  - Enable multi-character scene composition
 
 - [ ] **Storyboard Edit Dialog Improvements**: Add image comparison feature
   - Show side-by-side comparison of original vs edited image
@@ -268,4 +268,36 @@ _Add any additional notes, learnings, or decisions here._
 
 ---
 
-*Last Updated: November 26, 2025 - Character System Completed*
+## Recent Sessions
+
+### Session: Nov 26, 2025 (Morning)
+**Character System Implementation**
+- Created character database schema and API endpoints
+- Built Character Editor UI with CRUD operations
+- Implemented character variation management (primary + additional variations)
+- Added drag-and-drop file upload for character variations
+
+### Session: Nov 26, 2025 (Afternoon)
+**Character Integration in Style Editor**
+
+#### Completed Features
+1. **Style Editor - Characters Tab**: 
+   - Added dedicated "Characters" tab to Style Editor interface
+   - Displays character cards filtered by current selected style
+   - Click-to-select functionality with "Selected as reference" indicator
+   - Selected character card URL automatically included in test generation
+
+2. **Character Card Reference Integration**:
+   - Backend `/api/generate` receives character card URL via `userReferenceImages`
+   - Enables consistent character appearance using cards as reference images
+   - Seamless integration with existing generation workflow
+
+#### Discovered UX Improvements Needed
+- Double-click preview interaction needs visual hint (hover tooltip)
+- Test-generated images should be saveable as character cards
+- Old character cards need version management when style templates change
+- Multi-character selection capability (API supports up to 8 references)
+
+---
+
+*Last Updated: November 26, 2025 - Character Integration in Style Editor Completed*
