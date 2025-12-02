@@ -80,9 +80,10 @@ export default function CharacterEditor() {
   // Edit card state
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingCard, setEditingCard] = useState<CharacterCard | null>(null);
-  const [editAngle, setEditAngle] = useState<string>("front");
-  const [editPose, setEditPose] = useState<string>("standing");
-  const [editExpression, setEditExpression] = useState<string>("neutral");
+  const [editAngle, setEditAngle] = useState<string>("keep");
+  const [editPose, setEditPose] = useState<string>("keep");
+  const [editExpression, setEditExpression] = useState<string>("keep");
+  const [editPrompt, setEditPrompt] = useState<string>("");
   const [regeneratedImageUrl, setRegeneratedImageUrl] = useState<string | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
   
@@ -393,9 +394,10 @@ export default function CharacterEditor() {
 
   const handleOpenEditDialog = (card: CharacterCard) => {
     setEditingCard(card);
-    setEditAngle(card.angle || "front");
-    setEditPose(card.pose || "standing");
-    setEditExpression(card.expression || "neutral");
+    setEditAngle("keep");
+    setEditPose("keep");
+    setEditExpression("keep");
+    setEditPrompt("");
     setRegeneratedImageUrl(null);
     setShowEditDialog(true);
   };
@@ -410,10 +412,15 @@ export default function CharacterEditor() {
     if (!selectedCharacter || !editingCard) return;
     
     const visualPrompt = editedCharacter.visualPrompt ?? selectedCharacter.visualPrompt;
-    if (!visualPrompt?.trim()) {
+    
+    // Determine if this is an edit (using edit prompt) or regenerate (using new settings)
+    const hasEditPrompt = editPrompt.trim().length > 0;
+    const hasSettingsChange = editAngle !== "keep" || editPose !== "keep" || editExpression !== "keep";
+    
+    if (!hasEditPrompt && !hasSettingsChange) {
       toast({
-        title: "Error",
-        description: "Character has no visual description",
+        title: "No changes",
+        description: "Please enter an edit prompt or change at least one setting",
         variant: "destructive",
       });
       return;
@@ -421,28 +428,55 @@ export default function CharacterEditor() {
 
     setIsRegenerating(true);
     try {
-      const res = await apiRequest("POST", "/api/characters/generate-card", {
-        characterId: selectedCharacter.id,
-        styleId: editingCard.styleId,
-        visualPrompt: visualPrompt,
-        angle: editAngle,
-        pose: editPose,
-        expression: editExpression,
-        isCharacterSheet: false,
-      });
-      const result = await res.json();
+      let imageUrl: string;
       
-      if (result.card?.imageUrl) {
-        setRegeneratedImageUrl(result.card.imageUrl);
+      if (hasEditPrompt) {
+        // Edit mode: Use main /api/generate with current image as reference
+        const res = await apiRequest("POST", "/api/generate", {
+          prompt: editPrompt,
+          styleId: editingCard.styleId,
+          engine: "nanobanana",
+          userReferenceImages: [editingCard.imageUrl],
+          isEditMode: true,
+        });
+        const result = await res.json();
+        imageUrl = result.imageUrl;
+      } else {
+        // Regenerate mode: Use character card generator with new settings
+        if (!visualPrompt?.trim()) {
+          toast({
+            title: "Error",
+            description: "Character has no visual description",
+            variant: "destructive",
+          });
+          setIsRegenerating(false);
+          return;
+        }
+        
+        const res = await apiRequest("POST", "/api/characters/generate-card", {
+          characterId: selectedCharacter.id,
+          styleId: editingCard.styleId,
+          visualPrompt: visualPrompt,
+          angle: editAngle !== "keep" ? editAngle : (editingCard.angle || "front"),
+          pose: editPose !== "keep" ? editPose : (editingCard.pose || "standing"),
+          expression: editExpression !== "keep" ? editExpression : (editingCard.expression || "neutral"),
+          isCharacterSheet: false,
+        });
+        const result = await res.json();
+        imageUrl = result.card?.imageUrl;
+      }
+      
+      if (imageUrl) {
+        setRegeneratedImageUrl(imageUrl);
         toast({
-          title: "Regenerated",
-          description: "New card generated. Compare and choose to keep or discard.",
+          title: hasEditPrompt ? "Edited" : "Regenerated",
+          description: "New image generated. Compare and choose to keep or discard.",
         });
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to regenerate card",
+        description: error instanceof Error ? error.message : "Failed to process card",
         variant: "destructive",
       });
     } finally {
@@ -453,15 +487,17 @@ export default function CharacterEditor() {
   const handleKeepRegenerated = () => {
     if (!selectedCharacter || !editingCard || !regeneratedImageUrl) return;
     
+    const hasEditPrompt = editPrompt.trim().length > 0;
     const currentCards = editedCharacter.characterCards ?? selectedCharacter.characterCards ?? [];
     const updatedCards = currentCards.map((c: CharacterCard) => {
       if (c.id === editingCard.id) {
         return {
           ...c,
           imageUrl: regeneratedImageUrl,
-          angle: editAngle,
-          pose: editPose,
-          expression: editExpression,
+          // Only update settings if changed (not "keep") and not in edit prompt mode
+          angle: hasEditPrompt ? c.angle : (editAngle !== "keep" ? editAngle : c.angle),
+          pose: hasEditPrompt ? c.pose : (editPose !== "keep" ? editPose : c.pose),
+          expression: hasEditPrompt ? c.expression : (editExpression !== "keep" ? editExpression : c.expression),
         };
       }
       return c;
@@ -1091,21 +1127,36 @@ export default function CharacterEditor() {
 
       {/* Edit Card Dialog with Comparison View */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Character Card</DialogTitle>
             <DialogDescription>
-              Adjust settings and regenerate. Compare the new result with the original.
+              Enter an edit prompt to modify the image, or change settings to regenerate with new parameters.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid grid-cols-2 gap-6 py-4">
+          {/* Edit Prompt Section */}
+          <div className="space-y-2">
+            <Label>Edit Prompt (optional)</Label>
+            <Textarea
+              placeholder="Describe what you want to change, e.g., 'add glasses', 'change hair color to blue', 'make the background darker'..."
+              value={editPrompt}
+              onChange={(e) => setEditPrompt(e.target.value)}
+              className="min-h-[80px] resize-none"
+              data-testid="textarea-edit-prompt"
+            />
+            <p className="text-xs text-muted-foreground">
+              If provided, the AI will modify the current image based on your prompt. Leave empty to regenerate with new settings below.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             {/* Left Side - Original Image */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <h4 className="font-medium">Original</h4>
                 {editingCard && (
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap gap-1">
                     {editingCard.angle && (
                       <Badge variant="outline" className="text-xs">{editingCard.angle}</Badge>
                     )}
@@ -1133,7 +1184,7 @@ export default function CharacterEditor() {
             {/* Right Side - Regenerated or Controls */}
             <div className="space-y-3">
               <h4 className="font-medium">
-                {regeneratedImageUrl ? "Regenerated" : "New Settings"}
+                {regeneratedImageUrl ? (editPrompt.trim() ? "Edited" : "Regenerated") : "Settings (for regenerate)"}
               </h4>
               
               {regeneratedImageUrl ? (
@@ -1149,12 +1200,13 @@ export default function CharacterEditor() {
                 <div className="space-y-4">
                   {/* Angle Selector */}
                   <div className="space-y-2">
-                    <Label>Angle</Label>
-                    <Select value={editAngle} onValueChange={setEditAngle}>
+                    <Label className="text-muted-foreground">Angle</Label>
+                    <Select value={editAngle} onValueChange={setEditAngle} disabled={!!editPrompt.trim()}>
                       <SelectTrigger data-testid="select-edit-angle">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="keep">Keep Current ({editingCard?.angle || "not set"})</SelectItem>
                         {angleOptions.map(opt => (
                           <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
@@ -1164,12 +1216,13 @@ export default function CharacterEditor() {
                   
                   {/* Pose Selector */}
                   <div className="space-y-2">
-                    <Label>Pose</Label>
-                    <Select value={editPose} onValueChange={setEditPose}>
+                    <Label className="text-muted-foreground">Pose</Label>
+                    <Select value={editPose} onValueChange={setEditPose} disabled={!!editPrompt.trim()}>
                       <SelectTrigger data-testid="select-edit-pose">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="keep">Keep Current ({editingCard?.pose || "not set"})</SelectItem>
                         {poseOptions.map(opt => (
                           <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
@@ -1179,12 +1232,13 @@ export default function CharacterEditor() {
                   
                   {/* Expression Selector */}
                   <div className="space-y-2">
-                    <Label>Expression</Label>
-                    <Select value={editExpression} onValueChange={setEditExpression}>
+                    <Label className="text-muted-foreground">Expression</Label>
+                    <Select value={editExpression} onValueChange={setEditExpression} disabled={!!editPrompt.trim()}>
                       <SelectTrigger data-testid="select-edit-expression">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="keep">Keep Current ({editingCard?.expression || "not set"})</SelectItem>
                         {expressionOptions.map(opt => (
                           <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
@@ -1192,11 +1246,26 @@ export default function CharacterEditor() {
                     </Select>
                   </div>
                   
+                  {editPrompt.trim() && (
+                    <p className="text-xs text-muted-foreground">
+                      Settings are disabled when using edit prompt. Clear the prompt to change settings.
+                    </p>
+                  )}
+                  
                   {/* Placeholder for regenerated image */}
                   <div className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/50">
                     <div className="text-center text-muted-foreground">
-                      <RefreshCw className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Click Regenerate to preview</p>
+                      {editPrompt.trim() ? (
+                        <>
+                          <Pencil className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Click Edit to apply changes</p>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Click Regenerate to preview</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1239,7 +1308,12 @@ export default function CharacterEditor() {
                   {isRegenerating ? (
                     <>
                       <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      Regenerating...
+                      {editPrompt.trim() ? "Editing..." : "Regenerating..."}
+                    </>
+                  ) : editPrompt.trim() ? (
+                    <>
+                      <Pencil className="w-4 h-4 mr-2" />
+                      Edit Image
                     </>
                   ) : (
                     <>
