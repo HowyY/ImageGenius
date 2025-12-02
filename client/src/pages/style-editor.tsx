@@ -285,12 +285,12 @@ export default function StyleEditor() {
   const [testEngine, setTestEngine] = useState<string>("nanobanana");
   const [activeTab, setActiveTab] = useState("template");
   const [testResultUrl, setTestResultUrl] = useState<string | null>(null);
-  // Store selected character reference with cardId for reliable tracking
-  const [selectedCharacterRef, setSelectedCharacterRef] = useState<{
+  // Store multiple selected character references with cardId for reliable tracking
+  const [selectedCharacterRefs, setSelectedCharacterRefs] = useState<{
     cardId: string;
     imageUrl: string;
     characterName: string;
-  } | null>(null);
+  }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -555,7 +555,7 @@ export default function StyleEditor() {
 
   // Reset character card selection when style changes
   useEffect(() => {
-    setSelectedCharacterRef(null);
+    setSelectedCharacterRefs([]);
   }, [selectedStyleId]);
 
   const generateSimplePreview = (simpleTemplate: SimpleTemplate, basePrompt: string) => {
@@ -796,9 +796,9 @@ ${negativePrompt}`;
       engine: testEngine,
     };
     
-    // Include selected character card as a user reference image
-    if (selectedCharacterRef?.imageUrl) {
-      payload.userReferenceImages = [selectedCharacterRef.imageUrl];
+    // Include all selected character cards as user reference images
+    if (selectedCharacterRefs.length > 0) {
+      payload.userReferenceImages = selectedCharacterRefs.map(ref => ref.imageUrl);
     }
     
     generateMutation.mutate(payload);
@@ -1644,11 +1644,10 @@ ${negativePrompt}`;
                                   }
                                   
                                   // Use cardId for reliable selection tracking (URLs may change/expire)
-                                  // Only consider selected if both displayCard and selectedCharacterRef have valid cardIds
+                                  // Check if this character's displayCard is in the selected array
                                   const isSelected = Boolean(
                                     displayCard?.id && 
-                                    selectedCharacterRef?.cardId && 
-                                    displayCard.id === selectedCharacterRef.cardId
+                                    selectedCharacterRefs.some(ref => ref.cardId === displayCard.id)
                                   );
                                   
                                   // Get avatar with crop info
@@ -1660,15 +1659,20 @@ ${negativePrompt}`;
                                       className="flex flex-col items-center gap-1 group cursor-pointer"
                                       onClick={() => {
                                         if (displayCard?.id && displayCard?.imageUrl) {
-                                          // Toggle selection: click to select, click again to deselect
+                                          // Toggle selection: click to add, click again to remove
                                           if (isSelected) {
-                                            setSelectedCharacterRef(null);
+                                            setSelectedCharacterRefs(prev => 
+                                              prev.filter(ref => ref.cardId !== displayCard.id)
+                                            );
                                           } else {
-                                            setSelectedCharacterRef({
-                                              cardId: displayCard.id,
-                                              imageUrl: displayCard.imageUrl,
-                                              characterName: character.name,
-                                            });
+                                            setSelectedCharacterRefs(prev => [
+                                              ...prev,
+                                              {
+                                                cardId: displayCard.id,
+                                                imageUrl: displayCard.imageUrl,
+                                                characterName: character.name,
+                                              }
+                                            ]);
                                           }
                                         }
                                       }}
@@ -1787,17 +1791,34 @@ ${negativePrompt}`;
               <Separator className="my-4" />
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="font-medium">Test Generation</h3>
-                  {selectedCharacterRef && (
-                    <Badge 
-                      variant="outline" 
-                      className="text-xs cursor-pointer"
-                      onClick={() => setSelectedCharacterRef(null)}
-                    >
-                      {selectedCharacterRef.characterName}
-                      <X className="w-3 h-3 ml-1" />
-                    </Badge>
+                  {selectedCharacterRefs.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {selectedCharacterRefs.map((ref) => (
+                        <Badge 
+                          key={ref.cardId}
+                          variant="outline" 
+                          className="text-xs cursor-pointer"
+                          onClick={() => setSelectedCharacterRefs(prev => 
+                            prev.filter(r => r.cardId !== ref.cardId)
+                          )}
+                        >
+                          {ref.characterName}
+                          <X className="w-3 h-3 ml-1" />
+                        </Badge>
+                      ))}
+                      {selectedCharacterRefs.length > 1 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs text-muted-foreground"
+                          onClick={() => setSelectedCharacterRefs([])}
+                        >
+                          Clear all
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
                 
@@ -1849,37 +1870,42 @@ ${negativePrompt}`;
                   </Select>
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                     <Label>Test Prompt</Label>
-                    {selectedCharacterRef && (
-                      <button
-                        type="button"
-                        className="text-xs text-primary hover:underline"
-                        onClick={() => {
-                          const placeholder = `[${selectedCharacterRef.characterName}]`;
-                          if (!testPrompt.includes(placeholder)) {
-                            setTestPrompt(prev => `${placeholder} ${prev}`.trim());
-                          }
-                        }}
-                        data-testid="button-insert-character-placeholder"
-                      >
-                        Insert [{selectedCharacterRef.characterName}]
-                      </button>
+                    {selectedCharacterRefs.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {selectedCharacterRefs.map((ref) => (
+                          <button
+                            key={ref.cardId}
+                            type="button"
+                            className="text-xs text-primary hover:underline"
+                            onClick={() => {
+                              const placeholder = `[${ref.characterName}]`;
+                              if (!testPrompt.includes(placeholder)) {
+                                setTestPrompt(prev => `${placeholder} ${prev}`.trim());
+                              }
+                            }}
+                            data-testid={`button-insert-${ref.cardId}`}
+                          >
+                            + [{ref.characterName}]
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                   <Textarea
                     value={testPrompt}
                     onChange={(e) => setTestPrompt(e.target.value)}
-                    placeholder={selectedCharacterRef 
-                      ? `[${selectedCharacterRef.characterName}] running in the park...`
+                    placeholder={selectedCharacterRefs.length > 0 
+                      ? `[${selectedCharacterRefs.map(r => r.characterName).join('] and [')}] running in the park...`
                       : "A girl running in the park..."
                     }
                     rows={2}
                     data-testid="textarea-test-prompt"
                   />
-                  {selectedCharacterRef && (
+                  {selectedCharacterRefs.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Use [{selectedCharacterRef.characterName}] in your prompt to reference the selected character
+                      Use {selectedCharacterRefs.map(r => `[${r.characterName}]`).join(', ')} in your prompt to reference the selected character{selectedCharacterRefs.length > 1 ? 's' : ''}
                     </p>
                   )}
                 </div>
