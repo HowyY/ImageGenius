@@ -533,6 +533,7 @@ export default function Storyboard() {
         userReferenceImages: [imageUrl],
         sceneId: sceneIdToEdit,
         sceneName: `Scene Edit`,
+        isEditMode: true,
       });
 
       await apiRequest("PATCH", `/api/scenes/${sceneIdToEdit}`, {
