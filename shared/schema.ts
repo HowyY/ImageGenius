@@ -380,6 +380,7 @@ export const generateRequestSchema = z.object({
   customTemplate: anyTemplateSchema.optional(),
   templateReferenceImages: z.array(z.string()).optional(),
   sceneId: z.number().optional(),
+  isEditMode: z.boolean().optional(),
 });
 
 export const generateResponseSchema = z.object({
