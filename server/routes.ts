@@ -1050,7 +1050,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages, sceneId } = validationResult.data;
+      const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages, sceneId, isEditMode } = validationResult.data;
       
       // Parse character placeholders from prompt (format: [角色名] or [CharacterName])
       // Only process placeholders that match known character names (with normalization)
@@ -1187,112 +1187,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls.push(...userReferenceImages);
       }
       
-      // Add template reference images if exists (from request or database)
-      const allTemplateReferenceImages = templateReferenceImages?.length 
-        ? templateReferenceImages 
-        : dbTemplateReferenceImages;
-        
-      if (allTemplateReferenceImages && allTemplateReferenceImages.length > 0) {
-        console.log(`Uploading ${allTemplateReferenceImages.length} template reference images on-demand...`);
-        const uploadPromises = allTemplateReferenceImages.map(async (path) => {
-          try {
-            // Upload image on-demand (uses cache if already uploaded)
-            return await uploadImageOnDemand(path, styleId);
-          } catch (error) {
-            console.error(`Failed to upload template image ${path}:`, error);
-            return null;
-          }
-        });
-        
-        const uploadedUrls = await Promise.all(uploadPromises);
-        const validUrls = uploadedUrls.filter((url): url is string => url !== null);
-        imageUrls.push(...validUrls);
-      }
-      
-      // Add style preset reference images (upload on-demand with deduplication)
-      // Get all reference image file paths from the file system
-      const styleReferencePaths = getStyleReferenceImagePaths(styleId);
-      
-      if (styleReferencePaths.length > 0) {
-        // Normalize URLs/paths to enable proper comparison
-        // Extracts the relative path portion (e.g., "/reference-images/style-1/1.png")
-        const normalizePathForComparison = (urlOrPath: string): string => {
-          // If it's an HTTP(S) URL, extract the path portion after the domain
-          if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
-            try {
-              const url = new URL(urlOrPath);
-              // Extract path after domain, look for /reference-images/ pattern
-              const match = url.pathname.match(/\/reference-images\/.*$/);
-              return match ? match[0] : urlOrPath;
-            } catch {
-              return urlOrPath;
-            }
-          }
+      // In edit mode, skip template and style reference images - only use the image being edited
+      if (!isEditMode) {
+        // Add template reference images if exists (from request or database)
+        const allTemplateReferenceImages = templateReferenceImages?.length 
+          ? templateReferenceImages 
+          : dbTemplateReferenceImages;
           
-          // For local paths, ensure consistent format with leading slash
-          // Handle both "/reference-images/..." and "reference-images/..."
-          if (urlOrPath.includes('reference-images/')) {
-            // Extract everything from "reference-images/" onward
-            const match = urlOrPath.match(/reference-images\/.*$/);
-            if (match) {
-              // Return with leading slash for consistency
-              return '/' + match[0];
-            }
-          }
-          
-          return urlOrPath;
-        };
-        
-        // Build set of existing normalized paths for deduplication
-        const existingNormalizedPaths = new Set(
-          imageUrls.map(url => normalizePathForComparison(url))
-        );
-        
-        // Filter out any paths that already exist (by full normalized path, not just filename)
-        const uniquePaths = styleReferencePaths.filter(path => {
-          const normalizedPath = normalizePathForComparison(path);
-          const isUnique = !existingNormalizedPaths.has(normalizedPath);
-          if (!isUnique) {
-            console.log(`Skipping duplicate reference image: ${normalizedPath}`);
-          }
-          return isUnique;
-        });
-        
-        // Determine how many style images to upload
-        let pathsToUpload = uniquePaths;
-        if (engine === "seedream") {
-          const MAX_SEEDREAM_REFS = 4;
-          const currentRefCount = imageUrls.length;
-          const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
-          pathsToUpload = uniquePaths.slice(0, maxStyleRefs);
-        }
-        
-        // Upload style preset images on-demand
-        if (pathsToUpload.length > 0) {
-          console.log(`Uploading ${pathsToUpload.length} style preset images on-demand...`);
-          const styleUploadPromises = pathsToUpload.map(async (path) => {
+        if (allTemplateReferenceImages && allTemplateReferenceImages.length > 0) {
+          console.log(`Uploading ${allTemplateReferenceImages.length} template reference images on-demand...`);
+          const uploadPromises = allTemplateReferenceImages.map(async (path) => {
             try {
+              // Upload image on-demand (uses cache if already uploaded)
               return await uploadImageOnDemand(path, styleId);
             } catch (error) {
-              console.error(`Failed to upload style preset image ${path}:`, error);
+              console.error(`Failed to upload template image ${path}:`, error);
               return null;
             }
           });
           
-          const styleUploadedUrls = await Promise.all(styleUploadPromises);
-          const validStyleUrls = styleUploadedUrls.filter((url): url is string => url !== null);
-          imageUrls.push(...validStyleUrls);
+          const uploadedUrls = await Promise.all(uploadPromises);
+          const validUrls = uploadedUrls.filter((url): url is string => url !== null);
+          imageUrls.push(...validUrls);
         }
+        
+        // Add style preset reference images (upload on-demand with deduplication)
+        // Get all reference image file paths from the file system
+        const styleReferencePaths = getStyleReferenceImagePaths(styleId);
+        
+        if (styleReferencePaths.length > 0) {
+          // Normalize URLs/paths to enable proper comparison
+          // Extracts the relative path portion (e.g., "/reference-images/style-1/1.png")
+          const normalizePathForComparison = (urlOrPath: string): string => {
+            // If it's an HTTP(S) URL, extract the path portion after the domain
+            if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+              try {
+                const url = new URL(urlOrPath);
+                // Extract path after domain, look for /reference-images/ pattern
+                const match = url.pathname.match(/\/reference-images\/.*$/);
+                return match ? match[0] : urlOrPath;
+              } catch {
+                return urlOrPath;
+              }
+            }
+            
+            // For local paths, ensure consistent format with leading slash
+            // Handle both "/reference-images/..." and "reference-images/..."
+            if (urlOrPath.includes('reference-images/')) {
+              // Extract everything from "reference-images/" onward
+              const match = urlOrPath.match(/reference-images\/.*$/);
+              if (match) {
+                // Return with leading slash for consistency
+                return '/' + match[0];
+              }
+            }
+            
+            return urlOrPath;
+          };
+          
+          // Build set of existing normalized paths for deduplication
+          const existingNormalizedPaths = new Set(
+            imageUrls.map(url => normalizePathForComparison(url))
+          );
+          
+          // Filter out any paths that already exist (by full normalized path, not just filename)
+          const uniquePaths = styleReferencePaths.filter(path => {
+            const normalizedPath = normalizePathForComparison(path);
+            const isUnique = !existingNormalizedPaths.has(normalizedPath);
+            if (!isUnique) {
+              console.log(`Skipping duplicate reference image: ${normalizedPath}`);
+            }
+            return isUnique;
+          });
+          
+          // Determine how many style images to upload
+          let pathsToUpload = uniquePaths;
+          if (engine === "seedream") {
+            const MAX_SEEDREAM_REFS = 4;
+            const currentRefCount = imageUrls.length;
+            const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
+            pathsToUpload = uniquePaths.slice(0, maxStyleRefs);
+          }
+          
+          // Upload style preset images on-demand
+          if (pathsToUpload.length > 0) {
+            console.log(`Uploading ${pathsToUpload.length} style preset images on-demand...`);
+            const styleUploadPromises = pathsToUpload.map(async (path) => {
+              try {
+                return await uploadImageOnDemand(path, styleId);
+              } catch (error) {
+                console.error(`Failed to upload style preset image ${path}:`, error);
+                return null;
+              }
+            });
+            
+            const styleUploadedUrls = await Promise.all(styleUploadPromises);
+            const validStyleUrls = styleUploadedUrls.filter((url): url is string => url !== null);
+            imageUrls.push(...validStyleUrls);
+          }
+        }
+      } else {
+        console.log(`Edit mode: Skipping template and style reference images, using only user reference image`);
       }
 
       console.log("\n=== Image Generation Request ===");
       console.log(`Engine: ${engine}`);
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
+      console.log(`Edit Mode: ${isEditMode ? "Yes (skipping style references)" : "No"}`);
       console.log(`User Prompt: ${prompt}`);
       console.log(`Processed Prompt: ${processedPrompt !== prompt ? processedPrompt : "(same as user prompt)"}`);
       console.log(`Character Reference Images: ${characterReferenceImages.join(", ") || "None"}`);
       console.log(`User Reference Images: ${userReferenceImages?.join(", ") || "None"}`);
-      console.log(`Template Reference Images: ${templateReferenceImages?.join(", ") || "None"}`);
+      console.log(`Template Reference Images: ${isEditMode ? "(skipped - edit mode)" : (templateReferenceImages?.join(", ") || "None")}`);
       console.log(`Image URLs (priority order): ${imageUrls.join(", ")}`);
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
