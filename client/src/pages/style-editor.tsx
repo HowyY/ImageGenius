@@ -73,6 +73,7 @@ import type { StylePreset, Color, SelectCharacter, CharacterCard, AvatarCrop, Av
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { ColorPaletteManager } from "@/components/ColorPaletteManager";
 import { normalizeTemplateColors } from "@/lib/templateUtils";
+import { useCharacters, CHARACTERS_QUERY_KEY } from "@/hooks/use-characters";
 import { CroppedAvatar } from "@/components/AvatarCropDialog";
 import { User, Check } from "lucide-react";
 
@@ -305,9 +306,7 @@ export default function StyleEditor() {
     },
   });
 
-  const { data: characters } = useQuery<SelectCharacter[]>({
-    queryKey: ["/api/characters"],
-  });
+  const { data: characters } = useCharacters();
 
   // Fetch all templates to get displayOrder
   interface TemplateWithOrder {

@@ -50,6 +50,7 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { AvatarCropDialog, CroppedAvatar } from "@/components/AvatarCropDialog";
 import { PreviewImage } from "@/components/ImageLightbox";
 import type { SelectCharacter, InsertCharacter, UpdateCharacter, CharacterCard, AvatarProfiles, AvatarCrop, AvatarProfile } from "@shared/schema";
+import { useCharacters, CHARACTERS_QUERY_KEY } from "@/hooks/use-characters";
 
 interface Style {
   id: string;
@@ -129,9 +130,7 @@ export default function CharacterEditor() {
     { value: "tired", label: "Tired" },
   ];
 
-  const { data: characters = [], isLoading } = useQuery<SelectCharacter[]>({
-    queryKey: ["/api/characters"],
-  });
+  const { data: characters = [], isLoading } = useCharacters();
 
   const { data: styles = [] } = useQuery<Style[]>({
     queryKey: ["/api/styles"],
@@ -143,7 +142,7 @@ export default function CharacterEditor() {
       return res.json();
     },
     onSuccess: (newChar) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      queryClient.invalidateQueries({ queryKey: CHARACTERS_QUERY_KEY });
       setSelectedCharacterId(newChar.id);
       toast({
         title: "Success",
@@ -165,7 +164,7 @@ export default function CharacterEditor() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      queryClient.invalidateQueries({ queryKey: CHARACTERS_QUERY_KEY });
       toast({
         title: "Success",
         description: "Character updated successfully",
@@ -186,7 +185,7 @@ export default function CharacterEditor() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      queryClient.invalidateQueries({ queryKey: CHARACTERS_QUERY_KEY });
       setSelectedCharacterId("");
       setShowDeleteDialog(false);
       toast({
@@ -312,7 +311,7 @@ export default function CharacterEditor() {
       });
       const result = await res.json();
       
-      queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      queryClient.invalidateQueries({ queryKey: CHARACTERS_QUERY_KEY });
       toast({
         title: "Success",
         description: isCharacterSheet ? "Character sheet generated successfully" : "Character card generated successfully",

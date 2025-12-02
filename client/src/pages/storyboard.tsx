@@ -22,7 +22,8 @@ import {
   Check,
   Eye,
   X,
-  Users
+  Users,
+  Copy
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -38,6 +39,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { useGeneration } from "@/contexts/GenerationContext";
+import { useCharacters, CHARACTERS_QUERY_KEY } from "@/hooks/use-characters";
 
 interface EditingState {
   sceneDescription: string;
@@ -87,6 +89,9 @@ export default function Storyboard() {
   const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; prompt: string; style: string; engine: string; date: string } | null>(null);
   const [characterPopoverOpen, setCharacterPopoverOpen] = useState<number | null>(null);
+  const [copyCharsDialogOpen, setCopyCharsDialogOpen] = useState(false);
+  const [copyCharsSourceScene, setCopyCharsSourceScene] = useState<{ id: number; characterIds: string[] } | null>(null);
+  const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
   
 
   const { data: storyboards, isLoading: storyboardsLoading } = useQuery<SelectStoryboard[]>({
@@ -109,9 +114,7 @@ export default function Storyboard() {
     queryKey: ["/api/styles"],
   });
 
-  const { data: characters } = useQuery<SelectCharacter[]>({
-    queryKey: ["/api/characters"],
-  });
+  const { data: characters } = useCharacters();
 
   const { data: sceneHistory, isLoading: historyLoading } = useQuery<SelectGenerationHistory[]>({
     queryKey: ["/api/history/scene", historySceneId],
@@ -521,12 +524,63 @@ export default function Storyboard() {
     },
   });
 
+  const copyCharsToScenesMutation = useMutation({
+    mutationFn: async ({ sceneIds, characterIds }: { sceneIds: number[]; characterIds: string[] }) => {
+      await Promise.all(
+        sceneIds.map(sceneId => 
+          apiRequest("PATCH", `/api/scenes/${sceneId}`, { selectedCharacterIds: characterIds })
+        )
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+      setCopyCharsDialogOpen(false);
+      setCopyCharsSourceScene(null);
+      setCopyCharsTargetScenes([]);
+      toast({
+        title: "Success",
+        description: "Characters copied to selected scenes",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to copy characters to scenes",
+        variant: "destructive",
+      });
+    },
+  });
+
   const toggleSceneCharacter = useCallback((sceneId: number, characterId: string, currentIds: string[]) => {
     const newIds = currentIds.includes(characterId)
       ? currentIds.filter(id => id !== characterId)
       : [...currentIds, characterId];
     updateSceneCharactersMutation.mutate({ sceneId, characterIds: newIds });
   }, [updateSceneCharactersMutation]);
+
+  const openCopyCharsDialog = useCallback((sceneId: number, characterIds: string[]) => {
+    setCopyCharsSourceScene({ id: sceneId, characterIds });
+    setCopyCharsTargetScenes([]);
+    setCopyCharsDialogOpen(true);
+    setCharacterPopoverOpen(null);
+  }, []);
+
+  const toggleCopyTarget = useCallback((sceneId: number) => {
+    setCopyCharsTargetScenes(prev => 
+      prev.includes(sceneId) 
+        ? prev.filter(id => id !== sceneId)
+        : [...prev, sceneId]
+    );
+  }, []);
+
+  const handleCopyCharsConfirm = useCallback(() => {
+    if (copyCharsSourceScene && copyCharsTargetScenes.length > 0) {
+      copyCharsToScenesMutation.mutate({
+        sceneIds: copyCharsTargetScenes,
+        characterIds: copyCharsSourceScene.characterIds,
+      });
+    }
+  }, [copyCharsSourceScene, copyCharsTargetScenes, copyCharsToScenesMutation]);
 
   const handleGenerateClick = async (scene: SelectStoryboardScene) => {
     const editing = editingScenes[scene.id];
@@ -1118,15 +1172,27 @@ export default function Storyboard() {
                           </div>
                         )}
                         {(scene.selectedCharacterIds || []).length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-xs"
-                            onClick={() => updateSceneCharactersMutation.mutate({ sceneId: scene.id, characterIds: [] })}
-                            data-testid={`button-clear-chars-scene-${scene.id}`}
-                          >
-                            Clear all characters
-                          </Button>
+                          <div className="space-y-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full text-xs"
+                              onClick={() => openCopyCharsDialog(scene.id, scene.selectedCharacterIds || [])}
+                              data-testid={`button-copy-chars-scene-${scene.id}`}
+                            >
+                              <Copy className="w-3 h-3 mr-1" />
+                              Copy to other scenes
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full text-xs text-muted-foreground"
+                              onClick={() => updateSceneCharactersMutation.mutate({ sceneId: scene.id, characterIds: [] })}
+                              data-testid={`button-clear-chars-scene-${scene.id}`}
+                            >
+                              Clear all characters
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </PopoverContent>
@@ -1656,6 +1722,110 @@ export default function Storyboard() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={copyCharsDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setCopyCharsDialogOpen(false);
+          setCopyCharsSourceScene(null);
+          setCopyCharsTargetScenes([]);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Copy Characters to Scenes</DialogTitle>
+            <DialogDescription>
+              {copyCharsSourceScene && (() => {
+                const sourceSceneIndex = scenes?.findIndex(s => s.id === copyCharsSourceScene.id) ?? -1;
+                const selectedChars = characters?.filter(c => copyCharsSourceScene.characterIds.includes(c.id)) || [];
+                return (
+                  <span>
+                    Copy {selectedChars.length} character{selectedChars.length !== 1 ? 's' : ''} 
+                    ({selectedChars.map(c => c.name).join(', ')}) from Scene {sourceSceneIndex + 1} to:
+                  </span>
+                );
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {scenes?.filter(s => s.id !== copyCharsSourceScene?.id).map((scene, idx) => {
+                const sceneIndex = scenes.findIndex(s2 => s2.id === scene.id);
+                const isSelected = copyCharsTargetScenes.includes(scene.id);
+                const currentChars = characters?.filter(c => (scene.selectedCharacterIds || []).includes(c.id)) || [];
+                
+                return (
+                  <button
+                    key={scene.id}
+                    className={`w-full flex items-center gap-3 p-3 rounded-md text-left transition-colors ${
+                      isSelected 
+                        ? 'bg-primary/10 ring-1 ring-primary' 
+                        : 'hover:bg-muted'
+                    }`}
+                    onClick={() => toggleCopyTarget(scene.id)}
+                    data-testid={`button-copy-target-scene-${scene.id}`}
+                  >
+                    <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                      isSelected ? 'bg-primary border-primary' : 'border-muted-foreground/30'
+                    }`}>
+                      {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium">Scene {sceneIndex + 1}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {scene.visualDescription?.slice(0, 40) || 'No description'}
+                        {(scene.visualDescription?.length || 0) > 40 ? '...' : ''}
+                      </div>
+                      {currentChars.length > 0 && (
+                        <div className="text-xs text-amber-500 mt-0.5">
+                          Has: {currentChars.map(c => c.name).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {scenes && scenes.length <= 1 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No other scenes available to copy to.
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const otherSceneIds = scenes?.filter(s => s.id !== copyCharsSourceScene?.id).map(s => s.id) || [];
+                setCopyCharsTargetScenes(prev => 
+                  prev.length === otherSceneIds.length ? [] : otherSceneIds
+                );
+              }}
+              data-testid="button-toggle-all-scenes"
+            >
+              {copyCharsTargetScenes.length === (scenes?.filter(s => s.id !== copyCharsSourceScene?.id).length || 0)
+                ? 'Deselect All'
+                : 'Select All'}
+            </Button>
+            <Button
+              onClick={handleCopyCharsConfirm}
+              disabled={copyCharsTargetScenes.length === 0 || copyCharsToScenesMutation.isPending}
+              data-testid="button-confirm-copy-chars"
+            >
+              {copyCharsToScenesMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Copying...
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy to {copyCharsTargetScenes.length} Scene{copyCharsTargetScenes.length !== 1 ? 's' : ''}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
