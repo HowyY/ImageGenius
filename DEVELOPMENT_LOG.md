@@ -176,7 +176,7 @@ Build an AI-powered image generation tool for ORAMA's storyboard feature, suppor
 ## TODO List
 
 ### High Priority
-- [x] **Style Editor Redesign**: Redesign the Prompt Editor interface to become a comprehensive Style Editor
+- [x] **Style Editor Redesign**: Redesign the Prompt Editor interface to become a comprehensive Style Editor ✅ (Nov 26, 2025)
   - Renamed Prompt Editor to Style Editor
   - Restructured editor page with better navigation
   - Improved organization for style configuration
@@ -190,6 +190,14 @@ Build an AI-powered image generation tool for ORAMA's storyboard feature, suppor
   - ✅ Integrated character editor into main navigation
   - ✅ Database schema for characters table with reference URLs
   - _Implementation: Individual character references with multiple variations approach (Plan B from character_editor_plan.md)_
+
+- [x] **Avatar Profile System**: Enable avatar cropping and multi-style avatar management ✅ (Dec 2, 2025)
+  - ✅ Created reusable AvatarCropDialog component with interactive cropping
+  - ✅ Extended character schema with avatarProfiles JSONB field
+  - ✅ Implemented style-specific avatar storage (one avatar per style per character)
+  - ✅ Integrated crop-and-save workflow in Character Editor
+  - ✅ Display avatar thumbnails in character list
+  - _Implementation: Client-side crop coordinate calculation, server-side avatar generation via API_
 
 ### Medium Priority
 - [x] **Character Integration in Style Editor**: Enable character card selection as references ✅ (Nov 26, 2025)
@@ -298,6 +306,15 @@ _Add any additional notes, learnings, or decisions here._
 - Old character cards need version management when style templates change
 - Multi-character selection capability (API supports up to 8 references)
 
+### Session: Dec 2, 2025
+**Avatar Profile System Implementation**
+- Implemented AvatarCropDialog component for interactive cropping.
+- Extended character schema to include avatarProfiles JSONB field for storing avatar data.
+- Developed style-specific avatar storage, ensuring one avatar per style per character.
+- Integrated the crop-and-save workflow into the Character Editor.
+- Added display of avatar thumbnails in the character list for easier identification.
+- Backend logic for avatar generation via API is in place.
+
 ---
 
-*Last Updated: November 26, 2025 - Character Integration in Style Editor Completed*
+*Last Updated: December 2, 2025 - Avatar Profile System Completed*
