@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,9 @@ export function AvatarCropDialog({
               </span>
             )}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Crop and position the avatar image for this character
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

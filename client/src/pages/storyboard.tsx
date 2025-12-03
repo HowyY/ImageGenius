@@ -1689,6 +1689,10 @@ export default function Storyboard() {
 
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Image Preview</DialogTitle>
+          <DialogDescription className="sr-only">
+            Preview of generated image with details
+          </DialogDescription>
           <div className="relative">
             <Button
               variant="ghost"

@@ -1336,6 +1336,10 @@ export default function CharacterEditor() {
       {/* Image Preview Dialog */}
       <Dialog open={!!previewCard} onOpenChange={(open) => !open && setPreviewCard(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Character Card Preview</DialogTitle>
+          <DialogDescription className="sr-only">
+            Preview character card image with details and actions
+          </DialogDescription>
           <div className="relative">
             <Button
               size="icon"

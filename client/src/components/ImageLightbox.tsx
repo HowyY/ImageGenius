@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut, RotateCcw, X, Maximize2 } from "lucide-react";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -192,6 +192,7 @@ export function ImageLightbox({ src, alt, trigger, className }: ImageLightboxPro
         >
           <VisuallyHidden>
             <DialogTitle>Image Preview</DialogTitle>
+            <DialogDescription>Full-size image preview with zoom and pan controls</DialogDescription>
           </VisuallyHidden>
           
           <div className="absolute top-2 right-2 z-50 flex items-center gap-1">
