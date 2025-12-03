@@ -1,8 +1,9 @@
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import type { GenerateRequest, GenerateResponse } from "@shared/schema";
 
 export type GenerationStatus = "pending" | "generating" | "completed" | "failed";
+export type GenerationStage = "starting" | "processing" | "receiving";
 
 export interface GenerationTask {
   id: string;
@@ -12,7 +13,7 @@ export interface GenerationTask {
   sceneId?: number;
   sceneName?: string;
   status: GenerationStatus;
-  progress: number;
+  stage: GenerationStage;
   imageUrl?: string;
   error?: string;
   startedAt: number;
@@ -44,34 +45,11 @@ interface GenerationProviderProps {
 
 export function GenerationProvider({ children }: GenerationProviderProps) {
   const [tasks, setTasks] = useState<GenerationTask[]>([]);
-  const progressIntervals = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const updateTask = useCallback((taskId: string, updates: Partial<GenerationTask>) => {
     setTasks(prev => prev.map(task => 
       task.id === taskId ? { ...task, ...updates } : task
     ));
-  }, []);
-
-  const startProgressSimulation = useCallback((taskId: string) => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 8 + 2;
-      if (progress >= 90) {
-        progress = 90;
-        clearInterval(interval);
-        progressIntervals.current.delete(taskId);
-      }
-      updateTask(taskId, { progress: Math.min(progress, 90) });
-    }, 500);
-    progressIntervals.current.set(taskId, interval);
-  }, [updateTask]);
-
-  const stopProgressSimulation = useCallback((taskId: string) => {
-    const interval = progressIntervals.current.get(taskId);
-    if (interval) {
-      clearInterval(interval);
-      progressIntervals.current.delete(taskId);
-    }
   }, []);
 
   const startGeneration = useCallback(async (request: GenerateRequest & { sceneName?: string }): Promise<GenerateResponse> => {
@@ -85,46 +63,44 @@ export function GenerationProvider({ children }: GenerationProviderProps) {
       sceneId: request.sceneId,
       sceneName: request.sceneName,
       status: "generating",
-      progress: 0,
+      stage: "starting",
       startedAt: Date.now(),
     };
 
     setTasks(prev => [newTask, ...prev]);
-    startProgressSimulation(taskId);
 
     try {
+      updateTask(taskId, { stage: "processing" });
+      
       const response = await apiRequest("POST", "/api/generate", request);
+      
+      updateTask(taskId, { stage: "receiving" });
       const result = await response.json() as GenerateResponse;
       
-      stopProgressSimulation(taskId);
       updateTask(taskId, {
         status: "completed",
-        progress: 100,
         imageUrl: result.imageUrl,
         completedAt: Date.now(),
       });
 
       return result;
     } catch (error) {
-      stopProgressSimulation(taskId);
       updateTask(taskId, {
         status: "failed",
-        progress: 0,
         error: error instanceof Error ? error.message : "Generation failed",
         completedAt: Date.now(),
       });
       throw error;
     }
-  }, [startProgressSimulation, stopProgressSimulation, updateTask]);
+  }, [updateTask]);
 
   const clearCompletedTasks = useCallback(() => {
     setTasks(prev => prev.filter(task => task.status === "generating" || task.status === "pending"));
   }, []);
 
   const clearTask = useCallback((taskId: string) => {
-    stopProgressSimulation(taskId);
     setTasks(prev => prev.filter(task => task.id !== taskId));
-  }, [stopProgressSimulation]);
+  }, []);
 
   const isGenerating = useCallback((sceneId?: number) => {
     if (sceneId !== undefined) {

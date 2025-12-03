@@ -1,8 +1,7 @@
-import { useState } from "react";
-import { useGeneration, type GenerationTask } from "@/contexts/GenerationContext";
+import { useState, useEffect } from "react";
+import { useGeneration, type GenerationTask, type GenerationStage } from "@/contexts/GenerationContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { 
   ChevronDown, 
@@ -12,14 +11,50 @@ import {
   CheckCircle2, 
   XCircle,
   Image as ImageIcon,
-  Trash2
+  Trash2,
+  Clock,
+  Sparkles,
+  Download
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function formatElapsedTime(startedAt: number): string {
+  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  if (minutes > 0) {
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  }
+  return `${seconds}s`;
+}
+
+function getStageInfo(stage: GenerationStage): { label: string; icon: typeof Clock } {
+  switch (stage) {
+    case "starting":
+      return { label: "Starting", icon: Clock };
+    case "processing":
+      return { label: "Generating with AI", icon: Sparkles };
+    case "receiving":
+      return { label: "Receiving image", icon: Download };
+    default:
+      return { label: "Processing", icon: Loader2 };
+  }
+}
 
 function TaskItem({ task, onClear }: { task: GenerationTask; onClear: () => void }) {
   const isGenerating = task.status === "generating";
   const isCompleted = task.status === "completed";
   const isFailed = task.status === "failed";
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!isGenerating) return;
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
+
+  const stageInfo = isGenerating ? getStageInfo(task.stage) : null;
+  const StageIcon = stageInfo?.icon || Loader2;
 
   return (
     <div 
@@ -28,7 +63,7 @@ function TaskItem({ task, onClear }: { task: GenerationTask; onClear: () => void
     >
       <div className="flex items-start gap-2">
         <div className="flex-shrink-0 mt-0.5">
-          {isGenerating && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+          {isGenerating && <StageIcon className="w-4 h-4 animate-spin text-primary" />}
           {isCompleted && <CheckCircle2 className="w-4 h-4 text-green-500" />}
           {isFailed && <XCircle className="w-4 h-4 text-destructive" />}
         </div>
@@ -48,10 +83,13 @@ function TaskItem({ task, onClear }: { task: GenerationTask; onClear: () => void
           </p>
           
           {isGenerating && (
-            <div className="mt-2">
-              <Progress value={task.progress} className="h-1.5" />
-              <span className="text-xs text-muted-foreground mt-1">
-                {Math.round(task.progress)}%
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-primary">
+                <Clock className="w-3 h-3" />
+                <span className="font-medium">{formatElapsedTime(task.startedAt)}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {stageInfo?.label}
               </span>
             </div>
           )}
@@ -65,9 +103,16 @@ function TaskItem({ task, onClear }: { task: GenerationTask; onClear: () => void
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-xs text-green-600 dark:text-green-400">
-                Completed
-              </span>
+              <div className="flex flex-col">
+                <span className="text-xs text-green-600 dark:text-green-400">
+                  Completed
+                </span>
+                {task.completedAt && (
+                  <span className="text-xs text-muted-foreground">
+                    {formatElapsedTime(task.startedAt)} total
+                  </span>
+                )}
+              </div>
             </div>
           )}
           
