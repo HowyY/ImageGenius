@@ -117,7 +117,18 @@ interface UniversalTemplate {
   referenceImages?: ImageReference[];
 }
 
-type PromptTemplate = StructuredTemplate | SimpleTemplate | UniversalTemplate;
+interface CinematicTemplate {
+  name: string;
+  templateType: "cinematic";
+  cameraFraming: string;
+  visualAnchors: string;
+  colorRender: string;
+  technicalSpecs: string;
+  negativePrompt: string;
+  referenceImages?: ImageReference[];
+}
+
+type PromptTemplate = StructuredTemplate | SimpleTemplate | UniversalTemplate | CinematicTemplate;
 
 function isSimpleTemplate(template: PromptTemplate): template is SimpleTemplate {
   return (template as SimpleTemplate).templateType === "simple";
@@ -127,8 +138,12 @@ function isUniversalTemplate(template: PromptTemplate): template is UniversalTem
   return (template as UniversalTemplate).templateType === "universal";
 }
 
+function isCinematicTemplate(template: PromptTemplate): template is CinematicTemplate {
+  return (template as CinematicTemplate).templateType === "cinematic";
+}
+
 function isStructuredTemplate(template: PromptTemplate): template is StructuredTemplate {
-  return !isSimpleTemplate(template) && !isUniversalTemplate(template);
+  return !isSimpleTemplate(template) && !isUniversalTemplate(template) && !isCinematicTemplate(template);
 }
 
 const DEFAULT_TEMPLATE: StructuredTemplate = {
@@ -407,6 +422,33 @@ ${negativePrompt}`;
     return prompt;
   };
 
+  // Helper function to generate preview for cinematic templates immediately
+  const generateCinematicPreview = (cinematicTemplate: CinematicTemplate) => {
+    const cameraFraming = cinematicTemplate.cameraFraming || "(Medium shot:1.1), balanced composition, cinematic storyboard, eye-level angle";
+    const visualAnchors = cinematicTemplate.visualAnchors || "";
+    const colorRender = cinematicTemplate.colorRender || "";
+    const technicalSpecs = cinematicTemplate.technicalSpecs || "best quality, 2D vector art, clean lines, sharp edges";
+    const negativePrompt = cinematicTemplate.negativePrompt || "";
+    
+    return `[SCENE ACTION]
+{userPrompt}
+
+[CAMERA & FRAMING]
+${cameraFraming}
+
+[VISUAL ANCHORS]
+${visualAnchors}
+
+[COLOR & RENDER]
+${colorRender}
+
+[TECHNICAL SPECS]
+${technicalSpecs}
+
+[NEGATIVE]
+${negativePrompt}`;
+  };
+
   useEffect(() => {
     // Load template when selectedStyleId changes or template data arrives
     if (selectedStyleId && styles && !templateLoading) {
@@ -446,6 +488,11 @@ ${negativePrompt}`;
             // Generate universal preview immediately
             const styleName = normalizedTemplate.name || selectedStyle?.label || "Style";
             setPreviewPrompt(generateUniversalPreview(normalizedTemplate as UniversalTemplate, styleName));
+          } else if (loadedTemplate.templateType === "cinematic") {
+            // Cinematic template - preserve its structure as-is
+            setTemplate(loadedTemplate);
+            // Generate cinematic preview immediately
+            setPreviewPrompt(generateCinematicPreview(loadedTemplate as CinematicTemplate));
           } else {
             // Structured template - merge with DEFAULT_TEMPLATE to ensure all fields exist
             const mergedTemplate = {
@@ -592,6 +639,12 @@ ${negativePrompt}`;
     // Check if this is a universal template
     if (isUniversalTemplate(template)) {
       setPreviewPrompt(generateUniversalPreview(template, template.name || styleLabel));
+      return;
+    }
+    
+    // Check if this is a cinematic template
+    if (isCinematicTemplate(template)) {
+      setPreviewPrompt(generateCinematicPreview(template));
       return;
     }
     
@@ -1412,6 +1465,110 @@ ${negativePrompt}`;
                       placeholder="bad proportions, distorted limbs, extra faces, blurry, noisy, cluttered background"
                       rows={3}
                       data-testid="input-negative-prompt"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Cinematic Template UI - structured sections with weighted keywords */}
+              {isCinematicTemplate(template) && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 p-3 bg-purple-500/10 rounded-md">
+                    <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm font-medium">Cinematic Template</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Structured prompt with weighted keywords: [SCENE ACTION] + [CAMERA & FRAMING] + [VISUAL ANCHORS] + [COLOR & RENDER] + [TECHNICAL SPECS] + [NEGATIVE]
+                  </p>
+
+                  {/* Camera & Framing */}
+                  <div>
+                    <Label>Camera & Framing</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Composition, camera angle, and framing with optional weights (e.g., "(Medium shot:1.1)")
+                    </p>
+                    <Textarea
+                      value={template.cameraFraming}
+                      onChange={(e) => setTemplate({ ...template, cameraFraming: e.target.value })}
+                      placeholder="(Medium shot:1.1), balanced composition, cinematic storyboard, eye-level angle"
+                      rows={2}
+                      data-testid="input-camera-framing"
+                    />
+                  </div>
+
+                  {/* Visual Anchors */}
+                  <div>
+                    <Label>Visual Anchors</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Style-defining keywords with weights for visual characteristics
+                    </p>
+                    <Textarea
+                      value={template.visualAnchors}
+                      onChange={(e) => setTemplate({ ...template, visualAnchors: e.target.value })}
+                      placeholder="(Sketchline Vector V2 style:1.2),
+deep-blue outline characters,
+solid deep-blue hair,
+simple dot eyes, small curved mouth,
+consistent simplified anatomy,
+white negative space,
+clean vector linework"
+                      rows={6}
+                      data-testid="input-visual-anchors"
+                    />
+                  </div>
+
+                  {/* Color & Render */}
+                  <div>
+                    <Label>Color & Render</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Color palette and rendering approach with weights
+                    </p>
+                    <Textarea
+                      value={template.colorRender}
+                      onChange={(e) => setTemplate({ ...template, colorRender: e.target.value })}
+                      placeholder="(blue-cyan color palette:1.2),
+deep-blue line palette,
+soft cyan-to-blue gradient fills on clothing,
+minimal cyan highlights,
+flat color application"
+                      rows={5}
+                      data-testid="input-color-render"
+                    />
+                  </div>
+
+                  {/* Technical Specs */}
+                  <div>
+                    <Label>Technical Specs</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Quality and rendering requirements
+                    </p>
+                    <Textarea
+                      value={template.technicalSpecs}
+                      onChange={(e) => setTemplate({ ...template, technicalSpecs: e.target.value })}
+                      placeholder="best quality, 2D vector art,
+clean lines, sharp edges,
+high contrast, minimalist background"
+                      rows={3}
+                      data-testid="input-technical-specs"
+                    />
+                  </div>
+
+                  {/* Negative Prompt */}
+                  <div>
+                    <Label>Negative Prompt</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Things to avoid with weights for strong enforcement (e.g., "(shading:1.3)")
+                    </p>
+                    <Textarea
+                      value={template.negativePrompt}
+                      onChange={(e) => setTemplate({ ...template, negativePrompt: e.target.value })}
+                      placeholder="(shading:1.3), (shadows:1.3), (noise:1.3),
+(heavy cyan lines:1.2), (large cyan fills:1.2),
+full-surface gradients, colored backgrounds,
+3D effects, neon tones, realistic, texture,
+(red:1.5), (green:1.5), (yellow:1.5)"
+                      rows={5}
+                      data-testid="input-cinematic-negative"
                     />
                   </div>
                 </div>
