@@ -77,12 +77,12 @@ The application supports four template types for flexible prompt generation:
    - `referenceImages`: Style reference images
 
 4. **Cinematic Templates**: Professional cinematography-focused templates with weighted parameters:
-   - `sceneAction`: Main action or event (supports `{userPrompt}` placeholder)
    - `cameraFraming`: Camera angle, shot type, composition with weights (e.g., `medium shot:1.2`)
    - `visualAnchors`: Key visual elements that define the scene
    - `colorRender`: Color grading, lighting style, rendering quality
    - `technicalSpecs`: Resolution, quality settings, technical parameters
    - `negativePrompt`: Elements to avoid
+   - Note: Scene action is provided via Test Prompt in the UI, not as a template field
 
 The Universal prompt format follows: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
 
