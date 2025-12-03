@@ -151,7 +151,19 @@ interface UniversalTemplate {
   referenceImages?: ImageReference[];
 }
 
-type PromptTemplate = StructuredTemplate | SimpleTemplate | UniversalTemplate;
+interface CinematicTemplate {
+  name: string;
+  templateType: "cinematic";
+  sceneAction: string;
+  cameraFraming: string;
+  visualAnchors: string;
+  colorRender: string;
+  technicalSpecs: string;
+  negativePrompt: string;
+  referenceImages?: ImageReference[];
+}
+
+type PromptTemplate = StructuredTemplate | SimpleTemplate | UniversalTemplate | CinematicTemplate;
 
 function isSimpleTemplate(template: PromptTemplate): template is SimpleTemplate {
   return (template as SimpleTemplate).templateType === "simple";
@@ -161,8 +173,12 @@ function isUniversalTemplate(template: PromptTemplate): template is UniversalTem
   return (template as UniversalTemplate).templateType === "universal";
 }
 
+function isCinematicTemplate(template: PromptTemplate): template is CinematicTemplate {
+  return (template as CinematicTemplate).templateType === "cinematic";
+}
+
 function isStructuredTemplate(template: PromptTemplate): template is StructuredTemplate {
-  return !isSimpleTemplate(template) && !isUniversalTemplate(template);
+  return !isSimpleTemplate(template) && !isUniversalTemplate(template) && !isCinematicTemplate(template);
 }
 
 const DEFAULT_TEMPLATE: StructuredTemplate = {
@@ -216,6 +232,17 @@ const DEFAULT_TEMPLATE: StructuredTemplate = {
 - chaotic or cluttered composition
 - low-quality details such as blurry shapes or noisy textures`,
   },
+};
+
+const DEFAULT_CINEMATIC_TEMPLATE: CinematicTemplate = {
+  name: "Default Cinematic Template",
+  templateType: "cinematic",
+  sceneAction: "{userPrompt}",
+  cameraFraming: "medium shot:1.2, balanced composition, subtle depth of field:0.8",
+  visualAnchors: "main subject clearly defined, secondary elements support the narrative",
+  colorRender: "cinematic color grading:1.1, natural lighting, film grain:0.3",
+  technicalSpecs: "8K resolution, photorealistic quality, professional cinematography",
+  negativePrompt: "blurry, low quality, distorted anatomy, inconsistent lighting, amateur composition",
 };
 
 interface ExtendedStylePreset extends StylePreset {
@@ -643,6 +670,55 @@ ${negativePrompt}`;
     return prompt;
   };
 
+  const generateCinematicPreview = (cinematicTemplate: CinematicTemplate) => {
+    const sceneAction = cinematicTemplate.sceneAction || "{userPrompt}";
+    const cameraFraming = cinematicTemplate.cameraFraming || "";
+    const visualAnchors = cinematicTemplate.visualAnchors || "";
+    const colorRender = cinematicTemplate.colorRender || "";
+    const technicalSpecs = cinematicTemplate.technicalSpecs || "";
+    const negativePrompt = cinematicTemplate.negativePrompt || "";
+
+    let prompt = `[SCENE ACTION]
+${sceneAction}`;
+
+    if (cameraFraming) {
+      prompt += `
+
+[CAMERA & FRAMING]
+${cameraFraming}`;
+    }
+
+    if (visualAnchors) {
+      prompt += `
+
+[VISUAL ANCHORS]
+${visualAnchors}`;
+    }
+
+    if (colorRender) {
+      prompt += `
+
+[COLOR & RENDER]
+${colorRender}`;
+    }
+
+    if (technicalSpecs) {
+      prompt += `
+
+[TECHNICAL SPECS]
+${technicalSpecs}`;
+    }
+
+    if (negativePrompt) {
+      prompt += `
+
+[NEGATIVE]
+${negativePrompt}`;
+    }
+
+    return prompt;
+  };
+
   const generateStructuredPreview = useCallback((structuredTemplate: StructuredTemplate, basePrompt: string, styleName: string) => {
     let promptParts: string[] = [];
 
@@ -698,6 +774,13 @@ ${negativePrompt}`;
             setTemplate(normalizedTemplate);
             const styleName = normalizedTemplate.name || selectedStyle?.label || "Style";
             setPreviewPrompt(generateUniversalPreview(normalizedTemplate as UniversalTemplate, styleName));
+          } else if (loadedTemplate.templateType === "cinematic") {
+            const mergedCinematic = {
+              ...DEFAULT_CINEMATIC_TEMPLATE,
+              ...loadedTemplate,
+            };
+            setTemplate(mergedCinematic);
+            setPreviewPrompt(generateCinematicPreview(mergedCinematic as CinematicTemplate));
           } else {
             const mergedTemplate = {
               ...DEFAULT_TEMPLATE,
@@ -761,6 +844,8 @@ ${negativePrompt}`;
       setPreviewPrompt(generateSimplePreview(template, selectedStyle.basePrompt || ""));
     } else if (isUniversalTemplate(template)) {
       setPreviewPrompt(generateUniversalPreview(template, template.name || selectedStyle.label));
+    } else if (isCinematicTemplate(template)) {
+      setPreviewPrompt(generateCinematicPreview(template));
     } else if (isStructuredTemplate(template)) {
       setPreviewPrompt(generateStructuredPreview(template, selectedStyle.basePrompt || "", selectedStyle.label));
     }
@@ -798,10 +883,37 @@ ${negativePrompt}`;
 
   const handleReset = () => {
     if (!selectedStyle) return;
-    setTemplate(normalizeTemplateColors({
-      ...DEFAULT_TEMPLATE,
-      name: selectedStyle.label || DEFAULT_TEMPLATE.name,
-    }));
+    
+    const templateName = selectedStyle.label || "Default";
+    
+    if (isCinematicTemplate(template)) {
+      setTemplate({
+        ...DEFAULT_CINEMATIC_TEMPLATE,
+        name: templateName,
+      });
+    } else if (isSimpleTemplate(template)) {
+      setTemplate({
+        name: templateName,
+        templateType: "simple",
+        suffix: "white background, 8k resolution",
+      });
+    } else if (isUniversalTemplate(template)) {
+      setTemplate({
+        name: templateName,
+        templateType: "universal",
+        styleKeywords: "",
+        paletteMode: "loose",
+        loosePalette: "",
+        rules: "",
+        negativePrompt: "",
+      });
+    } else {
+      setTemplate(normalizeTemplateColors({
+        ...DEFAULT_TEMPLATE,
+        name: templateName,
+      }));
+    }
+    
     toast({
       title: "Template reset",
       description: "Template has been reset to defaults.",
@@ -1210,7 +1322,12 @@ ${negativePrompt}`;
                             <div>
                               <Label>Template Type</Label>
                               <Select
-                                value={isSimpleTemplate(template) ? "simple" : isUniversalTemplate(template) ? "universal" : "structured"}
+                                value={
+                                  isSimpleTemplate(template) ? "simple" : 
+                                  isUniversalTemplate(template) ? "universal" : 
+                                  isCinematicTemplate(template) ? "cinematic" : 
+                                  "structured"
+                                }
                                 onValueChange={(value) => {
                                   if (value === "simple") {
                                     setTemplate({
@@ -1228,6 +1345,11 @@ ${negativePrompt}`;
                                       rules: "",
                                       negativePrompt: "",
                                     });
+                                  } else if (value === "cinematic") {
+                                    setTemplate({
+                                      ...DEFAULT_CINEMATIC_TEMPLATE,
+                                      name: template.name,
+                                    });
                                   } else {
                                     setTemplate({
                                       ...DEFAULT_TEMPLATE,
@@ -1243,6 +1365,7 @@ ${negativePrompt}`;
                                   <SelectItem value="universal">Universal (V2)</SelectItem>
                                   <SelectItem value="simple">Simple</SelectItem>
                                   <SelectItem value="structured">Structured</SelectItem>
+                                  <SelectItem value="cinematic">Cinematic (Weighted)</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1296,6 +1419,95 @@ ${negativePrompt}`;
                                   className="font-mono text-sm"
                                   data-testid="textarea-suffix"
                                 />
+                              </div>
+                            )}
+
+                            {isCinematicTemplate(template) && (
+                              <div className="space-y-4">
+                                <div>
+                                  <Label>Scene Action</Label>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Main action or event in the scene. Use {"{userPrompt}"} as placeholder.
+                                  </p>
+                                  <Textarea
+                                    value={template.sceneAction}
+                                    onChange={(e) => setTemplate({ ...template, sceneAction: e.target.value })}
+                                    placeholder="{userPrompt}"
+                                    rows={2}
+                                    className="font-mono text-sm"
+                                    data-testid="textarea-scene-action"
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Camera & Framing</Label>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Camera angle, shot type, composition. Use weights like :1.2 for emphasis.
+                                  </p>
+                                  <Textarea
+                                    value={template.cameraFraming}
+                                    onChange={(e) => setTemplate({ ...template, cameraFraming: e.target.value })}
+                                    placeholder="medium shot:1.2, balanced composition, subtle depth of field:0.8"
+                                    rows={2}
+                                    className="font-mono text-sm"
+                                    data-testid="textarea-camera-framing"
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Visual Anchors</Label>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Key visual elements that define the scene. Use weights for priority.
+                                  </p>
+                                  <Textarea
+                                    value={template.visualAnchors}
+                                    onChange={(e) => setTemplate({ ...template, visualAnchors: e.target.value })}
+                                    placeholder="main subject clearly defined, secondary elements support the narrative"
+                                    rows={2}
+                                    className="font-mono text-sm"
+                                    data-testid="textarea-visual-anchors"
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Color & Render</Label>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Color grading, lighting style, and rendering quality.
+                                  </p>
+                                  <Textarea
+                                    value={template.colorRender}
+                                    onChange={(e) => setTemplate({ ...template, colorRender: e.target.value })}
+                                    placeholder="cinematic color grading:1.1, natural lighting, film grain:0.3"
+                                    rows={2}
+                                    className="font-mono text-sm"
+                                    data-testid="textarea-color-render"
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Technical Specs</Label>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Resolution, quality settings, and technical parameters.
+                                  </p>
+                                  <Textarea
+                                    value={template.technicalSpecs}
+                                    onChange={(e) => setTemplate({ ...template, technicalSpecs: e.target.value })}
+                                    placeholder="8K resolution, photorealistic quality, professional cinematography"
+                                    rows={2}
+                                    className="font-mono text-sm"
+                                    data-testid="textarea-technical-specs"
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Negative Prompt</Label>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Elements to avoid in the generated image.
+                                  </p>
+                                  <Textarea
+                                    value={template.negativePrompt}
+                                    onChange={(e) => setTemplate({ ...template, negativePrompt: e.target.value })}
+                                    placeholder="blurry, low quality, distorted anatomy..."
+                                    rows={3}
+                                    className="font-mono text-sm"
+                                    data-testid="textarea-cinematic-negative"
+                                  />
+                                </div>
                               </div>
                             )}
 
