@@ -719,7 +719,11 @@ async function pollNanoProResult(taskId: string) {
   throw new Error("NanoPro task timed out");
 }
 
-// Get all reference image file paths for a style from the file system
+// DEPRECATED: This function is no longer used for image generation
+// Reference images are now exclusively managed through the Style Editor UI
+// and stored in templateData.referenceImages (database)
+// This prevents deleted images from being sent to the KIE API
+// Keeping the function for potential future use (e.g., migration, cleanup tools)
 function getStyleReferenceImagePaths(styleId: string): string[] {
   const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
   
@@ -1257,81 +1261,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           imageUrls.push(...validUrls);
         }
         
-        // Add style preset reference images (upload on-demand with deduplication)
-        // Get all reference image file paths from the file system
-        const styleReferencePaths = getStyleReferenceImagePaths(styleId);
-        
-        if (styleReferencePaths.length > 0) {
-          // Normalize URLs/paths to enable proper comparison
-          // Extracts the relative path portion (e.g., "/reference-images/style-1/1.png")
-          const normalizePathForComparison = (urlOrPath: string): string => {
-            // If it's an HTTP(S) URL, extract the path portion after the domain
-            if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
-              try {
-                const url = new URL(urlOrPath);
-                // Extract path after domain, look for /reference-images/ pattern
-                const match = url.pathname.match(/\/reference-images\/.*$/);
-                return match ? match[0] : urlOrPath;
-              } catch {
-                return urlOrPath;
-              }
-            }
-            
-            // For local paths, ensure consistent format with leading slash
-            // Handle both "/reference-images/..." and "reference-images/..."
-            if (urlOrPath.includes('reference-images/')) {
-              // Extract everything from "reference-images/" onward
-              const match = urlOrPath.match(/reference-images\/.*$/);
-              if (match) {
-                // Return with leading slash for consistency
-                return '/' + match[0];
-              }
-            }
-            
-            return urlOrPath;
-          };
-          
-          // Build set of existing normalized paths for deduplication
-          const existingNormalizedPaths = new Set(
-            imageUrls.map(url => normalizePathForComparison(url))
-          );
-          
-          // Filter out any paths that already exist (by full normalized path, not just filename)
-          const uniquePaths = styleReferencePaths.filter(path => {
-            const normalizedPath = normalizePathForComparison(path);
-            const isUnique = !existingNormalizedPaths.has(normalizedPath);
-            if (!isUnique) {
-              console.log(`Skipping duplicate reference image: ${normalizedPath}`);
-            }
-            return isUnique;
-          });
-          
-          // Determine how many style images to upload
-          let pathsToUpload = uniquePaths;
-          if (engine === "seedream") {
-            const MAX_SEEDREAM_REFS = 4;
-            const currentRefCount = imageUrls.length;
-            const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
-            pathsToUpload = uniquePaths.slice(0, maxStyleRefs);
-          }
-          
-          // Upload style preset images on-demand
-          if (pathsToUpload.length > 0) {
-            console.log(`Uploading ${pathsToUpload.length} style preset images on-demand...`);
-            const styleUploadPromises = pathsToUpload.map(async (path) => {
-              try {
-                return await uploadImageOnDemand(path, styleId);
-              } catch (error) {
-                console.error(`Failed to upload style preset image ${path}:`, error);
-                return null;
-              }
-            });
-            
-            const styleUploadedUrls = await Promise.all(styleUploadPromises);
-            const validStyleUrls = styleUploadedUrls.filter((url): url is string => url !== null);
-            imageUrls.push(...validStyleUrls);
-          }
-        }
+        // Note: We no longer scan the filesystem for reference images
+        // All reference images are now managed explicitly through the Style Editor UI
+        // and stored in templateData.referenceImages (database)
+        // This ensures that deleted images are not sent to the API
       } else {
         console.log(`Edit mode: Skipping template and style reference images, using only user reference image`);
       }
