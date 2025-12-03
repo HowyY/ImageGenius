@@ -63,7 +63,7 @@ Characters support style-specific avatars with crop functionality to ensure cons
 
 ### Template System Architecture
 
-The application supports three template types for flexible prompt generation:
+The application supports four template types for flexible prompt generation:
 
 1. **Structured Templates** (Default): Complex multi-section templates with Camera & Composition, Environment, Main Character, Secondary Objects, Style Enforcement sections.
 
@@ -76,7 +76,17 @@ The application supports three template types for flexible prompt generation:
    - `negativePrompt`: Elements to avoid
    - `referenceImages`: Style reference images
 
+4. **Cinematic Templates**: Professional cinematography-focused templates with weighted parameters:
+   - `sceneAction`: Main action or event (supports `{userPrompt}` placeholder)
+   - `cameraFraming`: Camera angle, shot type, composition with weights (e.g., `medium shot:1.2`)
+   - `visualAnchors`: Key visual elements that define the scene
+   - `colorRender`: Color grading, lighting style, rendering quality
+   - `technicalSpecs`: Resolution, quality settings, technical parameters
+   - `negativePrompt`: Elements to avoid
+
 The Universal prompt format follows: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
+
+The Cinematic prompt format follows: [SCENE ACTION][CAMERA & FRAMING][VISUAL ANCHORS][COLOR & RENDER][TECHNICAL SPECS][NEGATIVE]
 
 Palette fallback hierarchy: User override → Template default → Style default colors
 
