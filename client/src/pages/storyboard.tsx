@@ -619,7 +619,7 @@ export default function Storyboard() {
       const generateData = await startGeneration({
         prompt: finalPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro",
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
         sceneId: scene.id,
         sceneName: `Scene ${scene.orderIndex + 1}`,
         userReferenceImages: characterRefs.length > 0 ? characterRefs.map(r => r.imageUrl) : undefined,
@@ -695,7 +695,7 @@ export default function Storyboard() {
       const generateData = await startGeneration({
         prompt: editPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro",
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
         userReferenceImages: [imageUrl],
         sceneId: sceneIdToEdit,
         sceneName: `Scene Edit`,
@@ -935,6 +935,9 @@ export default function Storyboard() {
                     </SelectItem>
                     <SelectItem value="nanopro" data-testid="option-engine-nanopro">
                       Nano Pro (2K/4K)
+                    </SelectItem>
+                    <SelectItem value="nanobanana-t2i" data-testid="option-engine-nanobanana-t2i">
+                      NanoBanana T2I (No Ref)
                     </SelectItem>
                   </SelectContent>
                 </Select>

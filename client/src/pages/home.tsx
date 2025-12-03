@@ -77,7 +77,7 @@ export default function Home() {
     defaultValues: {
       prompt: savedPrompt,
       styleId: savedStyleId || "",
-      engine: savedEngine as "nanobanana" | "seedream" | "nanopro",
+      engine: savedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
     },
   });
 
@@ -473,6 +473,19 @@ export default function Home() {
                             <span className="flex items-center gap-1">
                               Nano Pro
                               <Badge variant="secondary" className="text-xs px-1 py-0">2K</Badge>
+                            </span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === "nanobanana-t2i" ? "default" : "outline"}
+                            onClick={() => field.onChange("nanobanana-t2i")}
+                            disabled={isGenerating}
+                            className="flex-1 min-w-[100px]"
+                            data-testid="button-engine-nanobanana-t2i"
+                          >
+                            <span className="flex items-center gap-1">
+                              T2I
+                              <Badge variant="secondary" className="text-xs px-1 py-0">No Ref</Badge>
                             </span>
                           </Button>
                         </div>

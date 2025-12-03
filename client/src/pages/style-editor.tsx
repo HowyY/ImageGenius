@@ -496,7 +496,7 @@ export default function StyleEditor() {
         id,
         label,
         description,
-        engines: ["nanobanana", "seedream", "nanopro"],
+        engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
         basePrompt: "clean vector art style",
         referenceImageUrl: "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png",
       });
@@ -2170,11 +2170,12 @@ ${negativePrompt}`;
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(selectedStyle?.engines || ["nanobanana", "seedream", "nanopro"]).map((engine) => (
+                      {(selectedStyle?.engines || ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"]).map((engine) => (
                         <SelectItem key={engine} value={engine}>
                           {engine === "nanobanana" ? "NanoBanana Edit" : 
                            engine === "seedream" ? "SeeDream V4" : 
-                           engine === "nanopro" ? "Nano Pro" : engine}
+                           engine === "nanopro" ? "Nano Pro" :
+                           engine === "nanobanana-t2i" ? "NanoBanana T2I" : engine}
                         </SelectItem>
                       ))}
                     </SelectContent>
