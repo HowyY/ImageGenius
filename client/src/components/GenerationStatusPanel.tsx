@@ -18,8 +18,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function formatElapsedTime(startedAt: number): string {
-  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+function formatElapsedTime(startedAt: number, endTime?: number): string {
+  const end = endTime ?? Date.now();
+  const elapsed = Math.floor((end - startedAt) / 1000);
   const minutes = Math.floor(elapsed / 60);
   const seconds = elapsed % 60;
   if (minutes > 0) {
@@ -109,7 +110,7 @@ function TaskItem({ task, onClear }: { task: GenerationTask; onClear: () => void
                 </span>
                 {task.completedAt && (
                   <span className="text-xs text-muted-foreground">
-                    {formatElapsedTime(task.startedAt)} total
+                    {formatElapsedTime(task.startedAt, task.completedAt)} total
                   </span>
                 )}
               </div>
@@ -117,9 +118,16 @@ function TaskItem({ task, onClear }: { task: GenerationTask; onClear: () => void
           )}
           
           {isFailed && (
-            <p className="text-xs text-destructive mt-1">
-              {task.error || "Generation failed"}
-            </p>
+            <div className="mt-1">
+              <p className="text-xs text-destructive">
+                {task.error || "Generation failed"}
+              </p>
+              {task.completedAt && (
+                <span className="text-xs text-muted-foreground">
+                  Failed after {formatElapsedTime(task.startedAt, task.completedAt)}
+                </span>
+              )}
+            </div>
           )}
         </div>
         
