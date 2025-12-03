@@ -367,6 +367,7 @@ function SortableStyleItem({
           {...listeners}
           className="flex items-center justify-center cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground"
           onClick={(e) => e.stopPropagation()}
+          data-testid={`drag-handle-${style.id}`}
         >
           <GripVertical className="w-4 h-4" />
         </div>
@@ -485,7 +486,7 @@ export default function StyleEditor() {
   }, [allTemplates]);
 
   // Sort styles by displayOrder (templates with lower order first)
-  const sortedStyles = useMemo(() => {
+  const serverSortedStyles = useMemo(() => {
     if (!styles) return [];
     return [...styles].sort((a, b) => {
       const orderA = templateOrderMap[a.id] ?? 9999;
@@ -493,6 +494,33 @@ export default function StyleEditor() {
       return orderA - orderB;
     });
   }, [styles, templateOrderMap]);
+
+  // Local state for optimistic reordering
+  const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
+  
+  // Track last known server order for rollback
+  const lastServerOrderRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (serverSortedStyles.length > 0) {
+      lastServerOrderRef.current = serverSortedStyles.map(s => s.id);
+    }
+  }, [serverSortedStyles]);
+  
+  // Use optimistic order if set, otherwise use server order
+  const sortedStyles = useMemo(() => {
+    if (optimisticOrder && styles) {
+      const styleMap = new Map(styles.map(s => [s.id, s]));
+      return optimisticOrder
+        .map(id => styleMap.get(id))
+        .filter((s): s is ExtendedStylePreset => s !== undefined);
+    }
+    return serverSortedStyles;
+  }, [optimisticOrder, styles, serverSortedStyles]);
+
+  // Clear optimistic order when server data updates or styles list changes
+  useEffect(() => {
+    setOptimisticOrder(null);
+  }, [allTemplates, styles?.length]);
 
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -710,6 +738,7 @@ export default function StyleEditor() {
       if (context?.previousTemplates) {
         queryClient.setQueryData(["/api/templates"], context.previousTemplates);
       }
+      setOptimisticOrder(lastServerOrderRef.current.length > 0 ? lastServerOrderRef.current : null);
       toast({
         title: "Reorder failed",
         description: error.message,
@@ -721,24 +750,18 @@ export default function StyleEditor() {
     },
   });
 
-  const handleMoveStyle = (styleId: string, direction: "up" | "down") => {
-    const currentIndex = sortedStyles.findIndex(s => s.id === styleId);
-    if (currentIndex === -1) return;
+  const applyReorder = useCallback((newOrderedStyles: ExtendedStylePreset[]) => {
+    setOptimisticOrder(newOrderedStyles.map(s => s.id));
     
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= sortedStyles.length) return;
-
-    const newOrder = arrayMove(sortedStyles, currentIndex, targetIndex);
-    
-    const templateOrders = newOrder.map((s, index) => ({
+    const templateOrders = newOrderedStyles.map((s, index) => ({
       styleId: s.id,
       displayOrder: index,
     }));
 
     reorderTemplatesMutation.mutate(templateOrders);
-  };
+  }, [reorderTemplatesMutation]);
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
@@ -747,16 +770,10 @@ export default function StyleEditor() {
       
       if (oldIndex !== -1 && newIndex !== -1) {
         const newOrder = arrayMove(sortedStyles, oldIndex, newIndex);
-        
-        const templateOrders = newOrder.map((s, index) => ({
-          styleId: s.id,
-          displayOrder: index,
-        }));
-
-        reorderTemplatesMutation.mutate(templateOrders);
+        applyReorder(newOrder);
       }
     }
-  };
+  }, [sortedStyles, applyReorder]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
