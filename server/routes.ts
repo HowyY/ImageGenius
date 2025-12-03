@@ -2461,10 +2461,25 @@ ${negativePrompt}`;
 
       console.log(`[CharacterCard] Successfully generated card ${newCard.id} for character ${character.name}`);
       
+      // Return debug info for KIE API Request Details display
       res.json({
         success: true,
         card: newCard,
         character: updatedCharacter,
+        // Debug info for prompt fine-tuning
+        debugInfo: {
+          engine: engine,
+          styleLabel: style.label,
+          referenceImageUrls: imageUrls,
+          finalPrompt: finalPrompt,
+          generatedImageUrl: generatedImageUrl,
+          visualPrompt: visualPrompt,
+          angle: isCharacterSheet ? "sheet" : angle,
+          pose: isCharacterSheet ? "sheet" : pose,
+          expression: isCharacterSheet ? "neutral" : expression,
+          isCharacterSheet: isCharacterSheet,
+          cleanBackground: cleanBackground,
+        },
       });
     } catch (error) {
       console.error("Error generating character card:", error);

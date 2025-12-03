@@ -42,7 +42,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X, Users, Images, Menu, UserCircle, Crop, Maximize2 } from "lucide-react";
+import { Plus, Trash2, User, Search, Sparkles, Check, ImageIcon, LayoutGrid, Pencil, RefreshCw, ZoomIn, X, Users, Images, Menu, UserCircle, Crop, Maximize2, Info } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -57,6 +57,20 @@ interface Style {
   label: string;
   description: string;
   engines: string[];
+}
+
+interface GenerationDebugInfo {
+  engine: string;
+  styleLabel: string;
+  referenceImageUrls: string[];
+  finalPrompt: string;
+  generatedImageUrl: string;
+  visualPrompt: string;
+  angle: string;
+  pose: string;
+  expression: string;
+  isCharacterSheet: boolean;
+  cleanBackground: boolean;
 }
 
 export default function CharacterEditor() {
@@ -101,6 +115,10 @@ export default function CharacterEditor() {
   const [showAvatarCropDialog, setShowAvatarCropDialog] = useState(false);
   const [avatarCropCard, setAvatarCropCard] = useState<CharacterCard | null>(null);
   const [avatarCropStyleId, setAvatarCropStyleId] = useState<string>("");
+  
+  // KIE API Request Details dialog state
+  const [showRequestDetailsDialog, setShowRequestDetailsDialog] = useState(false);
+  const [lastGenerationDebugInfo, setLastGenerationDebugInfo] = useState<GenerationDebugInfo | null>(null);
   
   const { toast } = useToast();
 
@@ -221,6 +239,11 @@ export default function CharacterEditor() {
     }
   }, [urlStyleId, styles, selectedStyleId]);
 
+  // Clear debug info when character or style changes to avoid stale data
+  useEffect(() => {
+    setLastGenerationDebugInfo(null);
+  }, [selectedCharacterId, selectedStyleId]);
+
   const handleCreateCharacter = () => {
     if (!newCharacterName.trim()) {
       toast({
@@ -311,12 +334,19 @@ export default function CharacterEditor() {
       });
       const result = await res.json();
       
+      // Store debug info for "View Request Details" dialog
+      if (result.debugInfo) {
+        setLastGenerationDebugInfo(result.debugInfo);
+      }
+      
       queryClient.invalidateQueries({ queryKey: CHARACTERS_QUERY_KEY });
       toast({
         title: "Success",
         description: isCharacterSheet ? "Character sheet generated successfully" : "Character card generated successfully",
       });
     } catch (error) {
+      // Clear debug info on failure to avoid confusion
+      setLastGenerationDebugInfo(null);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to generate character card",
@@ -1037,6 +1067,18 @@ export default function CharacterEditor() {
                       {isCharacterSheet ? <LayoutGrid className="w-4 h-4 mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
                       {isGenerating ? "Generating..." : (isCharacterSheet ? "Generate Character Sheet" : "Generate Card")}
                     </Button>
+                    
+                    {lastGenerationDebugInfo && (
+                      <Button 
+                        className="w-full"
+                        variant="outline"
+                        onClick={() => setShowRequestDetailsDialog(true)}
+                        data-testid="button-view-request-details"
+                      >
+                        <Info className="w-4 h-4 mr-2" />
+                        View Request Details
+                      </Button>
+                    )}
                   </div>
 
                   <Button 
@@ -1416,6 +1458,124 @@ export default function CharacterEditor() {
           styleName={styles.find(s => s.id === avatarCropStyleId)?.label}
         />
       )}
+
+      {/* KIE API Request Details Dialog */}
+      <Dialog open={showRequestDetailsDialog} onOpenChange={setShowRequestDetailsDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>KIE API Request Details</DialogTitle>
+            <DialogDescription>
+              Complete information sent to KIE for this character card generation
+            </DialogDescription>
+          </DialogHeader>
+          
+          {lastGenerationDebugInfo && (
+            <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
+              <div className="space-y-6">
+                {/* Generation Info */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">GENERATION INFO</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-md">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Engine</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.engine}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Style</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.styleLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Mode</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.isCharacterSheet ? "Character Sheet" : "Single Card"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Angle</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.angle}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pose</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.pose}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Expression</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.expression}</p>
+                    </div>
+                    <div className="col-span-2 md:col-span-3">
+                      <p className="text-xs text-muted-foreground">Clean Background</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.cleanBackground ? "Yes" : "No"}</p>
+                    </div>
+                    <div className="col-span-2 md:col-span-3">
+                      <p className="text-xs text-muted-foreground">Visual Prompt</p>
+                      <p className="font-medium">{lastGenerationDebugInfo.visualPrompt}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reference Images Sent to KIE */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">
+                    REFERENCE IMAGES SENT TO KIE
+                  </h3>
+                  {lastGenerationDebugInfo.referenceImageUrls && lastGenerationDebugInfo.referenceImageUrls.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {lastGenerationDebugInfo.referenceImageUrls.map((url, idx) => (
+                        <div key={idx} className="space-y-2">
+                          <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
+                            <img
+                              src={url}
+                              alt={`Reference ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium">Reference #{idx + 1}</p>
+                            <p className="text-xs text-muted-foreground break-all line-clamp-2">
+                              {url}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-muted/50 rounded-md border border-dashed">
+                      <p className="text-sm text-muted-foreground text-center">
+                        No reference images used for this generation.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Full Prompt Sent to KIE */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">FULL PROMPT SENT TO KIE</h3>
+                  <div className="p-4 bg-muted/50 rounded-md">
+                    <pre className="text-xs whitespace-pre-wrap font-mono">
+                      {lastGenerationDebugInfo.finalPrompt}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* Generated Result */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm text-muted-foreground">GENERATED RESULT</h3>
+                  <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
+                    <img
+                      src={lastGenerationDebugInfo.generatedImageUrl}
+                      alt="Generated result"
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground break-all">
+                    {lastGenerationDebugInfo.generatedImageUrl}
+                  </p>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
