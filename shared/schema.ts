@@ -325,6 +325,24 @@ export const universalTemplateSchema = z.object({
   negativePrompt: z.string(), // Negative prompt keywords
 });
 
+// Cinematic template schema - structured prompt with explicit sections
+// Uses a film/storyboard approach with camera framing, visual anchors, color/render, specs, and negative
+// This format is particularly effective for consistent style enforcement with weighted keywords
+export const cinematicTemplateSchema = z.object({
+  name: z.string(),
+  templateType: z.literal("cinematic"),
+  // Camera & Framing section: controls composition and camera angle
+  cameraFraming: z.string(), // e.g., "(Medium shot:1.1), balanced composition, cinematic storyboard, eye-level angle"
+  // Visual Anchors section: style-defining keywords with weights
+  visualAnchors: z.string(), // e.g., "(Sketchline Vector V2 style:1.2), deep-blue outline characters..."
+  // Color & Render section: color palette and rendering approach
+  colorRender: z.string(), // e.g., "(blue-cyan color palette:1.2), deep-blue line palette..."
+  // Technical Specs section: quality and rendering requirements
+  technicalSpecs: z.string(), // e.g., "best quality, 2D vector art, clean lines, sharp edges..."
+  // Negative prompts section: things to avoid with weights
+  negativePrompt: z.string(), // e.g., "(shading:1.3), (shadows:1.3), (noise:1.3)..."
+});
+
 export const promptTemplateSchema = z.object({
   name: z.string(),
   templateType: z.literal("structured").optional().default("structured"),
@@ -370,7 +388,7 @@ export const promptTemplateSchema = z.object({
 });
 
 // Union of template types for request validation
-export const anyTemplateSchema = z.union([simpleTemplateSchema, promptTemplateSchema, universalTemplateSchema]);
+export const anyTemplateSchema = z.union([simpleTemplateSchema, promptTemplateSchema, universalTemplateSchema, cinematicTemplateSchema]);
 
 export const generateRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
@@ -395,7 +413,8 @@ export type ColorPalette = z.infer<typeof colorPaletteSchema>;
 export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 export type SimpleTemplate = z.infer<typeof simpleTemplateSchema>;
 export type UniversalTemplate = z.infer<typeof universalTemplateSchema>;
-export type AnyTemplate = PromptTemplate | SimpleTemplate | UniversalTemplate;
+export type CinematicTemplate = z.infer<typeof cinematicTemplateSchema>;
+export type AnyTemplate = PromptTemplate | SimpleTemplate | UniversalTemplate | CinematicTemplate;
 export type StylePreset = z.infer<typeof stylePresetSchema>;
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;
 export type GenerateResponse = z.infer<typeof generateResponseSchema>;
