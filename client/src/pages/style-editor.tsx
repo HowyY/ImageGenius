@@ -134,7 +134,7 @@ interface StructuredTemplate {
 interface SimpleTemplate {
   name: string;
   templateType: "simple";
-  suffix: string;
+  prompt: string;
   referenceImages?: ImageReference[];
 }
 
@@ -614,9 +614,12 @@ export default function StyleEditor() {
     setSelectedCharacterRefs([]);
   }, [selectedStyleId]);
 
-  const generateSimplePreview = (simpleTemplate: SimpleTemplate, basePrompt: string) => {
-    const suffix = simpleTemplate.suffix || "white background, 8k resolution";
-    return `{userPrompt}, ${basePrompt}, ${suffix}`;
+  const generateSimplePreview = (simpleTemplate: SimpleTemplate, _basePrompt: string) => {
+    const templatePrompt = simpleTemplate.prompt || "";
+    if (templatePrompt) {
+      return `{userPrompt}, ${templatePrompt}`;
+    }
+    return `{userPrompt}`;
   };
 
   const generateUniversalPreview = (universalTemplate: UniversalTemplate, styleName: string) => {
@@ -895,7 +898,7 @@ ${negativePrompt}`;
       setTemplate({
         name: templateName,
         templateType: "simple",
-        suffix: "white background, 8k resolution",
+        prompt: "",
       });
     } else if (isUniversalTemplate(template)) {
       setTemplate({
@@ -1386,7 +1389,7 @@ ${negativePrompt}`;
                                     setTemplate({
                                       name: template.name,
                                       templateType: "simple",
-                                      suffix: "white background, 8k resolution",
+                                      prompt: "",
                                     });
                                   } else if (value === "universal") {
                                     setTemplate({
@@ -1463,15 +1466,18 @@ ${negativePrompt}`;
 
                             {isSimpleTemplate(template) && (
                               <div>
-                                <Label>Suffix</Label>
+                                <Label>Prompt</Label>
                                 <Textarea
-                                  value={template.suffix}
-                                  onChange={(e) => setTemplate({ ...template, suffix: e.target.value })}
-                                  placeholder="white background, 8k resolution"
-                                  rows={3}
+                                  value={template.prompt}
+                                  onChange={(e) => setTemplate({ ...template, prompt: e.target.value })}
+                                  placeholder="Enter your custom prompt format here..."
+                                  rows={5}
                                   className="font-mono text-sm"
-                                  data-testid="textarea-suffix"
+                                  data-testid="textarea-prompt"
                                 />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Output: {"{scene}"}, {"{this prompt}"}
+                                </p>
                               </div>
                             )}
 

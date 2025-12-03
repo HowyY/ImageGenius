@@ -169,24 +169,21 @@ function buildPrompt(
 ${NEGATIVE_PROMPT}`.trim();
 }
 
-// Simple concatenation template builder
+// Simple template builder - free-form prompt testing
+// Output: {userPrompt}, {template.prompt}
 function buildSimplePrompt(
   userPrompt: string,
-  style: StylePreset & { basePrompt: string },
-  hasUserReference: boolean,
+  _style: StylePreset & { basePrompt: string },
+  _hasUserReference: boolean,
   template: any
 ): string {
-  const suffix = template.suffix || "white background, 8k resolution";
+  const templatePrompt = template.prompt || "";
   
-  // Simple concatenation: scene, style basePrompt, suffix
-  let prompt = `${userPrompt}, ${style.basePrompt}, ${suffix}`;
-  
-  // Add character lock instruction if user provided reference images
-  if (hasUserReference) {
-    prompt += "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**";
+  // Simple concatenation: scene + template prompt (for free testing)
+  if (templatePrompt) {
+    return `${userPrompt}, ${templatePrompt}`;
   }
-  
-  return prompt;
+  return userPrompt;
 }
 
 // V2 Universal template builder - simplified, structured prompt format
