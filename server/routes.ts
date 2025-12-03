@@ -2237,10 +2237,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isCharacterSheet) {
         // Character sheet mode: multiple angles with UNIFIED SCALE rules
         framingInstruction = `Character turnaround reference sheet, arranged horizontally:
-- Front view (facing camera)
-- Three-quarter view (slight angle)
-- Side view (profile)
-- Back view (facing away)
+- Front view (facing forward)
+- Three-quarter right view (turned slightly to the right)
+- Right side view (full profile facing right)
+- Back view (facing away, symmetric)
 
 All views must follow identical scale:
 - Same canvas height per view
