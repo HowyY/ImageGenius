@@ -62,6 +62,23 @@ import {
   EyeOff,
   Pencil,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -295,6 +312,118 @@ function StyleThumbnail({ src, label }: { src?: string; label: string }) {
         }}
         data-testid="thumb-image"
       />
+    </div>
+  );
+}
+
+interface SortableStyleItemProps {
+  style: ExtendedStylePreset;
+  isSelected: boolean;
+  onSelect: () => void;
+  onRename: () => void;
+  onToggleVisibility: () => void;
+  isToggleDisabled: boolean;
+}
+
+function SortableStyleItem({ 
+  style, 
+  isSelected, 
+  onSelect, 
+  onRename, 
+  onToggleVisibility,
+  isToggleDisabled 
+}: SortableStyleItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: style.id });
+
+  const itemStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={itemStyle}
+      className={`group p-2 rounded-md transition-colors cursor-pointer ${
+        isSelected
+          ? "bg-primary/10 border border-primary/30"
+          : "hover-elevate"
+      }`}
+      onClick={onSelect}
+      data-testid={`style-item-${style.id}`}
+    >
+      <div className="flex items-start gap-1">
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex items-center justify-center cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+        
+        <div className="relative flex-shrink-0">
+          <StyleThumbnail 
+            src={style.referenceImageUrl} 
+            label={style.label} 
+          />
+          {style.isHidden && (
+            <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center pointer-events-none">
+              <EyeOff className="w-4 h-4 text-white" />
+            </div>
+          )}
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            <span className="font-medium text-sm truncate">{style.label}</span>
+            {style.isHidden && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0 flex-shrink-0 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-600">Hidden</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <p className="text-xs text-muted-foreground truncate">{style.id}</p>
+            <Button 
+              size="sm"
+              variant="ghost"
+              className="flex-shrink-0 h-5 px-1.5 text-[10px] relative z-[1000]"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onRename();
+              }}
+              title="Rename this style"
+              data-testid={`button-rename-${style.id}`}
+            >
+              <Pencil className="w-3 h-3" />
+            </Button>
+            <Button 
+              size="sm"
+              variant={style.isHidden ? "outline" : "ghost"}
+              className={`flex-shrink-0 h-5 px-1.5 text-[10px] relative z-[1000] ${style.isHidden ? "border-orange-400 text-orange-600 dark:text-orange-400" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onToggleVisibility();
+              }}
+              disabled={isToggleDisabled}
+              title={style.isHidden ? "Show this style to users" : "Hide this style from users"}
+              data-testid={`button-toggle-visibility-${style.id}`}
+            >
+              {style.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -563,15 +692,32 @@ export default function StyleEditor() {
     mutationFn: async (templateOrders: { styleId: string; displayOrder: number }[]) => {
       await apiRequest("POST", "/api/templates/reorder", { templateOrders });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+    onMutate: async (templateOrders) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/templates"] });
+      const previousTemplates = queryClient.getQueryData<TemplateWithOrder[]>(["/api/templates"]);
+      
+      if (previousTemplates) {
+        const newTemplates = previousTemplates.map(t => {
+          const newOrder = templateOrders.find(o => o.styleId === t.styleId);
+          return newOrder ? { ...t, displayOrder: newOrder.displayOrder } : t;
+        });
+        queryClient.setQueryData(["/api/templates"], newTemplates);
+      }
+      
+      return { previousTemplates };
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousTemplates) {
+        queryClient.setQueryData(["/api/templates"], context.previousTemplates);
+      }
       toast({
         title: "Reorder failed",
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
     },
   });
 
@@ -582,11 +728,8 @@ export default function StyleEditor() {
     const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (targetIndex < 0 || targetIndex >= sortedStyles.length) return;
 
-    // Create new order
-    const newOrder = [...sortedStyles];
-    [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]];
+    const newOrder = arrayMove(sortedStyles, currentIndex, targetIndex);
     
-    // Build templateOrders array
     const templateOrders = newOrder.map((s, index) => ({
       styleId: s.id,
       displayOrder: index,
@@ -594,6 +737,37 @@ export default function StyleEditor() {
 
     reorderTemplatesMutation.mutate(templateOrders);
   };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = sortedStyles.findIndex(s => s.id === active.id);
+      const newIndex = sortedStyles.findIndex(s => s.id === over.id);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = arrayMove(sortedStyles, oldIndex, newIndex);
+        
+        const templateOrders = newOrder.map((s, index) => ({
+          styleId: s.id,
+          displayOrder: index,
+        }));
+
+        reorderTemplatesMutation.mutate(templateOrders);
+      }
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     if (styles && styles.length > 0 && !selectedStyleId) {
@@ -1172,115 +1346,40 @@ ${negativePrompt}`;
               {searchQuery ? "No styles match your search" : "No styles available"}
             </div>
           ) : (
-            filteredStyles.map((style, index) => (
-              <div
-                key={style.id}
-                className={`group p-2 rounded-md transition-colors cursor-pointer ${
-                  selectedStyleId === style.id
-                    ? "bg-primary/10 border border-primary/30"
-                    : "hover-elevate"
-                }`}
-                onClick={() => {
-                  setSelectedStyleId(style.id);
-                  setShowMobileStylesPanel(false);
-                }}
-                data-testid={`style-item-${style.id}`}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={filteredStyles.map(s => s.id)}
+                strategy={verticalListSortingStrategy}
               >
-                <div className="flex items-start gap-1">
-                  {/* Reorder buttons */}
-                  <div className="flex flex-col relative z-[1000]">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-4 w-4"
-                      disabled={index === 0 || reorderTemplatesMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        handleMoveStyle(style.id, "up");
-                      }}
-                      data-testid={`button-move-up-${style.id}`}
-                    >
-                      <ChevronUp className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-4 w-4"
-                      disabled={index === filteredStyles.length - 1 || reorderTemplatesMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        handleMoveStyle(style.id, "down");
-                      }}
-                      data-testid={`button-move-down-${style.id}`}
-                    >
-                      <ChevronDown className="w-3 h-3" />
-                    </Button>
-                  </div>
-                  
-                  {/* Thumbnail */}
-                  <div className="relative flex-shrink-0">
-                    <StyleThumbnail 
-                      src={style.referenceImageUrl} 
-                      label={style.label} 
-                    />
-                    {style.isHidden && (
-                      <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center pointer-events-none">
-                        <EyeOff className="w-4 h-4 text-white" />
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium text-sm truncate">{style.label}</span>
-                      {style.isHidden && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 flex-shrink-0 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-600">Hidden</Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <p className="text-xs text-muted-foreground truncate">{style.id}</p>
-                      <Button 
-                        size="sm"
-                        variant="ghost"
-                        className="flex-shrink-0 h-5 px-1.5 text-[10px] relative z-[1000]"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          setRenameStyleId(style.id);
-                          setRenameNewLabel(style.label);
-                          setShowRenameDialog(true);
-                        }}
-                        title="Rename this style"
-                        data-testid={`button-rename-${style.id}`}
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </Button>
-                      <Button 
-                        size="sm"
-                        variant={style.isHidden ? "outline" : "ghost"}
-                        className={`flex-shrink-0 h-5 px-1.5 text-[10px] relative z-[1000] ${style.isHidden ? "border-orange-400 text-orange-600 dark:text-orange-400" : ""}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          toggleVisibilityMutation.mutate({ 
-                            styleId: style.id, 
-                            isHidden: !style.isHidden 
-                          });
-                        }}
-                        disabled={toggleVisibilityMutation.isPending}
-                        title={style.isHidden ? "Show this style to users" : "Hide this style from users"}
-                        data-testid={`button-toggle-visibility-${style.id}`}
-                      >
-                        {style.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
+                {filteredStyles.map((style) => (
+                  <SortableStyleItem
+                    key={style.id}
+                    style={style}
+                    isSelected={selectedStyleId === style.id}
+                    onSelect={() => {
+                      setSelectedStyleId(style.id);
+                      setShowMobileStylesPanel(false);
+                    }}
+                    onRename={() => {
+                      setRenameStyleId(style.id);
+                      setRenameNewLabel(style.label);
+                      setShowRenameDialog(true);
+                    }}
+                    onToggleVisibility={() => {
+                      toggleVisibilityMutation.mutate({ 
+                        styleId: style.id, 
+                        isHidden: !style.isHidden 
+                      });
+                    }}
+                    isToggleDisabled={toggleVisibilityMutation.isPending}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </ScrollArea>
