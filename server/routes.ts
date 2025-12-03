@@ -518,6 +518,47 @@ async function pollNanoBananaResult(taskId: string) {
   throw new Error("NanoBanana task timed out");
 }
 
+// Nano Banana Text-to-Image (no reference images needed)
+async function callNanoBananaT2I(prompt: string, imageSize: string = "16:9") {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
+  }
+
+  console.log(`[NanoBanana T2I] Creating text-to-image task...`);
+  console.log(`[NanoBanana T2I] Prompt: ${prompt.substring(0, 100)}...`);
+  console.log(`[NanoBanana T2I] Image Size: ${imageSize}`);
+
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "google/nano-banana",
+      input: {
+        prompt,
+        output_format: "png",
+        image_size: imageSize,
+      },
+    }),
+  });
+
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`NanoBanana T2I failed to create task: ${createResponse.status} ${createJson.msg ?? ""}`);
+  }
+
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("NanoBanana T2I response missing taskId");
+  }
+
+  console.log(`[NanoBanana T2I] Task created: ${taskId}`);
+  return await pollNanoBananaResult(taskId);
+}
+
 async function callSeedreamEdit(prompt: string, imageUrls: string[]) {
   if (!KIE_API_KEY) {
     throw new Error("KIE_API_KEY is not set in the environment");
