@@ -279,6 +279,47 @@ ${negativePrompt}`;
   return prompt.trim();
 }
 
+// Cinematic template builder - uses structured sections with weighted keywords
+// Format is particularly effective for style-locked storyboard consistency
+function buildCinematicPrompt(
+  userPrompt: string,
+  style: StylePreset & { basePrompt: string },
+  hasUserReference: boolean,
+  template: any
+): string {
+  const cameraFraming = template.cameraFraming || "(Medium shot:1.1), balanced composition, cinematic storyboard, eye-level angle";
+  const visualAnchors = template.visualAnchors || "";
+  const colorRender = template.colorRender || "";
+  const technicalSpecs = template.technicalSpecs || "best quality, 2D vector art, clean lines, sharp edges";
+  const negativePrompt = template.negativePrompt || "";
+  
+  // Character lock instruction for reference images
+  const characterLock = hasUserReference 
+    ? "\nMaintain exact character appearance from reference: face, hairstyle, clothing, body proportions."
+    : "";
+  
+  // Build prompt following cinematic structure with explicit sections
+  let prompt = `[SCENE ACTION]
+${userPrompt}${characterLock}
+
+[CAMERA & FRAMING]
+${cameraFraming}
+
+[VISUAL ANCHORS]
+${visualAnchors}
+
+[COLOR & RENDER]
+${colorRender}
+
+[TECHNICAL SPECS]
+${technicalSpecs}
+
+[NEGATIVE]
+${negativePrompt}`;
+
+  return prompt.trim();
+}
+
 function buildPromptFromTemplate(
   userPrompt: string,
   style: StylePreset & { basePrompt: string },
@@ -293,6 +334,11 @@ function buildPromptFromTemplate(
   // Check if this is a universal (v2) template
   if (template.templateType === "universal") {
     return buildUniversalPrompt(userPrompt, style, hasUserReference, template);
+  }
+  
+  // Check if this is a cinematic template
+  if (template.templateType === "cinematic") {
+    return buildCinematicPrompt(userPrompt, style, hasUserReference, template);
   }
   
   // Structured template (default/legacy)
