@@ -1,0 +1,158 @@
+生成步骤
+1. 用户输入收集
+
+characterId - 角色 ID
+
+styleId - 风格 ID
+
+visualPrompt - 角色外观描述（例如："一个年轻女子，长发飘飘，穿着蓝色连衣裙"）
+
+angle - 视角（front/three-quarter/side/back）
+
+pose - 姿势（standing/sitting/walking/action/portrait）
+
+expression - 表情（neutral/happy/sad/angry/surprised/thoughtful）
+
+cleanBackground - 是否使用纯白背景
+
+isCharacterSheet - 是否生成多视角角色设定图（turnaround sheet）
+
+新增行为（系统自动）：
+
+所有角色卡使用统一画布比例
+
+所有角色统一使用底部 baseline（用于模型解析绝对尺度）
+
+2. 获取风格和模板数据
+
+从数据库获取对应的 Style 和 Template
+
+载入 styleKeywords、referenceImages、paletteMode、extraRules 等信息
+
+3. 构建 Prompt（关键升级点）
+
+使用 Universal 模板结构组装最终 prompt。
+模板中新增 比例控制、baseline、turnaround 尺度一致性。
+
+4. 处理参考图片
+
+从模板的 referenceImages 获取风格参考图
+
+上传本地图片到 KIE 获取临时 URL
+
+将 URL 注入生成 API
+
+5. 调用 AI 生成
+
+根据引擎选择（NanoBanana / NanoPro / Seedream）调用对应 API
+
+新增：引擎将根据新增的比例规则生成高度一致的角色卡
+
+6. 保存卡片
+
+将生成的卡片添加到角色的 characterCards 数组
+
+自动设置为该风格的头像（如首次生成）
+
+标记此卡包含 baseline，用于后续场景生成的比例控制
+
+✅ 新版 Universal Prompt 结构（可直接替换）
+[SCENE]
+{visualPrompt}
+
+
+例如：
+
+一个年轻女子，黑色长发，穿白色衬衫
+
+[FRAMING]（单角度模式）
+
+新增比例一致性与 baseline 逻辑
+
+{angle} view, {pose}, {expression}.  
+Full-body character centered in frame.  
+Character height should occupy approx. 88% of canvas height.  
+Feet aligned perfectly to a consistent baseline at the bottom.  
+Head kept within a consistent top margin across all character cards.  
+Neutral posture. Clean white background if cleanBackground = true.  
+No perspective distortion. No resizing of body proportions.
+
+
+示例输出：
+
+front view, standing pose, neutral expression. 
+Full-body character centered in frame. 
+Character height occupies 88% of canvas height. 
+Feet aligned to baseline. 
+Clean white background, no perspective.
+
+[FRAMING]（Character Sheet 模式）
+
+新增 turn-around 统一比例规则（解决比例乱问题的核心）
+
+Character turnaround reference sheet, arranged horizontally:
+
+- Front view
+- Three-quarter view
+- Side view
+- Back view
+
+All views must follow identical scale:
+- Same canvas height per view
+- Heads aligned at identical top margin
+- Feet aligned to the same baseline
+- Head size and body proportions remain constant
+- No resizing or perspective variation between views
+- Neutral expression in all angles
+- Clean white background
+
+[STYLE]
+In {styleId} style:
+{styleKeywords}
+
+
+例如：
+
+In Flat Vector style:
+clean lines, minimal shading, smooth color transitions
+
+[COLORS]
+
+Loose 模式：
+
+warm earth tones, soft neutrals
+
+
+Strict 模式：
+
+#FF6B6B, #4ECDC4, #45B7D1
+
+[RULES]
+
+新增最重要比例控制规则
+
+- Single character only (unless generating character sheet)  
+- Character must be fully visible (no cropping)
+- Maintain fixed scale across all generated character cards
+- Do NOT change head size, limb proportions, or overall height
+- Feet must stay aligned to baseline
+- No perspective distortion or exaggerated proportions
+{extraRules from template}
+
+[NEGATIVE]
+multiple characters, text, watermark, blurry, distorted limbs,
+oversized head, chibi proportions, extreme perspective, foreshortening
+
+🎯 你的角色卡系统现在正式拥有：
+
+统一身高
+
+统一头身比
+
+转角不变形
+
+多张角色卡比例一致
+
+多角色场景比例可控
+
+后续扩展（自动关系图）可兼容

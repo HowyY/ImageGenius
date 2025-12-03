@@ -2232,18 +2232,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : "simple contextual background, well-lit";
       
       // Build framing instruction based on mode (character sheet vs single card)
+      // NEW: Added proportion control rules for consistent character scaling
       let framingInstruction: string;
       if (isCharacterSheet) {
-        // Character sheet mode: multiple angles in one image
-        framingInstruction = `Character turnaround reference sheet, multiple views of the same character in a single image, arranged horizontally or in a grid layout:
+        // Character sheet mode: multiple angles with UNIFIED SCALE rules
+        framingInstruction = `Character turnaround reference sheet, arranged horizontally:
 - Front view (facing camera)
 - Three-quarter view (slight angle)
 - Side view (profile)
 - Back view (facing away)
-All views show the same character in the same outfit, consistent proportions, ${backgroundInstruction}, professional character design sheet layout`;
+
+All views must follow identical scale:
+- Same canvas height per view
+- Heads aligned at identical top margin
+- Feet aligned to the same baseline at bottom
+- Head size and body proportions remain constant across all views
+- No resizing or perspective variation between views
+- Neutral expression in all angles
+- ${backgroundInstruction}`;
       } else {
         // Single card mode: specific angle, pose, and expression
-        framingInstruction = `Character card, ${angleText}, ${poseText}, ${expressionText}, ${backgroundInstruction}, character is the main focus`;
+        // NEW: Added proportion control (88% canvas height, baseline alignment)
+        framingInstruction = `${angleText}, ${poseText}, ${expressionText}.
+Full-body character centered in frame.
+Character height should occupy approximately 85-90% of canvas height.
+Feet aligned to a consistent baseline at the bottom of the frame.
+Head kept within a consistent top margin.
+No perspective distortion. No resizing of body proportions.
+${backgroundInstruction}`;
       }
       
       // Build the prompt using Universal template structure (same as main image generation)
@@ -2264,11 +2280,22 @@ All views show the same character in the same outfit, consistent proportions, ${
         const styleName = style.label;
         const styleKeywords = templateData.styleKeywords || style.basePrompt || "";
         const rules = templateData.rules || "";
+        
+        // Build negative prompt with proportion-related negatives
+        // Keep the critical "multiple characters" guard for single-card mode
         let negativePrompt = templateData.negativePrompt || "blurry, low quality, distorted, multiple characters, group shot";
+        
+        // Add proportion control negatives (prevent head/body ratio issues)
+        negativePrompt += ", oversized head, chibi proportions, extreme perspective, foreshortening, distorted limbs, inconsistent proportions";
         
         // Add background-related negatives when clean background is requested
         if (cleanBackground) {
           negativePrompt += ", complex background, environmental elements, scenery, gradient background, outdoor scene, indoor scene, landscape";
+        }
+        
+        // Add character sheet specific negatives
+        if (isCharacterSheet) {
+          negativePrompt += ", different sizes between views, inconsistent character height, misaligned baseline";
         }
         
         // Build prompt following Universal structure: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
@@ -2317,13 +2344,27 @@ Follow the palette's saturation and contrast.`;
           }
         }
         
-        // Add rules section with character-specific additions
+        // Add rules section with character-specific additions and proportion control
+        // NEW: Added fixed scale rules for consistent character proportions
+        let proportionRules = `- Single character only (unless generating character sheet)
+- Character must be fully visible (no cropping)
+- Maintain fixed scale across all generated character cards
+- Do NOT change head size, limb proportions, or overall height
+- Feet must stay aligned to baseline at bottom of frame
+- No perspective distortion or exaggerated proportions`;
+
+        // Add character sheet specific rules
+        if (isCharacterSheet) {
+          proportionRules += `
+- All views must have identical character height
+- Consistent head-to-body ratio across all angles
+- Same baseline alignment in every view`;
+        }
+
         finalPrompt += `
 
 [RULES]
-- Single character only, no other people
-- Character should be clearly visible and recognizable
-- Consistent with the visual description provided
+${proportionRules}
 ${rules}
 
 [NEGATIVE]
