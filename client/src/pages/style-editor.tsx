@@ -1012,8 +1012,61 @@ ${negativePrompt}`;
     }
   };
 
-  const handleRemoveImage = (imageId: string) => {
-    setReferenceImages(prev => prev.filter(img => img.id !== imageId));
+  const handleRemoveImage = async (imageId: string) => {
+    const imageToRemove = referenceImages.find(img => img.id === imageId);
+    
+    if (!imageToRemove) {
+      return;
+    }
+    
+    const imagePath = imageToRemove.url;
+    const isLocalReferenceImage = imagePath.startsWith('/reference-images/') || imagePath.includes('/reference-images/');
+    
+    if (isLocalReferenceImage) {
+      if (!selectedStyleId) {
+        toast({
+          title: "Cannot delete image",
+          description: "No style selected. Please select a style first.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/delete-reference-image', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            styleId: selectedStyleId,
+            imagePath: imagePath,
+          }),
+        });
+        
+        if (response.ok) {
+          console.log(`✓ Deleted reference image file: ${imagePath}`);
+          setReferenceImages(prev => prev.filter(img => img.id !== imageId));
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Failed to delete reference image file:', errorData);
+          toast({
+            title: "Failed to delete image",
+            description: errorData.message || "Could not delete the reference image file",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error('Error deleting reference image file:', error);
+        toast({
+          title: "Delete failed",
+          description: "Network error while deleting reference image",
+          variant: "destructive",
+        });
+      }
+    } else {
+      setReferenceImages(prev => prev.filter(img => img.id !== imageId));
+    }
   };
 
   const handleDragStart = (imageId: string) => {

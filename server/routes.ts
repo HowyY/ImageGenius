@@ -1681,6 +1681,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/delete-reference-image", async (req, res) => {
+    try {
+      const { styleId, imagePath } = req.body;
+
+      if (!styleId || !imagePath) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "styleId and imagePath are required",
+        });
+      }
+
+      // Validate that imagePath belongs to this styleId to prevent cross-style deletion
+      const expectedPathPrefix = `/reference-images/${styleId}/`;
+      const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+      
+      if (!normalizedPath.startsWith(expectedPathPrefix) && !normalizedPath.includes(`/reference-images/${styleId}/`)) {
+        return res.status(400).json({
+          error: "Path mismatch",
+          message: `imagePath does not belong to style '${styleId}'`,
+        });
+      }
+
+      // Extract filename from the path (e.g., "/reference-images/warm/A.png" -> "A.png")
+      const fileName = imagePath.split('/').pop();
+      if (!fileName) {
+        return res.status(400).json({
+          error: "Invalid imagePath",
+          message: "Could not extract filename from imagePath",
+        });
+      }
+
+      // Build the full file path
+      const { unlinkSync, existsSync: fsExistsSync } = await import("fs");
+      const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
+      const filePath = join(styleDir, fileName);
+
+      // Check if file exists
+      if (!fsExistsSync(filePath)) {
+        console.log(`Reference image not found (may already be deleted): ${filePath}`);
+        return res.json({
+          success: true,
+          message: "File not found (may already be deleted)",
+          deletedPath: imagePath,
+        });
+      }
+
+      // Delete the file
+      unlinkSync(filePath);
+      console.log(`✓ Deleted reference image: ${styleId}/${fileName}`);
+
+      // Remove from uploadCache to ensure it's re-uploaded if added again
+      const cacheKey = `${styleId}:${imagePath}`;
+      uploadCache.delete(cacheKey);
+
+      // Remove from uploadedReferenceImages cache
+      const existingStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
+      if (existingStyle) {
+        existingStyle.imageUrls = existingStyle.imageUrls.filter(
+          (url) => !url.includes(fileName)
+        );
+      }
+
+      res.json({
+        success: true,
+        message: "Reference image deleted successfully",
+        deletedPath: imagePath,
+      });
+    } catch (error) {
+      console.error("Error deleting reference image:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete reference image",
+      });
+    }
+  });
+
   // ===== Storyboard API =====
 
   // Get all storyboards
