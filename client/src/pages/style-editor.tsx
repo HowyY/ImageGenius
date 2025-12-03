@@ -60,6 +60,7 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -341,6 +342,9 @@ export default function StyleEditor() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showNewStyleDialog, setShowNewStyleDialog] = useState(false);
   const [showMobileStylesPanel, setShowMobileStylesPanel] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameStyleId, setRenameStyleId] = useState<string | null>(null);
+  const [renameNewLabel, setRenameNewLabel] = useState("");
   const [cloneNewLabel, setCloneNewLabel] = useState("");
   const [newStyleLabel, setNewStyleLabel] = useState("");
   const [newStyleDescription, setNewStyleDescription] = useState("");
@@ -428,6 +432,30 @@ export default function StyleEditor() {
     onError: (error: Error) => {
       toast({
         title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const renameStyleMutation = useMutation({
+    mutationFn: async ({ styleId, label }: { styleId: string; label: string }) => {
+      const response = await apiRequest("PATCH", `/api/styles/${styleId}`, { label });
+      return response.json() as Promise<ExtendedStylePreset>;
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/styles"] });
+      setShowRenameDialog(false);
+      setRenameStyleId(null);
+      setRenameNewLabel("");
+      toast({
+        title: "Style renamed",
+        description: `Style renamed to "${result.label}".`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Rename failed",
         description: error.message,
         variant: "destructive",
       });
@@ -1046,6 +1074,22 @@ ${negativePrompt}`;
                     </div>
                     <div className="flex items-center gap-1">
                       <p className="text-xs text-muted-foreground truncate">{style.id}</p>
+                      <Button 
+                        size="sm"
+                        variant="ghost"
+                        className="flex-shrink-0 h-5 px-1.5 text-[10px] relative z-[1000]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setRenameStyleId(style.id);
+                          setRenameNewLabel(style.label);
+                          setShowRenameDialog(true);
+                        }}
+                        title="Rename this style"
+                        data-testid={`button-rename-${style.id}`}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
                       <Button 
                         size="sm"
                         variant={style.isHidden ? "outline" : "ghost"}
@@ -2014,6 +2058,48 @@ ${negativePrompt}`;
               data-testid="button-confirm-clone"
             >
               {cloneStyleMutation.isPending ? "Cloning..." : "Clone Style"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Style Dialog */}
+      <Dialog open={showRenameDialog} onOpenChange={(open) => {
+        setShowRenameDialog(open);
+        if (!open) {
+          setRenameStyleId(null);
+          setRenameNewLabel("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Style</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this style.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="rename-label">New Name</Label>
+              <Input
+                id="rename-label"
+                value={renameNewLabel}
+                onChange={(e) => setRenameNewLabel(e.target.value)}
+                placeholder="Enter new style name"
+                data-testid="input-rename-label"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => renameStyleId && renameStyleMutation.mutate({ styleId: renameStyleId, label: renameNewLabel })}
+              disabled={!renameNewLabel.trim() || renameStyleMutation.isPending}
+              data-testid="button-confirm-rename"
+            >
+              {renameStyleMutation.isPending ? "Renaming..." : "Rename"}
             </Button>
           </DialogFooter>
         </DialogContent>
