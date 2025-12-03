@@ -1425,20 +1425,6 @@ ${negativePrompt}`;
                             {isCinematicTemplate(template) && (
                               <div className="space-y-4">
                                 <div>
-                                  <Label>Scene Action</Label>
-                                  <p className="text-xs text-muted-foreground mb-1">
-                                    Main action or event in the scene. Use {"{userPrompt}"} as placeholder.
-                                  </p>
-                                  <Textarea
-                                    value={template.sceneAction}
-                                    onChange={(e) => setTemplate({ ...template, sceneAction: e.target.value })}
-                                    placeholder="{userPrompt}"
-                                    rows={2}
-                                    className="font-mono text-sm"
-                                    data-testid="textarea-scene-action"
-                                  />
-                                </div>
-                                <div>
                                   <Label>Camera & Framing</Label>
                                   <p className="text-xs text-muted-foreground mb-1">
                                     Camera angle, shot type, composition. Use weights like :1.2 for emphasis.
