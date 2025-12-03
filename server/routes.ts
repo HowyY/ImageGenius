@@ -1329,6 +1329,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrl = await callNanoBananaEdit(finalPrompt, imageUrls);
       } else if (engine === "nanopro") {
         imageUrl = await callNanoProEdit(finalPrompt, imageUrls);
+      } else if (engine === "nanobanana-t2i") {
+        // Text-to-Image engine - no reference images needed
+        imageUrl = await callNanoBananaT2I(finalPrompt, "16:9");
       } else {
         imageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
       }
