@@ -199,6 +199,40 @@ const DEFAULT_TEMPLATE: StructuredTemplate = {
   },
 };
 
+const DEFAULT_SIMPLE_TEMPLATE: SimpleTemplate = {
+  name: "Simple Template",
+  templateType: "simple",
+  suffix: "white background, 8k resolution",
+};
+
+const DEFAULT_UNIVERSAL_TEMPLATE: UniversalTemplate = {
+  name: "Universal Template",
+  templateType: "universal",
+  styleKeywords: "simple clean line art, flat 2D shapes, thin outlines, minimal shading, vector style",
+  paletteMode: "loose",
+  defaultPalette: [],
+  rules: "Consistent proportions, natural posture, correct scale, clean minimal background, no text, no watermark.",
+  negativePrompt: "bad proportions, distorted limbs, extra faces, blurry, noisy, cluttered background",
+};
+
+const DEFAULT_CINEMATIC_TEMPLATE: CinematicTemplate = {
+  name: "Cinematic Template",
+  templateType: "cinematic",
+  cameraFraming: "(Medium shot:1.1), balanced composition, cinematic storyboard, eye-level angle",
+  visualAnchors: "(Style name:1.2),\nclean outlines,\nconsistent simplified anatomy,\nwhite negative space",
+  colorRender: "(color palette:1.2),\nflat color application,\nminimal highlights",
+  technicalSpecs: "best quality, 2D vector art,\nclean lines, sharp edges,\nhigh contrast, minimalist background",
+  negativePrompt: "(shading:1.3), (shadows:1.3), (noise:1.3),\n3D effects, neon tones, realistic, texture",
+};
+
+// Helper to get current template type
+function getTemplateType(template: PromptTemplate): "structured" | "simple" | "universal" | "cinematic" {
+  if (isSimpleTemplate(template)) return "simple";
+  if (isUniversalTemplate(template)) return "universal";
+  if (isCinematicTemplate(template)) return "cinematic";
+  return "structured";
+}
+
 export default function PromptEditor() {
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [template, setTemplate] = useState<PromptTemplate>(DEFAULT_TEMPLATE);
@@ -358,6 +392,59 @@ export default function PromptEditor() {
   const generateSimplePreview = (simpleTemplate: SimpleTemplate, basePrompt: string) => {
     const suffix = simpleTemplate.suffix || "white background, 8k resolution";
     return `{userPrompt}, ${basePrompt}, ${suffix}`;
+  };
+
+  // Helper function to generate preview for structured templates with parameters
+  const generateStructuredPreview = (structuredTemplate: StructuredTemplate, styleLabel: string, basePrompt: string) => {
+    const exampleUserPrompt = "{userPrompt}";
+    let prompt = `PROMPT TEMPLATE\n\n[SCENE — ${exampleUserPrompt}]\n\n`;
+
+    if (structuredTemplate.cameraComposition?.enabled) {
+      prompt += "1. CAMERA & COMPOSITION\n";
+      prompt += `- Camera angle: ${structuredTemplate.cameraComposition.cameraAngle}\n`;
+      prompt += `- Composition layout: ${structuredTemplate.cameraComposition.compositionLayout} (${styleLabel} inspiration)\n`;
+      prompt += `- Framing: ${structuredTemplate.cameraComposition.framing}\n`;
+      prompt += `- Depth arrangement: ${structuredTemplate.cameraComposition.depthArrangement}\n\n`;
+    }
+
+    if (structuredTemplate.environment?.enabled) {
+      prompt += "2. ENVIRONMENT\n";
+      const setting = structuredTemplate.environment.setting.replace("[Scene description]", exampleUserPrompt);
+      prompt += `- Setting: ${setting}\n`;
+      prompt += `- Lighting: ${structuredTemplate.environment.lighting}\n`;
+      prompt += `- Atmosphere: ${structuredTemplate.environment.atmosphere}\n`;
+      prompt += `- Background complexity: ${structuredTemplate.environment.backgroundComplexity}\n\n`;
+    }
+
+    if (structuredTemplate.mainCharacter?.enabled) {
+      prompt += "3. MAIN CHARACTER\n";
+      prompt += `- Pose: ${structuredTemplate.mainCharacter.pose}\n`;
+      prompt += `- Expression: ${structuredTemplate.mainCharacter.expression}\n`;
+      prompt += `- Interaction: ${structuredTemplate.mainCharacter.interaction}\n`;
+      prompt += `- Clothing: ${structuredTemplate.mainCharacter.clothing}\n\n`;
+    }
+
+    if (structuredTemplate.secondaryObjects?.enabled) {
+      prompt += "4. SECONDARY OBJECTS\n";
+      prompt += `- Objects: ${structuredTemplate.secondaryObjects.objects}\n`;
+      prompt += `- Motion cues: ${structuredTemplate.secondaryObjects.motionCues}\n`;
+      prompt += `- Scale rules: ${structuredTemplate.secondaryObjects.scaleRules}\n\n`;
+    }
+
+    if (structuredTemplate.styleEnforcement?.enabled) {
+      prompt += `5. STYLE ENFORCEMENT (${styleLabel})\n`;
+      prompt += `- Base style: ${basePrompt}\n`;
+      prompt += `- Style rules: ${structuredTemplate.styleEnforcement.styleRules}\n`;
+      prompt += `- Color palette: ${structuredTemplate.styleEnforcement.colorPalette}\n`;
+      prompt += `- Texture density: ${structuredTemplate.styleEnforcement.textureDensity}\n\n`;
+    }
+
+    if (structuredTemplate.negativePrompt?.enabled) {
+      prompt += "6. NEGATIVE PROMPT\n";
+      prompt += `${structuredTemplate.negativePrompt.items}\n`;
+    }
+
+    return prompt;
   };
 
   // Helper function to generate preview for universal templates immediately
@@ -1151,7 +1238,74 @@ ${negativePrompt}`;
                   value={template.name}
                   onChange={(e) => setTemplate({ ...template, name: e.target.value })}
                   placeholder="My Custom Template"
+                  data-testid="input-template-name"
                 />
+              </div>
+
+              {/* Template Type Selector */}
+              <div>
+                <Label>Template Type</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Choose the prompt structure format
+                </p>
+                <Select
+                  value={getTemplateType(template)}
+                  onValueChange={(value: "structured" | "simple" | "universal" | "cinematic") => {
+                    const currentName = template.name;
+                    let newTemplate: PromptTemplate;
+                    switch (value) {
+                      case "simple":
+                        newTemplate = { ...DEFAULT_SIMPLE_TEMPLATE, name: currentName };
+                        break;
+                      case "universal":
+                        newTemplate = { 
+                          ...DEFAULT_UNIVERSAL_TEMPLATE, 
+                          name: currentName,
+                          paletteMode: "loose" as const,
+                        };
+                        break;
+                      case "cinematic":
+                        newTemplate = { ...DEFAULT_CINEMATIC_TEMPLATE, name: currentName };
+                        break;
+                      case "structured":
+                      default:
+                        newTemplate = normalizeTemplateColors({ ...DEFAULT_TEMPLATE, name: currentName });
+                        break;
+                    }
+                    setTemplate(newTemplate);
+                    
+                    // Update preview based on new template type
+                    const styleName = selectedStyle?.label || "Style";
+                    const basePrompt = selectedStyle?.basePrompt || "";
+                    if (value === "simple") {
+                      setPreviewPrompt(generateSimplePreview(newTemplate as SimpleTemplate, basePrompt));
+                    } else if (value === "universal") {
+                      setPreviewPrompt(generateUniversalPreview(newTemplate as UniversalTemplate, styleName));
+                    } else if (value === "cinematic") {
+                      setPreviewPrompt(generateCinematicPreview(newTemplate as CinematicTemplate));
+                    } else {
+                      setPreviewPrompt(generateStructuredPreview(newTemplate as StructuredTemplate, styleName, basePrompt));
+                    }
+                  }}
+                >
+                  <SelectTrigger data-testid="select-template-type">
+                    <SelectValue placeholder="Select template type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="structured" data-testid="option-template-structured">
+                      Structured (Legacy)
+                    </SelectItem>
+                    <SelectItem value="simple" data-testid="option-template-simple">
+                      Simple (Suffix Only)
+                    </SelectItem>
+                    <SelectItem value="universal" data-testid="option-template-universal">
+                      Universal (V2)
+                    </SelectItem>
+                    <SelectItem value="cinematic" data-testid="option-template-cinematic">
+                      Cinematic (Weighted)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <Separator />
