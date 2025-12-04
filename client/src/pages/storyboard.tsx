@@ -978,6 +978,9 @@ export default function Storyboard() {
                     <SelectItem value="nanobanana-t2i" data-testid="option-engine-nanobanana-t2i">
                       NanoBanana T2I (No Ref)
                     </SelectItem>
+                    <SelectItem value="nanopro-t2i" data-testid="option-engine-nanopro-t2i">
+                      Nano Pro T2I (2K, No Ref)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
