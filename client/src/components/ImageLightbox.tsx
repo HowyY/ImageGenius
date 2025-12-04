@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, RotateCcw, X, Maximize2 } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, X, Maximize2, Download } from "lucide-react";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 interface ImageLightboxProps {
@@ -44,6 +44,28 @@ export function ImageLightbox({ src, alt, trigger, className }: ImageLightboxPro
     setScale(1);
     setPosition({ x: 0, y: 0 });
   }, []);
+
+  const handleDownload = useCallback(async () => {
+    try {
+      const response = await fetch(src);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const filename = src.split("/").pop() || `image-${Date.now()}.png`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download failed:", error);
+      window.open(src, "_blank");
+    }
+  }, [src]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -229,6 +251,15 @@ export function ImageLightbox({ src, alt, trigger, className }: ImageLightboxPro
             <Button
               size="icon"
               variant="ghost"
+              onClick={handleDownload}
+              className="text-white hover:bg-white/20"
+              data-testid="button-download-image"
+            >
+              <Download className="w-5 h-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
               onClick={() => setOpen(false)}
               className="text-white hover:bg-white/20"
               data-testid="button-close-lightbox"
@@ -276,9 +307,10 @@ interface PreviewImageProps {
   alt: string;
   className?: string;
   showZoomHint?: boolean;
+  "data-testid"?: string;
 }
 
-export function PreviewImage({ src, alt, className, showZoomHint = true }: PreviewImageProps) {
+export function PreviewImage({ src, alt, className, showZoomHint = true, "data-testid": testId }: PreviewImageProps) {
   return (
     <ImageLightbox
       src={src}
@@ -290,6 +322,7 @@ export function PreviewImage({ src, alt, className, showZoomHint = true }: Previ
             src={src} 
             alt={alt} 
             className="w-full h-full object-contain"
+            data-testid={testId}
           />
           {showZoomHint && (
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center pointer-events-none">

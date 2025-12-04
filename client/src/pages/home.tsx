@@ -48,6 +48,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { PreviewImage } from "@/components/ImageLightbox";
 import { useGeneration } from "@/contexts/GenerationContext";
 
 export default function Home() {
@@ -610,13 +611,11 @@ export default function Home() {
                 )}
 
                 {generatedImage && !isGenerating && (
-                  <ImageWithFallback
+                  <PreviewImage
                     src={generatedImage}
                     alt="Generated artwork"
-                    className="w-full h-full object-cover transition-opacity duration-300"
-                    loading="lazy"
+                    className="w-full h-full"
                     data-testid="img-result"
-                    fallbackText="Failed to load generated image"
                   />
                 )}
                 </div>

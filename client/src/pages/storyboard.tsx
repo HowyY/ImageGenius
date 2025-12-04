@@ -23,7 +23,8 @@ import {
   Eye,
   X,
   Users,
-  Copy
+  Copy,
+  Download
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -764,6 +765,28 @@ export default function Storyboard() {
     }
   };
 
+  const handleDownloadImage = async (url: string) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const filename = url.split("/").pop() || `image-${Date.now()}.png`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      window.open(url, "_blank");
+    }
+  };
+
   const getSceneDescription = (scene: SelectStoryboardScene) => {
     const editing = editingScenes[scene.id];
     if (editing?.sceneDescription !== undefined) {
@@ -1062,14 +1085,29 @@ export default function Storyboard() {
                       <span className="text-sm font-medium">Generating...</span>
                     </div>
                   ) : scene.generatedImageUrl ? (
-                    <ImageWithFallback
-                      src={scene.generatedImageUrl}
-                      alt={scene.visualDescription || `Scene`}
-                      className="w-full h-full object-cover"
-                      data-testid={`img-scene-${scene.id}`}
-                      loading="lazy"
-                      fallbackText="Failed to load"
-                    />
+                    <div 
+                      className="w-full h-full cursor-zoom-in"
+                      onClick={() => {
+                        const style = styles?.find(s => s.id === scene.styleId);
+                        setPreviewImage({
+                          url: scene.generatedImageUrl!,
+                          prompt: scene.visualDescription || "Generated image",
+                          style: style?.label || scene.styleId || "Unknown",
+                          engine: scene.engine || "Unknown",
+                          date: "Current scene"
+                        });
+                      }}
+                      data-testid={`button-enlarge-scene-${scene.id}`}
+                    >
+                      <ImageWithFallback
+                        src={scene.generatedImageUrl}
+                        alt={scene.visualDescription || `Scene`}
+                        className="w-full h-full object-cover"
+                        data-testid={`img-scene-${scene.id}`}
+                        loading="lazy"
+                        fallbackText="Failed to load"
+                      />
+                    </div>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
                       <Upload className="w-8 h-8" />
@@ -1739,15 +1777,26 @@ export default function Storyboard() {
             Preview of generated image with details
           </DialogDescription>
           <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 z-10 bg-background/80 backdrop-blur-sm"
-              onClick={() => setPreviewImage(null)}
-              data-testid="button-close-preview"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+            <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background/80 backdrop-blur-sm"
+                onClick={() => previewImage && handleDownloadImage(previewImage.url)}
+                data-testid="button-download-preview"
+              >
+                <Download className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background/80 backdrop-blur-sm"
+                onClick={() => setPreviewImage(null)}
+                data-testid="button-close-preview"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
             {previewImage && (
               <div className="flex flex-col">
                 <div className="bg-muted flex items-center justify-center max-h-[70vh] overflow-hidden">

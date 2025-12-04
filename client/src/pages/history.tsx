@@ -11,6 +11,7 @@ import { addUserReferenceImage, getUserReferenceImages } from "@/lib/generationS
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { PreviewImage } from "@/components/ImageLightbox";
 import {
   Dialog,
   DialogContent,
@@ -125,13 +126,11 @@ export default function History() {
                 data-testid={`card-history-${item.id}`}
               >
                 <div className="relative aspect-video bg-muted">
-                  <ImageWithFallback
+                  <PreviewImage
                     src={item.generatedImageUrl}
                     alt={item.prompt}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full"
                     data-testid={`img-generated-${item.id}`}
-                    loading="lazy"
-                    fallbackText="Failed to load image"
                   />
                 </div>
                 <CardHeader>
@@ -311,12 +310,11 @@ export default function History() {
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm text-muted-foreground">GENERATED RESULT</h3>
                   <div className="relative aspect-video bg-muted rounded-md overflow-hidden">
-                    <ImageWithFallback
+                    <PreviewImage
                       src={selectedItem.generatedImageUrl}
                       alt="Generated result"
-                      className="w-full h-full object-contain"
-                      loading="lazy"
-                      fallbackText="Failed to load"
+                      className="w-full h-full"
+                      data-testid="img-dialog-result"
                     />
                   </div>
                   <p className="text-xs text-muted-foreground break-all">
