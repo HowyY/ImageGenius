@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Home, History, Sparkles, LayoutGrid, Menu, Users, GitBranch } from "lucide-react";
+import { Home, History, Sparkles, LayoutGrid, Menu, Users, GitBranch, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
@@ -17,6 +17,7 @@ const navItems = [
   { href: "/history", label: "History", icon: History, testId: "button-nav-history" },
   { href: "/style-editor", label: "Style Editor", icon: Sparkles, testId: "button-nav-style-editor" },
   { href: "/characters", label: "Characters", icon: Users, testId: "button-nav-characters" },
+  { href: "/assets", label: "Assets", icon: Package, testId: "button-nav-assets", isBeta: true },
   { href: "/node-editor", label: "Node Editor", icon: GitBranch, testId: "button-nav-node-editor", isBeta: true },
 ];
 
