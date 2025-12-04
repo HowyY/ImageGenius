@@ -13,7 +13,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Define style presets with detailed visual descriptions
+// Each style has its own unique reference image for thumbnails
 const DEFAULT_REFERENCE_IMAGE = "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png";
+
+// Local reference image URLs (served from client/public/)
+const STYLE_REFERENCE_IMAGES = {
+  cyan_sketchline_vector: "/reference-images/cyan_sketchline_vector/1.png",
+  warm_orange_flat: "/reference-images/t/A.png", // Fallback until specific images added
+  simple_cyan_test: "/reference-images/cyan_sketchline_vector/2.png",
+  cyan_sketchline_vector_v2: "/reference-images/cyan_sketchline_vector/3.png",
+} as const;
 
 let uploadedReferenceImages: StyleImageMapping[] = [];
 
@@ -25,7 +34,7 @@ const STYLE_PRESETS: Array<
     label: "Cyan Sketchline Vector",
     description:
       "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
-    engines: ["nanobanana", "seedream", "nanopro"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
     basePrompt:
       "clean sketch-style vector line art, white negative space, minimalist details, modern financial illustration tone",
     defaultColors: {
@@ -37,22 +46,22 @@ const STYLE_PRESETS: Array<
         { name: "White", hex: "#FFFFFF", role: "background" },
       ],
     },
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.cyan_sketchline_vector,
   },
   {
     id: "warm_orange_flat",
     label: "Warm Orange Flat Illustration",
     description: "Warm orange/red flat illustration with strong contrast and almost white background",
-    engines: ["nanobanana", "seedream", "nanopro"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.warm_orange_flat,
   },
   {
     id: "simple_cyan_test",
     label: "Simple Cyan (Test)",
     description: "Test style using simple concatenation template - same cyan vector look with minimal prompt structure",
-    engines: ["nanobanana", "seedream", "nanopro"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
     basePrompt:
       "clean sketch-style vector line art, hand-drawn navy outlines on bright white space, subtle cyan-to-blue gradients, financial illustration vibe, minimalist details, flat color, high quality",
     defaultColors: {
@@ -64,13 +73,13 @@ const STYLE_PRESETS: Array<
         { name: "White", hex: "#FFFFFF", role: "background" },
       ],
     },
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.simple_cyan_test,
   },
   {
     id: "cyan_sketchline_vector_v2",
     label: "Sketchline Vector V2 (Universal)",
     description: "Deep-blue outlines with cyan accents, flat 2D illustration, simple dot eyes, clean vector style",
-    engines: ["nanobanana", "seedream", "nanopro"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
     basePrompt:
       "clean deep-blue line art, flat 2D illustration, soft cyan-to-blue gradient fills, simple facial features, no textures, no shadows",
     defaultColors: {
@@ -82,7 +91,7 @@ const STYLE_PRESETS: Array<
         { name: "White", hex: "#FFFFFF", role: "background" },
       ],
     },
-    referenceImageUrl: DEFAULT_REFERENCE_IMAGE,
+    referenceImageUrl: STYLE_REFERENCE_IMAGES.cyan_sketchline_vector_v2,
   },
 ];
 
@@ -160,24 +169,21 @@ function buildPrompt(
 ${NEGATIVE_PROMPT}`.trim();
 }
 
-// Simple concatenation template builder
+// Simple template builder - free-form prompt testing
+// Output: {userPrompt}, {template.prompt}
 function buildSimplePrompt(
   userPrompt: string,
-  style: StylePreset & { basePrompt: string },
-  hasUserReference: boolean,
+  _style: StylePreset & { basePrompt: string },
+  _hasUserReference: boolean,
   template: any
 ): string {
-  const suffix = template.suffix || "white background, 8k resolution";
+  const templatePrompt = template.prompt || "";
   
-  // Simple concatenation: scene, style basePrompt, suffix
-  let prompt = `${userPrompt}, ${style.basePrompt}, ${suffix}`;
-  
-  // Add character lock instruction if user provided reference images
-  if (hasUserReference) {
-    prompt += "\n\n**CRITICAL: Keep the exact same character appearance from the reference image. Maintain all visual characteristics including face, hairstyle, clothing, and body proportions.**";
+  // Simple concatenation: scene + template prompt (for free testing)
+  if (templatePrompt) {
+    return `${userPrompt}, ${templatePrompt}`;
   }
-  
-  return prompt;
+  return userPrompt;
 }
 
 // V2 Universal template builder - simplified, structured prompt format
@@ -270,6 +276,47 @@ ${negativePrompt}`;
   return prompt.trim();
 }
 
+// Cinematic template builder - uses structured sections with weighted keywords
+// Format is particularly effective for style-locked storyboard consistency
+function buildCinematicPrompt(
+  userPrompt: string,
+  style: StylePreset & { basePrompt: string },
+  hasUserReference: boolean,
+  template: any
+): string {
+  const cameraFraming = template.cameraFraming || "(Medium shot:1.1), balanced composition, cinematic storyboard, eye-level angle";
+  const visualAnchors = template.visualAnchors || "";
+  const colorRender = template.colorRender || "";
+  const technicalSpecs = template.technicalSpecs || "best quality, 2D vector art, clean lines, sharp edges";
+  const negativePrompt = template.negativePrompt || "";
+  
+  // Character lock instruction for reference images
+  const characterLock = hasUserReference 
+    ? "\nMaintain exact character appearance from reference: face, hairstyle, clothing, body proportions."
+    : "";
+  
+  // Build prompt following cinematic structure with explicit sections
+  let prompt = `[SCENE ACTION]
+${userPrompt}${characterLock}
+
+[CAMERA & FRAMING]
+${cameraFraming}
+
+[VISUAL ANCHORS]
+${visualAnchors}
+
+[COLOR & RENDER]
+${colorRender}
+
+[TECHNICAL SPECS]
+${technicalSpecs}
+
+[NEGATIVE]
+${negativePrompt}`;
+
+  return prompt.trim();
+}
+
 function buildPromptFromTemplate(
   userPrompt: string,
   style: StylePreset & { basePrompt: string },
@@ -284,6 +331,11 @@ function buildPromptFromTemplate(
   // Check if this is a universal (v2) template
   if (template.templateType === "universal") {
     return buildUniversalPrompt(userPrompt, style, hasUserReference, template);
+  }
+  
+  // Check if this is a cinematic template
+  if (template.templateType === "cinematic") {
+    return buildCinematicPrompt(userPrompt, style, hasUserReference, template);
   }
   
   // Structured template (default/legacy)
@@ -461,6 +513,47 @@ async function pollNanoBananaResult(taskId: string) {
 
   console.error(`[NanoBanana] Task timed out after ${maxAttempts * delayMs / 1000} seconds`);
   throw new Error("NanoBanana task timed out");
+}
+
+// Nano Banana Text-to-Image (no reference images needed)
+async function callNanoBananaT2I(prompt: string, imageSize: string = "16:9") {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
+  }
+
+  console.log(`[NanoBanana T2I] Creating text-to-image task...`);
+  console.log(`[NanoBanana T2I] Prompt: ${prompt.substring(0, 100)}...`);
+  console.log(`[NanoBanana T2I] Image Size: ${imageSize}`);
+
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "google/nano-banana",
+      input: {
+        prompt,
+        output_format: "png",
+        image_size: imageSize,
+      },
+    }),
+  });
+
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`NanoBanana T2I failed to create task: ${createResponse.status} ${createJson.msg ?? ""}`);
+  }
+
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("NanoBanana T2I response missing taskId");
+  }
+
+  console.log(`[NanoBanana T2I] Task created: ${taskId}`);
+  return await pollNanoBananaResult(taskId);
 }
 
 async function callSeedreamEdit(prompt: string, imageUrls: string[]) {
@@ -664,7 +757,11 @@ async function pollNanoProResult(taskId: string) {
   throw new Error("NanoPro task timed out");
 }
 
-// Get all reference image file paths for a style from the file system
+// DEPRECATED: This function is no longer used for image generation
+// Reference images are now exclusively managed through the Style Editor UI
+// and stored in templateData.referenceImages (database)
+// This prevents deleted images from being sent to the KIE API
+// Keeping the function for potential future use (e.g., migration, cleanup tools)
 function getStyleReferenceImagePaths(styleId: string): string[] {
   const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
   
@@ -758,6 +855,7 @@ async function seedBuiltInStyles() {
       defaultColors,
       referenceImageUrl,
       isBuiltIn: true,
+      isHidden: false,
     }));
     await storage.seedBuiltInStyles(builtInStyles);
     console.log("Built-in styles seeded to database");
@@ -792,40 +890,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/styles - Return available style presets (from database)
   // This endpoint provides the list of style options for the frontend dropdown
+  // Uses the first reference image from the style's template as thumbnail
+  // Query params:
+  //   includeHidden=1 - Include hidden styles (for Style Editor only)
   app.get("/api/styles", async (req, res) => {
     try {
-      // Get styles from database
-      const dbStyles = await storage.getAllStyles();
+      const includeHidden = req.query.includeHidden === "1";
+      
+      // Get styles from database with proper ordering
+      const dbStyles = await storage.getStylesWithOrder({ includeHidden });
       
       if (dbStyles.length > 0) {
-        // Return database styles with isBuiltIn flag
-        const stylesForFrontend = dbStyles.map(({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn }) => ({
-          id,
-          label,
-          description,
-          engines,
-          basePrompt,
-          defaultColors,
-          isBuiltIn,
-        }));
+        // For each style, get its template to find the first reference image
+        const stylesForFrontend = await Promise.all(
+          dbStyles.map(async ({ id, label, description, engines, basePrompt, defaultColors, isBuiltIn, isHidden, referenceImageUrl, displayOrder }) => {
+            // Try to get template's first reference image
+            let thumbnailUrl = referenceImageUrl;
+            
+            // Check database template first
+            const dbTemplate = await storage.getTemplate(id);
+            if (dbTemplate?.referenceImages && dbTemplate.referenceImages.length > 0) {
+              thumbnailUrl = dbTemplate.referenceImages[0];
+            } else {
+              // Fall back to default template if exists
+              const defaultTemplate = getDefaultTemplate(id);
+              if (defaultTemplate?.referenceImages && defaultTemplate.referenceImages.length > 0) {
+                thumbnailUrl = defaultTemplate.referenceImages[0];
+              }
+            }
+            
+            return {
+              id,
+              label,
+              description,
+              engines,
+              basePrompt,
+              defaultColors,
+              isBuiltIn,
+              isHidden,
+              displayOrder,
+              referenceImageUrl: thumbnailUrl,
+            };
+          })
+        );
         return res.json(stylesForFrontend);
       }
       
       // Fallback to static styles if database is empty
-      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
-        id,
-        label,
-        description,
-        engines,
-        basePrompt,
-        defaultColors,
-        isBuiltIn: true,
-      }));
+      const stylesForFrontend = await Promise.all(
+        STYLE_PRESETS.map(async ({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => {
+          // Try to get default template's first reference image
+          let thumbnailUrl = referenceImageUrl;
+          const defaultTemplate = getDefaultTemplate(id);
+          if (defaultTemplate?.referenceImages && defaultTemplate.referenceImages.length > 0) {
+            thumbnailUrl = defaultTemplate.referenceImages[0];
+          }
+          
+          return {
+            id,
+            label,
+            description,
+            engines,
+            basePrompt,
+            defaultColors,
+            isBuiltIn: true,
+            isHidden: false,
+            displayOrder: 9999,
+            referenceImageUrl: thumbnailUrl,
+          };
+        })
+      );
       res.json(stylesForFrontend);
     } catch (error) {
       console.error("Error fetching styles:", error);
       // Fallback to static styles on error
-      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors }) => ({
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => ({
         id,
         label,
         description,
@@ -833,6 +972,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         basePrompt,
         defaultColors,
         isBuiltIn: true,
+        isHidden: false,
+        displayOrder: 9999,
+        referenceImageUrl,
       }));
       res.json(stylesForFrontend);
     }
@@ -862,6 +1004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         defaultColors,
         referenceImageUrl: referenceImageUrl || DEFAULT_REFERENCE_IMAGE,
         isBuiltIn: false,
+        isHidden: false,
       });
       
       res.status(201).json(newStyle);
@@ -903,6 +1046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         defaultColors: sourceStyle.defaultColors,
         referenceImageUrl: sourceStyle.referenceImageUrl,
         isBuiltIn: false,
+        isHidden: false,
       });
       
       // Clone template if exists
@@ -919,6 +1063,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error cloning style:", error);
       res.status(500).json({ error: "Failed to clone style" });
+    }
+  });
+
+  // PATCH /api/styles/:id - Update a style (visibility, label, etc.)
+  app.patch("/api/styles/:id", async (req, res) => {
+    try {
+      const styleId = req.params.id;
+      const { isHidden, label, description } = req.body;
+      
+      const style = await storage.getStyle(styleId);
+      if (!style) {
+        return res.status(404).json({ error: "Style not found" });
+      }
+      
+      const updateData: Partial<{isHidden: boolean; label: string; description: string}> = {};
+      if (typeof isHidden === "boolean") {
+        updateData.isHidden = isHidden;
+      }
+      if (typeof label === "string" && label.trim()) {
+        updateData.label = label.trim();
+      }
+      if (typeof description === "string") {
+        updateData.description = description;
+      }
+      
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+      
+      const updatedStyle = await storage.updateStyle(styleId, updateData);
+      res.json(updatedStyle);
+    } catch (error) {
+      console.error("Error updating style:", error);
+      res.status(500).json({ error: "Failed to update style" });
     }
   });
 
@@ -960,7 +1138,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages } = validationResult.data;
+      const { prompt, styleId, engine, userReferenceImages, customTemplate, templateReferenceImages, sceneId, isEditMode } = validationResult.data;
+      
+      // Parse character placeholders from prompt (format: [角色名] or [CharacterName])
+      // Only process placeholders that match known character names (with normalization)
+      // This automatically adds character cards as reference images and enriches the prompt
+      let processedPrompt = prompt;
+      const characterReferenceImages: string[] = [];
+      
+      // First, get all characters to build a lookup map (case-insensitive, trimmed)
+      const allCharacters = await storage.getAllCharacters();
+      const characterLookup = new Map<string, typeof allCharacters[0]>();
+      for (const c of allCharacters) {
+        characterLookup.set(c.name.toLowerCase().trim(), c);
+      }
+      
+      // Find all bracket expressions in the prompt using global regex
+      const characterPlaceholderRegex = /\[([^\]]+)\]/g;
+      let match;
+      const processedPlaceholders = new Set<string>(); // Track already processed to avoid duplicates
+      
+      while ((match = characterPlaceholderRegex.exec(prompt)) !== null) {
+        const fullPlaceholder = match[0]; // e.g., "[Alice]"
+        const rawName = match[1]; // e.g., "Alice" or " Alice "
+        const normalizedName = rawName.toLowerCase().trim();
+        
+        // Skip if already processed this exact placeholder
+        if (processedPlaceholders.has(fullPlaceholder)) continue;
+        
+        // Only process if this matches a known character name (case-insensitive, trimmed)
+        const character = characterLookup.get(normalizedName);
+        if (!character) {
+          // Not a known character - leave this bracket expression untouched
+          continue;
+        }
+        
+        console.log(`\n=== Character Placeholder Detection ===`);
+        console.log(`✓ Found character: ${character.name} (from placeholder "${fullPlaceholder}")`);
+        
+        // Find character card matching the current style
+        const characterCards = character.characterCards as { id: string; styleId: string; imageUrl: string; prompt: string; createdAt: string }[] || [];
+        const styleCard = characterCards.find(card => card.styleId === styleId);
+        
+        let usedCard: { id: string; styleId: string; imageUrl: string } | null = null;
+        
+        if (styleCard) {
+          console.log(`  → Using style-matched card: ${styleCard.id}`);
+          usedCard = styleCard;
+        } else {
+          // No matching style card, use selected card if available
+          const selectedCard = characterCards.find(card => card.id === character.selectedCardId);
+          if (selectedCard) {
+            console.log(`  → Using selected card (different style): ${selectedCard.id}`);
+            usedCard = selectedCard;
+          }
+        }
+        
+        if (usedCard) {
+          characterReferenceImages.push(usedCard.imageUrl);
+          
+          // Replace ALL occurrences of this placeholder with character's visual description
+          if (character.visualPrompt) {
+            const escapedPlaceholder = fullPlaceholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            processedPrompt = processedPrompt.replace(new RegExp(escapedPlaceholder, 'g'), character.visualPrompt);
+            console.log(`  → Replaced all occurrences of placeholder with visual prompt`);
+          }
+        } else {
+          console.log(`  → No usable card for style ${styleId}, keeping placeholder as-is`);
+        }
+        
+        processedPlaceholders.add(fullPlaceholder);
+        console.log(`=== End Character Placeholder Detection ===\n`);
+      }
+      
+      if (characterReferenceImages.length > 0) {
+        console.log(`Total character reference images: ${characterReferenceImages.length}`);
+      }
       
       // Get style from database (or fallback to static)
       const selectedStyle = await getStyleById(styleId);
@@ -980,6 +1233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hasUserReference = !!(userReferenceImages && userReferenceImages.length > 0);
+      const hasCharacterReference = characterReferenceImages.length > 0;
       
       // Try to load template from database if no customTemplate provided
       let templateToUse: any = customTemplate;
@@ -1000,122 +1254,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Use the template (from request, database, or default)
-      const finalPrompt = buildPrompt(prompt, selectedStyle, hasUserReference, templateToUse);
+      // Note: we use processedPrompt (with character placeholders replaced) instead of raw prompt
+      const hasReference = hasUserReference || hasCharacterReference;
+      const finalPrompt = buildPrompt(processedPrompt, selectedStyle, hasReference, templateToUse);
 
       // Build image URLs array with priority order:
-      // 1. User-selected reference images (highest priority)
-      // 2. Template reference images (from Prompt Editor)
-      // 3. Style preset reference images (uploaded from public/reference-images)
+      // 1. Character card reference images (from placeholder parsing, highest priority)
+      // 2. User-selected reference images
+      // 3. Template reference images (from Prompt Editor)
+      // 4. Style preset reference images (uploaded from public/reference-images)
       const imageUrls: string[] = [];
+      
+      // Add character reference images first (highest priority for character consistency)
+      if (characterReferenceImages.length > 0) {
+        imageUrls.push(...characterReferenceImages);
+        console.log(`Added ${characterReferenceImages.length} character reference image(s)`);
+      }
       
       if (userReferenceImages && userReferenceImages.length > 0) {
         imageUrls.push(...userReferenceImages);
       }
       
-      // Add template reference images if exists (from request or database)
-      const allTemplateReferenceImages = templateReferenceImages?.length 
-        ? templateReferenceImages 
-        : dbTemplateReferenceImages;
-        
-      if (allTemplateReferenceImages && allTemplateReferenceImages.length > 0) {
-        console.log(`Uploading ${allTemplateReferenceImages.length} template reference images on-demand...`);
-        const uploadPromises = allTemplateReferenceImages.map(async (path) => {
-          try {
-            // Upload image on-demand (uses cache if already uploaded)
-            return await uploadImageOnDemand(path, styleId);
-          } catch (error) {
-            console.error(`Failed to upload template image ${path}:`, error);
-            return null;
-          }
-        });
-        
-        const uploadedUrls = await Promise.all(uploadPromises);
-        const validUrls = uploadedUrls.filter((url): url is string => url !== null);
-        imageUrls.push(...validUrls);
-      }
-      
-      // Add style preset reference images (upload on-demand with deduplication)
-      // Get all reference image file paths from the file system
-      const styleReferencePaths = getStyleReferenceImagePaths(styleId);
-      
-      if (styleReferencePaths.length > 0) {
-        // Normalize URLs/paths to enable proper comparison
-        // Extracts the relative path portion (e.g., "/reference-images/style-1/1.png")
-        const normalizePathForComparison = (urlOrPath: string): string => {
-          // If it's an HTTP(S) URL, extract the path portion after the domain
-          if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
-            try {
-              const url = new URL(urlOrPath);
-              // Extract path after domain, look for /reference-images/ pattern
-              const match = url.pathname.match(/\/reference-images\/.*$/);
-              return match ? match[0] : urlOrPath;
-            } catch {
-              return urlOrPath;
-            }
-          }
+      // In edit mode, skip template and style reference images - only use the image being edited
+      if (!isEditMode) {
+        // Add template reference images if exists (from request or database)
+        const allTemplateReferenceImages = templateReferenceImages?.length 
+          ? templateReferenceImages 
+          : dbTemplateReferenceImages;
           
-          // For local paths, ensure consistent format with leading slash
-          // Handle both "/reference-images/..." and "reference-images/..."
-          if (urlOrPath.includes('reference-images/')) {
-            // Extract everything from "reference-images/" onward
-            const match = urlOrPath.match(/reference-images\/.*$/);
-            if (match) {
-              // Return with leading slash for consistency
-              return '/' + match[0];
-            }
-          }
-          
-          return urlOrPath;
-        };
-        
-        // Build set of existing normalized paths for deduplication
-        const existingNormalizedPaths = new Set(
-          imageUrls.map(url => normalizePathForComparison(url))
-        );
-        
-        // Filter out any paths that already exist (by full normalized path, not just filename)
-        const uniquePaths = styleReferencePaths.filter(path => {
-          const normalizedPath = normalizePathForComparison(path);
-          const isUnique = !existingNormalizedPaths.has(normalizedPath);
-          if (!isUnique) {
-            console.log(`Skipping duplicate reference image: ${normalizedPath}`);
-          }
-          return isUnique;
-        });
-        
-        // Determine how many style images to upload
-        let pathsToUpload = uniquePaths;
-        if (engine === "seedream") {
-          const MAX_SEEDREAM_REFS = 4;
-          const currentRefCount = imageUrls.length;
-          const maxStyleRefs = Math.max(0, MAX_SEEDREAM_REFS - currentRefCount);
-          pathsToUpload = uniquePaths.slice(0, maxStyleRefs);
-        }
-        
-        // Upload style preset images on-demand
-        if (pathsToUpload.length > 0) {
-          console.log(`Uploading ${pathsToUpload.length} style preset images on-demand...`);
-          const styleUploadPromises = pathsToUpload.map(async (path) => {
+        if (allTemplateReferenceImages && allTemplateReferenceImages.length > 0) {
+          console.log(`Uploading ${allTemplateReferenceImages.length} template reference images on-demand...`);
+          const uploadPromises = allTemplateReferenceImages.map(async (path) => {
             try {
+              // Upload image on-demand (uses cache if already uploaded)
               return await uploadImageOnDemand(path, styleId);
             } catch (error) {
-              console.error(`Failed to upload style preset image ${path}:`, error);
+              console.error(`Failed to upload template image ${path}:`, error);
               return null;
             }
           });
           
-          const styleUploadedUrls = await Promise.all(styleUploadPromises);
-          const validStyleUrls = styleUploadedUrls.filter((url): url is string => url !== null);
-          imageUrls.push(...validStyleUrls);
+          const uploadedUrls = await Promise.all(uploadPromises);
+          const validUrls = uploadedUrls.filter((url): url is string => url !== null);
+          imageUrls.push(...validUrls);
         }
+        
+        // Note: We no longer scan the filesystem for reference images
+        // All reference images are now managed explicitly through the Style Editor UI
+        // and stored in templateData.referenceImages (database)
+        // This ensures that deleted images are not sent to the API
+      } else {
+        console.log(`Edit mode: Skipping template and style reference images, using only user reference image`);
       }
 
       console.log("\n=== Image Generation Request ===");
       console.log(`Engine: ${engine}`);
       console.log(`Style: ${selectedStyle.label} (${styleId})`);
+      console.log(`Edit Mode: ${isEditMode ? "Yes (skipping style references)" : "No"}`);
       console.log(`User Prompt: ${prompt}`);
+      console.log(`Processed Prompt: ${processedPrompt !== prompt ? processedPrompt : "(same as user prompt)"}`);
+      console.log(`Character Reference Images: ${characterReferenceImages.join(", ") || "None"}`);
       console.log(`User Reference Images: ${userReferenceImages?.join(", ") || "None"}`);
-      console.log(`Template Reference Images: ${templateReferenceImages?.join(", ") || "None"}`);
+      console.log(`Template Reference Images: ${isEditMode ? "(skipped - edit mode)" : (templateReferenceImages?.join(", ") || "None")}`);
       console.log(`Image URLs (priority order): ${imageUrls.join(", ")}`);
       console.log(`Final Prompt: ${finalPrompt}`);
       console.log("================================\n");
@@ -1126,6 +1326,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrl = await callNanoBananaEdit(finalPrompt, imageUrls);
       } else if (engine === "nanopro") {
         imageUrl = await callNanoProEdit(finalPrompt, imageUrls);
+      } else if (engine === "nanobanana-t2i") {
+        // Text-to-Image engine - no reference images needed
+        imageUrl = await callNanoBananaT2I(finalPrompt, "16:9");
       } else {
         imageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
       }
@@ -1142,9 +1345,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userReferenceUrls: userReferenceImages || undefined,
           allReferenceImageUrls: imageUrls.length > 0 ? imageUrls : undefined,
           generatedImageUrl: imageUrl,
+          sceneId: sceneId || null,
         });
         historyId = savedHistory.id;
-        console.log(`✓ Saved to history with ID: ${historyId}`);
+        console.log(`✓ Saved to history with ID: ${historyId}${sceneId ? ` (Scene ${sceneId})` : ''}`);
       } catch (dbError) {
         console.error("Failed to save generation history:", dbError);
       }
@@ -1179,6 +1383,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to fetch generation history",
+      });
+    }
+  });
+
+  app.get("/api/history/scene/:sceneId", async (req, res) => {
+    try {
+      const sceneId = parseInt(req.params.sceneId, 10);
+      if (isNaN(sceneId)) {
+        return res.status(400).json({
+          error: "Invalid scene ID",
+          message: "Scene ID must be a number",
+        });
+      }
+      const history = await storage.getGenerationHistoryBySceneId(sceneId);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching scene history:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch scene history",
+      });
+    }
+  });
+
+  // Template reorder must come before :styleId routes to avoid matching "reorder" as a styleId
+  app.post("/api/templates/reorder", async (req, res) => {
+    try {
+      const { templateOrders } = req.body;
+      
+      if (!templateOrders || !Array.isArray(templateOrders)) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "templateOrders array is required",
+        });
+      }
+
+      await storage.reorderTemplates(templateOrders);
+      
+      res.json({
+        message: "Templates reordered successfully",
+      });
+    } catch (error) {
+      console.error("Error reordering templates:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to reorder templates",
       });
     }
   });
@@ -1344,9 +1594,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Validate styleId exists
-      const styleExists = STYLE_PRESETS.some((s) => s.id === styleId);
-      if (!styleExists) {
+      // Validate styleId exists (check presets, styles table, or templates)
+      const presetExists = STYLE_PRESETS.some((s) => s.id === styleId);
+      const dbStyle = await storage.getStyle(styleId);
+      const dbTemplate = await storage.getTemplate(styleId);
+      if (!presetExists && !dbStyle && !dbTemplate) {
         return res.status(400).json({
           error: "Invalid styleId",
           message: `Style '${styleId}' does not exist`,
@@ -1403,11 +1655,363 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/delete-reference-image", async (req, res) => {
+    try {
+      const { styleId, imagePath } = req.body;
+
+      if (!styleId || !imagePath) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          message: "styleId and imagePath are required",
+        });
+      }
+
+      // Validate that imagePath belongs to this styleId to prevent cross-style deletion
+      const expectedPathPrefix = `/reference-images/${styleId}/`;
+      const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+      
+      if (!normalizedPath.startsWith(expectedPathPrefix) && !normalizedPath.includes(`/reference-images/${styleId}/`)) {
+        return res.status(400).json({
+          error: "Path mismatch",
+          message: `imagePath does not belong to style '${styleId}'`,
+        });
+      }
+
+      // Extract filename from the path (e.g., "/reference-images/warm/A.png" -> "A.png")
+      const fileName = imagePath.split('/').pop();
+      if (!fileName) {
+        return res.status(400).json({
+          error: "Invalid imagePath",
+          message: "Could not extract filename from imagePath",
+        });
+      }
+
+      // Build the full file path
+      const { unlinkSync, existsSync: fsExistsSync } = await import("fs");
+      const styleDir = join(__dirname, "..", "client", "public", "reference-images", styleId);
+      const filePath = join(styleDir, fileName);
+
+      // Check if file exists
+      if (!fsExistsSync(filePath)) {
+        console.log(`Reference image not found (may already be deleted): ${filePath}`);
+        return res.json({
+          success: true,
+          message: "File not found (may already be deleted)",
+          deletedPath: imagePath,
+        });
+      }
+
+      // Delete the file
+      unlinkSync(filePath);
+      console.log(`✓ Deleted reference image: ${styleId}/${fileName}`);
+
+      // Remove from uploadCache to ensure it's re-uploaded if added again
+      const cacheKey = `${styleId}:${imagePath}`;
+      uploadCache.delete(cacheKey);
+
+      // Remove from uploadedReferenceImages cache
+      const existingStyle = uploadedReferenceImages.find((s) => s.styleId === styleId);
+      if (existingStyle) {
+        existingStyle.imageUrls = existingStyle.imageUrls.filter(
+          (url) => !url.includes(fileName)
+        );
+      }
+
+      res.json({
+        success: true,
+        message: "Reference image deleted successfully",
+        deletedPath: imagePath,
+      });
+    } catch (error) {
+      console.error("Error deleting reference image:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete reference image",
+      });
+    }
+  });
+
+  // ===== Storyboard API =====
+
+  // Get all storyboards
+  app.get("/api/storyboards", async (req, res) => {
+    try {
+      const storyboards = await storage.getAllStoryboards();
+      res.json(storyboards);
+    } catch (error) {
+      console.error("Error fetching storyboards:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch storyboards",
+      });
+    }
+  });
+
+  // Get single storyboard
+  app.get("/api/storyboards/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const storyboard = await storage.getStoryboard(id);
+      if (!storyboard) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Storyboard ${id} not found`,
+        });
+      }
+
+      res.json(storyboard);
+    } catch (error) {
+      console.error("Error fetching storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch storyboard",
+      });
+    }
+  });
+
+  // Create a new storyboard
+  app.post("/api/storyboards", async (req, res) => {
+    try {
+      const { name, description, styleId, engine } = req.body;
+      
+      if (!name || name.trim() === "") {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "Storyboard name is required",
+        });
+      }
+
+      const storyboard = await storage.createStoryboard({
+        name: name.trim(),
+        description: description || "",
+        styleId: styleId || null,
+        engine: engine || null,
+      });
+      
+      res.json(storyboard);
+    } catch (error) {
+      console.error("Error creating storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create storyboard",
+      });
+    }
+  });
+
+  // Update a storyboard
+  app.patch("/api/storyboards/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const { name, description, styleId, engine } = req.body;
+      
+      const storyboard = await storage.updateStoryboard(id, {
+        name,
+        description,
+        styleId,
+        engine,
+      });
+
+      if (!storyboard) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Storyboard ${id} not found`,
+        });
+      }
+
+      res.json(storyboard);
+    } catch (error) {
+      console.error("Error updating storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update storyboard",
+      });
+    }
+  });
+
+  // Delete a storyboard
+  app.delete("/api/storyboards/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const deleted = await storage.deleteStoryboard(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Storyboard ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting storyboard:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete storyboard",
+      });
+    }
+  });
+
+  // ===== Storyboard Version API =====
+
+  // Get all versions for a storyboard
+  app.get("/api/storyboards/:id/versions", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const versions = await storage.getStoryboardVersions(id);
+      res.json(versions);
+    } catch (error) {
+      console.error("Error fetching storyboard versions:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch storyboard versions",
+      });
+    }
+  });
+
+  // Create a new version (save current state)
+  app.post("/api/storyboards/:id/versions", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Storyboard ID must be a number",
+        });
+      }
+
+      const { name, description } = req.body;
+      
+      if (!name || name.trim() === "") {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "Version name is required",
+        });
+      }
+
+      const version = await storage.createStoryboardVersion(id, name.trim(), description || "");
+      res.json(version);
+    } catch (error: any) {
+      console.error("Error creating storyboard version:", error);
+      if (error.message === "Storyboard not found") {
+        return res.status(404).json({
+          error: "Not found",
+          message: "Storyboard not found",
+        });
+      }
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create storyboard version",
+      });
+    }
+  });
+
+  // Restore a version
+  app.post("/api/storyboards/versions/:versionId/restore", async (req, res) => {
+    try {
+      const versionId = parseInt(req.params.versionId, 10);
+      if (isNaN(versionId)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Version ID must be a number",
+        });
+      }
+
+      const storyboard = await storage.restoreStoryboardVersion(versionId);
+      
+      if (!storyboard) {
+        return res.status(404).json({
+          error: "Not found",
+          message: "Version or storyboard not found",
+        });
+      }
+
+      res.json({ success: true, storyboard });
+    } catch (error) {
+      console.error("Error restoring storyboard version:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to restore storyboard version",
+      });
+    }
+  });
+
+  // Delete a version
+  app.delete("/api/storyboards/versions/:versionId", async (req, res) => {
+    try {
+      const versionId = parseInt(req.params.versionId, 10);
+      if (isNaN(versionId)) {
+        return res.status(400).json({
+          error: "Invalid ID",
+          message: "Version ID must be a number",
+        });
+      }
+
+      const deleted = await storage.deleteStoryboardVersion(versionId);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Version ${versionId} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting storyboard version:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete storyboard version",
+      });
+    }
+  });
+
   // ===== Storyboard Scene API =====
   
-  // Get all scenes
+  // Get all scenes (legacy - returns all scenes regardless of storyboard)
   app.get("/api/scenes", async (req, res) => {
     try {
+      const storyboardId = req.query.storyboardId;
+      
+      if (storyboardId) {
+        const id = parseInt(storyboardId as string, 10);
+        if (isNaN(id)) {
+          return res.status(400).json({
+            error: "Invalid ID",
+            message: "Storyboard ID must be a number",
+          });
+        }
+        const scenes = await storage.getScenesByStoryboardId(id);
+        return res.json(scenes);
+      }
+      
       const scenes = await storage.getAllScenes();
       res.json(scenes);
     } catch (error) {
@@ -1422,10 +2026,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a new scene
   app.post("/api/scenes", async (req, res) => {
     try {
-      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      const { storyboardId, voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex } = req.body;
       
       const scene = await storage.createScene({
-        prompt: prompt || "",
+        storyboardId: storyboardId || null,
+        voiceOver: voiceOver || "",
+        visualDescription: visualDescription || "",
         generatedImageUrl: generatedImageUrl || null,
         styleId: styleId || null,
         engine: engine || null,
@@ -1453,14 +2059,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { prompt, generatedImageUrl, styleId, engine, orderIndex } = req.body;
+      const { voiceOver, visualDescription, generatedImageUrl, styleId, engine, orderIndex, selectedCharacterIds } = req.body;
       
       const scene = await storage.updateScene(id, {
-        prompt,
+        voiceOver,
+        visualDescription,
         generatedImageUrl,
         styleId,
         engine,
         orderIndex,
+        selectedCharacterIds,
       });
 
       if (!scene) {
@@ -1535,7 +2143,507 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   await initializeReferenceImages();
 
+  // Migrate orphan scenes to a default storyboard
+  await migrateOrphanScenes();
+
+  // ===== Character API =====
+
+  // Get all characters
+  app.get("/api/characters", async (req, res) => {
+    try {
+      const chars = await storage.getAllCharacters();
+      res.json(chars);
+    } catch (error) {
+      console.error("Error fetching characters:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch characters",
+      });
+    }
+  });
+
+  // Get single character
+  app.get("/api/characters/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const character = await storage.getCharacter(id);
+      
+      if (!character) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${id} not found`,
+        });
+      }
+
+      res.json(character);
+    } catch (error) {
+      console.error("Error fetching character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch character",
+      });
+    }
+  });
+
+  // Create a new character
+  app.post("/api/characters", async (req, res) => {
+    try {
+      const { id, name, visualPrompt, characterCards, selectedCardId, avatarCardId, avatarProfiles, tags } = req.body;
+      
+      if (!id || !name) {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "id and name are required",
+        });
+      }
+
+      // Check if character ID already exists
+      const existing = await storage.getCharacter(id);
+      if (existing) {
+        return res.status(409).json({
+          error: "Conflict",
+          message: "Character ID already exists",
+        });
+      }
+
+      const character = await storage.createCharacter({
+        id,
+        name,
+        visualPrompt: visualPrompt || "",
+        characterCards: characterCards || [],
+        selectedCardId: selectedCardId || null,
+        avatarCardId: avatarCardId || null,
+        avatarProfiles: avatarProfiles || {},
+        tags: tags || [],
+      });
+      
+      res.json(character);
+    } catch (error) {
+      console.error("Error creating character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to create character",
+      });
+    }
+  });
+
+  // Update a character
+  app.patch("/api/characters/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, visualPrompt, characterCards, selectedCardId, avatarCardId, avatarProfiles, tags } = req.body;
+      
+      const character = await storage.updateCharacter(id, {
+        name,
+        visualPrompt,
+        characterCards,
+        selectedCardId,
+        avatarCardId,
+        avatarProfiles,
+        tags,
+      });
+
+      if (!character) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${id} not found`,
+        });
+      }
+
+      res.json(character);
+    } catch (error) {
+      console.error("Error updating character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update character",
+      });
+    }
+  });
+
+  // Generate a character card
+  app.post("/api/characters/generate-card", async (req, res) => {
+    try {
+      const { characterId, styleId, visualPrompt, angle = "front", pose = "standing", expression = "neutral", isCharacterSheet = false, cleanBackground = true } = req.body;
+      
+      if (!characterId || !styleId || !visualPrompt) {
+        return res.status(400).json({
+          error: "Invalid request",
+          message: "characterId, styleId, and visualPrompt are required",
+        });
+      }
+
+      // Get the character
+      const character = await storage.getCharacter(characterId);
+      if (!character) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${characterId} not found`,
+        });
+      }
+
+      // Get the style
+      const style = await storage.getStyle(styleId);
+      if (!style) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Style ${styleId} not found`,
+        });
+      }
+
+      // Get the template for this style
+      const template = await storage.getTemplate(styleId);
+      
+      // Map angle/pose/expression to descriptive text
+      const angleDescriptions: Record<string, string> = {
+        "front": "front view, facing camera directly",
+        "three-quarter": "three-quarter view, slight angle",
+        "side": "side view profile, looking left or right",
+        "back": "back view, facing away from camera",
+      };
+      
+      const poseDescriptions: Record<string, string> = {
+        "standing": "standing pose, natural posture",
+        "sitting": "sitting pose, relaxed position",
+        "walking": "walking pose, mid-stride movement",
+        "action": "dynamic action pose, expressive movement",
+        "portrait": "upper body portrait, shoulders and head",
+      };
+      
+      const expressionDescriptions: Record<string, string> = {
+        "neutral": "neutral expression, calm and composed",
+        "happy": "happy expression, smiling warmly",
+        "sad": "sad expression, melancholic look",
+        "angry": "angry expression, intense gaze",
+        "surprised": "surprised expression, wide eyes",
+        "thoughtful": "thoughtful expression, contemplative look",
+      };
+      
+      const angleText = angleDescriptions[angle] || angleDescriptions["front"];
+      const poseText = poseDescriptions[pose] || poseDescriptions["standing"];
+      const expressionText = expressionDescriptions[expression] || expressionDescriptions["neutral"];
+      
+      // Build background instruction based on cleanBackground flag
+      const backgroundInstruction = cleanBackground 
+        ? "solid white background, no environment, no scenery, studio lighting, character isolated"
+        : "simple contextual background, well-lit";
+      
+      // Build framing instruction based on mode (character sheet vs single card)
+      // NEW: Added proportion control rules for consistent character scaling
+      let framingInstruction: string;
+      if (isCharacterSheet) {
+        // Character sheet mode: multiple angles with UNIFIED SCALE rules
+        framingInstruction = `Character turnaround reference sheet, arranged horizontally:
+- Front view (facing forward)
+- Three-quarter right view (turned slightly to the right)
+- Right side view (full profile facing right)
+- Back view (facing away, symmetric)
+
+All views must follow identical scale:
+- Same canvas height per view
+- Heads aligned at identical top margin
+- Feet aligned to the same baseline at bottom
+- Head size and body proportions remain constant across all views
+- No resizing or perspective variation between views
+- Neutral expression in all angles
+- ${backgroundInstruction}`;
+      } else {
+        // Single card mode: specific angle, pose, and expression
+        // NEW: Added proportion control (88% canvas height, baseline alignment)
+        framingInstruction = `${angleText}, ${poseText}, ${expressionText}.
+Full-body character centered in frame.
+Character height should occupy approximately 85-90% of canvas height.
+Feet aligned to a consistent baseline at the bottom of the frame.
+Head kept within a consistent top margin.
+No perspective distortion. No resizing of body proportions.
+${backgroundInstruction}`;
+      }
+      
+      // Build the prompt using Universal template structure (same as main image generation)
+      let finalPrompt = "";
+      
+      if (template?.templateData && typeof template.templateData === "object") {
+        const templateData = template.templateData as { 
+          templateType?: string; 
+          styleKeywords?: string; 
+          rules?: string; 
+          negativePrompt?: string;
+          loosePalette?: string;
+          strictPalette?: string[];
+          defaultPalette?: string[];
+          paletteMode?: string;
+        };
+        
+        const styleName = style.label;
+        const styleKeywords = templateData.styleKeywords || style.basePrompt || "";
+        const rules = templateData.rules || "";
+        
+        // Build negative prompt with proportion-related negatives
+        // Keep the critical "multiple characters" guard for single-card mode
+        let negativePrompt = templateData.negativePrompt || "blurry, low quality, distorted, multiple characters, group shot";
+        
+        // Add proportion control negatives (prevent head/body ratio issues)
+        negativePrompt += ", oversized head, chibi proportions, extreme perspective, foreshortening, distorted limbs, inconsistent proportions";
+        
+        // Add background-related negatives when clean background is requested
+        if (cleanBackground) {
+          negativePrompt += ", complex background, environmental elements, scenery, gradient background, outdoor scene, indoor scene, landscape";
+        }
+        
+        // Add character sheet specific negatives
+        if (isCharacterSheet) {
+          negativePrompt += ", different sizes between views, inconsistent character height, misaligned baseline";
+        }
+        
+        // Build prompt following Universal structure: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
+        finalPrompt = `[SCENE]
+${visualPrompt}
+
+[FRAMING]
+${framingInstruction}
+
+[STYLE]
+In ${styleName} style:
+${styleKeywords}`;
+
+        // Add color palette section (same logic as buildUniversalPrompt)
+        // Determine palette mode: default to "loose" for better results
+        const paletteMode = templateData.paletteMode || "loose";
+        
+        // Loose mode: Use descriptive color text (if available)
+        if (paletteMode === "loose" && templateData.loosePalette) {
+          finalPrompt += `
+
+[COLORS]
+${templateData.loosePalette}`;
+        } else {
+          // Strict mode or fallback: Use HEX palette
+          // This matches buildUniversalPrompt's fallback chain
+          let palette: string[] = [];
+          if (templateData.strictPalette && templateData.strictPalette.length > 0) {
+            palette = templateData.strictPalette;
+          } else if (templateData.defaultPalette && templateData.defaultPalette.length > 0) {
+            // Legacy support: use defaultPalette if strictPalette not defined
+            palette = templateData.defaultPalette;
+          } else if (style.defaultColors && (style.defaultColors as any).colors) {
+            // Fallback to style's default colors
+            palette = ((style.defaultColors as any).colors as any[]).map((c: any) => c.hex);
+          }
+          
+          if (palette.length > 0) {
+            const paletteColors = palette.join(", ");
+            finalPrompt += `
+
+[COLORS]
+Use the following palette:
+${paletteColors}.
+Follow the palette's saturation and contrast.`;
+          }
+        }
+        
+        // Add rules section with character-specific additions and proportion control
+        // NEW: Added fixed scale rules for consistent character proportions
+        let proportionRules = `- Single character only (unless generating character sheet)
+- Character must be fully visible (no cropping)
+- Maintain fixed scale across all generated character cards
+- Do NOT change head size, limb proportions, or overall height
+- Feet must stay aligned to baseline at bottom of frame
+- No perspective distortion or exaggerated proportions`;
+
+        // Add character sheet specific rules
+        if (isCharacterSheet) {
+          proportionRules += `
+- All views must have identical character height
+- Consistent head-to-body ratio across all angles
+- Same baseline alignment in every view`;
+        }
+
+        finalPrompt += `
+
+[RULES]
+${proportionRules}
+${rules}
+
+[NEGATIVE]
+${negativePrompt}`;
+        
+      } else {
+        // No template available, use basic format with angle/pose
+        finalPrompt = `${visualPrompt}, ${style.basePrompt}, ${framingInstruction}, high quality, detailed`;
+      }
+
+      console.log(`[CharacterCard] Generating ${isCharacterSheet ? 'character sheet' : 'card'} for ${character.name} with style ${style.label}`);
+      console.log(`[CharacterCard] Mode: ${isCharacterSheet ? 'Character Sheet' : 'Single Card'}, Angle: ${angle}, Pose: ${pose}, Expression: ${expression}, CleanBG: ${cleanBackground}`);
+      console.log(`[CharacterCard] Prompt: ${finalPrompt.substring(0, 300)}...`);
+
+      // Get reference images from the template's referenceImages column (not templateData)
+      const templateReferenceImages = template?.referenceImages || [];
+      console.log(`[CharacterCard] Template reference images: ${templateReferenceImages.join(", ") || "None"}`);
+      
+      // Build image URLs array by uploading local paths to get HTTP URLs
+      const imageUrls: string[] = [];
+      
+      // Upload template reference images (these are typically local paths like "/reference-images/...")
+      if (templateReferenceImages.length > 0) {
+        console.log(`[CharacterCard] Uploading ${templateReferenceImages.length} template reference images...`);
+        const uploadPromises = templateReferenceImages.slice(0, 3).map(async (path) => {
+          try {
+            return await uploadImageOnDemand(path, styleId);
+          } catch (error) {
+            console.error(`[CharacterCard] Failed to upload template image ${path}:`, error);
+            return null;
+          }
+        });
+        
+        const uploadedUrls = await Promise.all(uploadPromises);
+        const validUrls = uploadedUrls.filter((url): url is string => url !== null);
+        imageUrls.push(...validUrls);
+      }
+      
+      // If no template images, try to use style's reference image as fallback
+      // But only if it's a local path (not an external URL that might expire)
+      if (imageUrls.length === 0 && style.referenceImageUrl) {
+        const styleRefImage = style.referenceImageUrl;
+        // Only use local paths, skip external URLs that might expire
+        if (styleRefImage.startsWith('/reference-images/') || styleRefImage.startsWith('reference-images/')) {
+          try {
+            const uploadedUrl = await uploadImageOnDemand(styleRefImage, styleId);
+            imageUrls.push(uploadedUrl);
+            console.log(`[CharacterCard] Using style reference image: ${uploadedUrl}`);
+          } catch (error) {
+            console.error(`[CharacterCard] Failed to upload style reference image:`, error);
+          }
+        } else if (styleRefImage.startsWith('https://')) {
+          // External URL - use directly but log a warning
+          console.log(`[CharacterCard] Using external style reference URL: ${styleRefImage}`);
+          imageUrls.push(styleRefImage);
+        }
+      }
+      
+      console.log(`[CharacterCard] Final image URLs: ${imageUrls.join(", ") || "None"}`);
+      
+      // Use the first engine from the style
+      const engine = style.engines[0] || "nano-banana-edit";
+      
+      let generatedImageUrl: string;
+      
+      if (engine === "seedream-v4-edit") {
+        generatedImageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
+      } else if (engine === "nano-pro") {
+        generatedImageUrl = await callNanoProEdit(finalPrompt, imageUrls);
+      } else {
+        generatedImageUrl = await callNanoBananaEdit(finalPrompt, imageUrls);
+      }
+
+      // Create the new character card with angle/pose metadata
+      const newCard = {
+        id: `card_${Date.now()}`,
+        styleId: styleId,
+        imageUrl: generatedImageUrl,
+        prompt: finalPrompt,
+        angle: isCharacterSheet ? "sheet" : angle,
+        pose: isCharacterSheet ? "sheet" : pose,
+        expression: isCharacterSheet ? "neutral" : expression,
+        isCharacterSheet: isCharacterSheet,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Update the character with the new card
+      const existingCards = (character.characterCards || []) as Array<{id: string; styleId: string; imageUrl: string; prompt: string; createdAt: string}>;
+      const updatedCharacter = await storage.updateCharacter(characterId, {
+        characterCards: [...existingCards, newCard],
+        selectedCardId: newCard.id,
+        visualPrompt: visualPrompt,
+      });
+
+      console.log(`[CharacterCard] Successfully generated card ${newCard.id} for character ${character.name}`);
+      
+      // Return debug info for KIE API Request Details display
+      res.json({
+        success: true,
+        card: newCard,
+        character: updatedCharacter,
+        // Debug info for prompt fine-tuning
+        debugInfo: {
+          engine: engine,
+          styleLabel: style.label,
+          referenceImageUrls: imageUrls,
+          finalPrompt: finalPrompt,
+          generatedImageUrl: generatedImageUrl,
+          visualPrompt: visualPrompt,
+          angle: isCharacterSheet ? "sheet" : angle,
+          pose: isCharacterSheet ? "sheet" : pose,
+          expression: isCharacterSheet ? "neutral" : expression,
+          isCharacterSheet: isCharacterSheet,
+          cleanBackground: cleanBackground,
+        },
+      });
+    } catch (error) {
+      console.error("Error generating character card:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Failed to generate character card",
+      });
+    }
+  });
+
+  // Delete a character
+  app.delete("/api/characters/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteCharacter(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Character ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting character:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete character",
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
+}
+
+async function migrateOrphanScenes() {
+  try {
+    // Check if there are any orphan scenes (scenes without a storyboardId)
+    const allScenes = await storage.getAllScenes();
+    const orphanScenes = allScenes.filter(s => s.storyboardId === null);
+    
+    if (orphanScenes.length === 0) {
+      console.log("No orphan scenes to migrate");
+      return;
+    }
+
+    console.log(`Found ${orphanScenes.length} orphan scene(s), migrating...`);
+
+    // Check if there's already a default storyboard
+    const storyboards = await storage.getAllStoryboards();
+    let defaultStoryboard = storyboards.find(s => s.name === "Default Storyboard");
+
+    if (!defaultStoryboard) {
+      // Create a default storyboard
+      defaultStoryboard = await storage.createStoryboard({
+        name: "Default Storyboard",
+        description: "Auto-created storyboard for migrated scenes",
+      });
+      console.log(`Created default storyboard with ID: ${defaultStoryboard.id}`);
+    }
+
+    // Migrate orphan scenes to the default storyboard
+    await storage.migrateScenesToStoryboard(defaultStoryboard.id);
+    console.log(`✓ Migrated ${orphanScenes.length} scene(s) to storyboard: ${defaultStoryboard.name}`);
+  } catch (error) {
+    console.error("Error migrating orphan scenes:", error);
+  }
 }

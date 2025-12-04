@@ -15,13 +15,55 @@ This web application enables users to generate AI-driven images from text prompt
 
 The frontend is a React 18+ and TypeScript single-page application, built with Vite. It uses shadcn/ui (Radix UI primitives) and Tailwind CSS for a "new-york" themed design. State management is handled by React Hook Form with Zod for validation, and TanStack Query for server state. Wouter manages client-side routing. The UI features a two-column layout, adapting to a single column on mobile.
 
+### Mobile-Responsive Navigation
+
+-   **Desktop (md+ screens)**: Horizontal navigation bar with icon+text links
+-   **Mobile (< md screens)**: Hamburger menu using shadcn Sheet component (slide-in drawer)
+-   **Component**: `Navigation` in `client/src/components/navigation.tsx`
+-   **Breakpoint**: `md` (768px) for switching between desktop and mobile layouts
+
 ### Backend Architecture
 
 The backend is an Express.js application on Node.js with TypeScript, providing a RESTful API for styles, image generation, and history. All incoming requests are validated using Zod schemas. It supports custom request logging and serves static files. A robust Style Preset System centrally defines visual styles, AI engines, and associated reference images.
 
+### Style Visibility System
+
+Styles can be hidden from regular users while remaining accessible to admins in the Style Editor:
+-   **Database**: `styles.isHidden` boolean field (defaults to false)
+-   **API**: `GET /api/styles?includeHidden=1` returns all styles including hidden ones
+-   **API**: `PATCH /api/styles/:id` updates style properties including visibility
+-   **Style Editor**: Fetches with `includeHidden=1` to show all styles with visibility toggle buttons
+-   **User-facing views**: Filter out hidden styles automatically
+
+### Per-Style Character Avatar System
+
+Characters support style-specific avatars with crop functionality to ensure consistent, style-matched avatar display:
+-   **Database**: `characters.avatarProfiles` JSONB field with structure:
+    ```
+    { [styleId]: { cardId: string, crop: { x: number, y: number, width: number, height: number } } }
+    ```
+    - `x, y`: Crop position as percentage of image dimensions (0-100)
+    - `width, height`: Crop area size as percentage of image dimensions (properly handles non-square source images)
+    - Legacy format with `zoom` field is supported for backward compatibility
+-   **Avatar Crop Dialog**: When clicking the crop icon on a character card, the AvatarCropDialog opens with:
+    - Pan controls (drag to reposition)
+    - Zoom slider (adjust magnification, 1x-3x)
+    - Reset button to restore defaults
+    - Round preview showing final avatar appearance
+-   **Components**:
+    - `AvatarCropDialog`: Modal dialog with react-easy-crop integration for setting crop parameters. Saves `croppedAreaPercentages` (x, y, width, height) directly for accurate rendering of non-square images.
+    - `CroppedAvatar`: CSS background-based avatar display using stored crop coordinates. Normalizes legacy (zoom) and new (width/height) formats automatically.
+-   **Display Priority**: Multi-tier fallback for avatar display:
+    1. Per-style avatarProfile: If current style has an avatar profile set, use that card with crop
+    2. Any style avatarProfile: Fallback to first available style avatar
+    3. selectedCard: Use the reference card without cropping
+    4. First card: Use first available character card
+    5. First letter fallback: Display first letter of character name
+-   **Use Case**: Different art styles produce vastly different character representations. Per-style avatars ensure the displayed avatar always matches the current visual style context.
+
 ### Template System Architecture
 
-The application supports three template types for flexible prompt generation:
+The application supports four template types for flexible prompt generation:
 
 1. **Structured Templates** (Default): Complex multi-section templates with Camera & Composition, Environment, Main Character, Secondary Objects, Style Enforcement sections.
 
@@ -34,16 +76,34 @@ The application supports three template types for flexible prompt generation:
    - `negativePrompt`: Elements to avoid
    - `referenceImages`: Style reference images
 
+4. **Cinematic Templates**: Professional cinematography-focused templates with weighted parameters:
+   - `cameraFraming`: Camera angle, shot type, composition with weights (e.g., `medium shot:1.2`)
+   - `visualAnchors`: Key visual elements that define the scene
+   - `colorRender`: Color grading, lighting style, rendering quality
+   - `technicalSpecs`: Resolution, quality settings, technical parameters
+   - `negativePrompt`: Elements to avoid
+   - Note: Scene action is provided via Test Prompt in the UI, not as a template field
+
 The Universal prompt format follows: [SCENE][FRAMING][STYLE][COLORS][RULES][NEGATIVE]
+
+The Cinematic prompt format follows: [SCENE ACTION][CAMERA & FRAMING][VISUAL ANCHORS][COLOR & RENDER][TECHNICAL SPECS][NEGATIVE]
 
 Palette fallback hierarchy: User override → Template default → Style default colors
 
 ### Data Storage Solutions
 
--   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs), prompt templates, and storyboard scenes. All data is defined by Drizzle ORM schemas.
--   **Storyboard Scenes**: Script-driven scene cards with editable prompts and optional generated images. Scenes can be created, edited, and deleted. Clicking "Generate" navigates to the generation page with the scene's prompt and updates the scene with the generated image.
--   **Client-Side Persistence**: localStorage is used for user preferences like style lock status and selected reference images. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
+-   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs), prompt templates, storyboards, storyboard versions, and storyboard scenes. All data is defined by Drizzle ORM schemas.
+-   **Multiple Storyboards**: Users can create, switch between, rename, and delete different storyboard projects. Each storyboard is isolated with its own scenes. The currently selected storyboard ID is persisted in localStorage for cross-session continuity.
+-   **Version Control**: Each storyboard supports named versions (snapshots) that can be saved and restored. Versions capture the complete scene state including descriptions, generated images, style settings, and engine choices.
+-   **Storyboard Scenes**: Script-driven scene cards in a 3-column grid layout. Each scene has:
+    - Image area (clickable to generate) with amber placeholder for empty scenes
+    - Status line showing "Generated Images (1)" or "No images generated yet"
+    - Scene Description textarea with 120px minimum height and auto-grow on typing
+    - Generate and Edit buttons for inline image generation
+    Scenes belong to a specific storyboard via `storyboardId` foreign key. Grid uses `items-start` alignment to allow cards with different heights based on content.
+-   **Client-Side Persistence**: localStorage is used for user preferences like style lock status, selected reference images, and current storyboard ID. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
 -   **Reference Image Storage**: The KIE File Upload API stores reference images, uploading them on-demand with temporary URLs and promise-based caching to prevent duplicate uploads.
+-   **Migration Logic**: On server startup, orphan scenes (without a storyboard) are automatically migrated to a "Default Storyboard" for backward compatibility.
 
 ### Type Safety and Code Sharing
 

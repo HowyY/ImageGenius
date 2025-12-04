@@ -29,7 +29,9 @@ export default function History() {
   
   const { data: history, isLoading } = useQuery<SelectGenerationHistory[]>({
     queryKey: ["/api/history"],
-    refetchInterval: 30000,
+    refetchInterval: 5000,
+    refetchOnMount: "always",
+    staleTime: 2000,
   });
 
   useEffect(() => {

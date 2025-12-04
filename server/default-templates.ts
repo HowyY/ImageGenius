@@ -190,6 +190,46 @@ export const DEFAULT_TEMPLATES: DefaultTemplateConfig[] = [
       "/reference-images/cyan_sketchline_vector/3.png",
     ],
   },
+  {
+    styleId: "sketchline_vector_cinematic",
+    templateData: {
+      name: "Sketchline Vector V2 (Cinematic)",
+      templateType: "cinematic",
+      // Camera & Framing: composition and camera angle with weights
+      cameraFraming: "(Medium shot:1.1), balanced composition, cinematic storyboard, eye-level angle",
+      // Visual Anchors: style-defining keywords extracted from reference style
+      visualAnchors: `(Sketchline Vector V2 style:1.2),
+deep-blue outline characters,
+solid deep-blue hair,
+simple dot eyes, small curved mouth,
+consistent simplified anatomy,
+white negative space,
+clean vector linework`,
+      // Color & Render: color palette and rendering approach with weights
+      colorRender: `(blue-cyan color palette:1.2),
+deep-blue line palette,
+soft cyan-to-blue gradient fills on clothing,
+minimal cyan highlights,
+flat color application`,
+      // Technical Specs: quality and rendering requirements
+      technicalSpecs: `best quality, 2D vector art,
+clean lines, sharp edges,
+high contrast, minimalist background`,
+      // Negative prompts: things to avoid with weights for strong enforcement
+      negativePrompt: `(shading:1.3), (shadows:1.3), (noise:1.3),
+(heavy cyan lines:1.2), (large cyan fills:1.2),
+full-surface gradients, colored backgrounds, colored ground,
+3D effects, neon tones, realistic, texture,
+cluttered details, sketch lines on face, messy lines,
+(red:1.5), (green:1.5), (yellow:1.5), (orange:1.5), (purple:1.5),
+warm colors, earth tones, pastel color wash`,
+    },
+    referenceImages: [
+      "/reference-images/cyan_sketchline_vector/1.png",
+      "/reference-images/cyan_sketchline_vector/2.png",
+      "/reference-images/cyan_sketchline_vector/3.png",
+    ],
+  },
 ];
 
 export function getDefaultTemplate(styleId: string): DefaultTemplateConfig | undefined {

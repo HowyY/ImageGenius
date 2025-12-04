@@ -1,20 +1,39 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, isNull } from "drizzle-orm";
 import {
   generationHistory,
-  promptTemplates,
-  styles,
-  storyboardScenes,
+  insertGenerationHistorySchema,
   type InsertGenerationHistory,
   type SelectGenerationHistory,
+  promptTemplates,
+  insertPromptTemplateSchema,
   type InsertPromptTemplate,
   type SelectPromptTemplate,
+  styles,
+  insertStyleSchema,
   type InsertStyle,
   type SelectStyle,
+  storyboards,
+  insertStoryboardSchema,
+  updateStoryboardSchema,
+  type InsertStoryboard,
+  type UpdateStoryboard,
+  type SelectStoryboard,
+  storyboardVersions,
+  type SelectStoryboardVersion,
+  storyboardScenes,
+  insertStoryboardSceneSchema,
+  updateStoryboardSceneSchema,
   type InsertStoryboardScene,
   type UpdateStoryboardScene,
   type SelectStoryboardScene,
+  characters,
+  insertCharacterSchema,
+  updateCharacterSchema,
+  type InsertCharacter,
+  type UpdateCharacter,
+  type SelectCharacter,
 } from "@shared/schema";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -29,24 +48,47 @@ if (DATABASE_URL) {
 export interface IStorage {
   saveGenerationHistory(data: InsertGenerationHistory): Promise<SelectGenerationHistory>;
   getGenerationHistory(limit?: number): Promise<SelectGenerationHistory[]>;
+  getGenerationHistoryBySceneId(sceneId: number): Promise<SelectGenerationHistory[]>;
   getTemplate(styleId: string): Promise<SelectPromptTemplate | null>;
   getAllTemplates(): Promise<SelectPromptTemplate[]>;
   saveTemplate(styleId: string, templateData: any, referenceImages?: string[]): Promise<SelectPromptTemplate>;
   deleteTemplate(styleId: string): Promise<void>;
+  reorderTemplates(templateOrders: { styleId: string; displayOrder: number }[]): Promise<void>;
   // Style CRUD operations
-  getAllStyles(): Promise<SelectStyle[]>;
+  getAllStyles(options?: { includeHidden?: boolean }): Promise<SelectStyle[]>;
+  getStylesWithOrder(options?: { includeHidden?: boolean }): Promise<(SelectStyle & { displayOrder: number })[]>;
   getStyle(styleId: string): Promise<SelectStyle | null>;
   createStyle(data: InsertStyle): Promise<SelectStyle>;
   updateStyle(styleId: string, data: Partial<InsertStyle>): Promise<SelectStyle | null>;
   deleteStyle(styleId: string): Promise<boolean>;
   seedBuiltInStyles(builtInStyles: InsertStyle[]): Promise<void>;
+  // Storyboard CRUD operations
+  getAllStoryboards(): Promise<SelectStoryboard[]>;
+  getStoryboard(id: number): Promise<SelectStoryboard | null>;
+  createStoryboard(data: InsertStoryboard): Promise<SelectStoryboard>;
+  updateStoryboard(id: number, data: UpdateStoryboard): Promise<SelectStoryboard | null>;
+  deleteStoryboard(id: number): Promise<boolean>;
+  // Storyboard version operations
+  getStoryboardVersions(storyboardId: number): Promise<SelectStoryboardVersion[]>;
+  getStoryboardVersion(id: number): Promise<SelectStoryboardVersion | null>;
+  createStoryboardVersion(storyboardId: number, name: string, description?: string): Promise<SelectStoryboardVersion>;
+  restoreStoryboardVersion(versionId: number): Promise<SelectStoryboard | null>;
+  deleteStoryboardVersion(id: number): Promise<boolean>;
   // Storyboard scene operations
   getAllScenes(): Promise<SelectStoryboardScene[]>;
+  getScenesByStoryboardId(storyboardId: number): Promise<SelectStoryboardScene[]>;
   getScene(id: number): Promise<SelectStoryboardScene | null>;
   createScene(data: InsertStoryboardScene): Promise<SelectStoryboardScene>;
   updateScene(id: number, data: UpdateStoryboardScene): Promise<SelectStoryboardScene | null>;
   deleteScene(id: number): Promise<boolean>;
   reorderScenes(sceneIds: number[]): Promise<void>;
+  migrateScenesToStoryboard(storyboardId: number): Promise<void>;
+  // Character CRUD Operations
+  getAllCharacters(): Promise<SelectCharacter[]>;
+  getCharacter(id: string): Promise<SelectCharacter | null>;
+  createCharacter(data: InsertCharacter): Promise<SelectCharacter>;
+  updateCharacter(id: string, data: UpdateCharacter): Promise<SelectCharacter | null>;
+  deleteCharacter(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -54,7 +96,7 @@ export class MemStorage implements IStorage {
     if (!db) {
       throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
     }
-    
+
     const [result] = await db
       .insert(generationHistory)
       .values({
@@ -67,6 +109,7 @@ export class MemStorage implements IStorage {
         generatedImageUrl: data.generatedImageUrl,
         userReferenceUrls: data.userReferenceUrls,
         allReferenceImageUrls: data.allReferenceImageUrls,
+        sceneId: data.sceneId,
       })
       .returning();
     return result;
@@ -76,12 +119,24 @@ export class MemStorage implements IStorage {
     if (!db) {
       return [];
     }
-    
+
     return await db
       .select()
       .from(generationHistory)
       .orderBy(desc(generationHistory.createdAt))
       .limit(limit);
+  }
+
+  async getGenerationHistoryBySceneId(sceneId: number): Promise<SelectGenerationHistory[]> {
+    if (!db) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(generationHistory)
+      .where(eq(generationHistory.sceneId, sceneId))
+      .orderBy(desc(generationHistory.createdAt));
   }
 
   async getTemplate(styleId: string): Promise<SelectPromptTemplate | null> {
@@ -106,7 +161,7 @@ export class MemStorage implements IStorage {
     return await db
       .select()
       .from(promptTemplates)
-      .orderBy(promptTemplates.styleId);
+      .orderBy(promptTemplates.displayOrder, promptTemplates.styleId);
   }
 
   async saveTemplate(styleId: string, templateData: any, referenceImages: string[] = []): Promise<SelectPromptTemplate> {
@@ -151,16 +206,76 @@ export class MemStorage implements IStorage {
     await db.delete(promptTemplates).where(eq(promptTemplates.styleId, styleId));
   }
 
+  async reorderTemplates(templateOrders: { styleId: string; displayOrder: number }[]): Promise<void> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Only update displayOrder for templates that already exist
+    // Don't create placeholder records as they would break the template data
+    for (const { styleId, displayOrder } of templateOrders) {
+      // Check if template exists
+      const existing = await this.getTemplate(styleId);
+      
+      if (existing) {
+        // Update existing template's displayOrder
+        await db
+          .update(promptTemplates)
+          .set({ displayOrder, updatedAt: new Date() })
+          .where(eq(promptTemplates.styleId, styleId));
+      }
+      // Skip styles without templates - they will keep default order (9999 in frontend)
+    }
+  }
+
   // Style CRUD operations
-  async getAllStyles(): Promise<SelectStyle[]> {
+  async getAllStyles(options?: { includeHidden?: boolean }): Promise<SelectStyle[]> {
     if (!db) {
       return [];
     }
 
-    return await db
-      .select()
-      .from(styles)
-      .orderBy(styles.label);
+    const includeHidden = options?.includeHidden ?? false;
+    
+    if (includeHidden) {
+      return await db
+        .select()
+        .from(styles)
+        .orderBy(styles.label);
+    } else {
+      return await db
+        .select()
+        .from(styles)
+        .where(eq(styles.isHidden, false))
+        .orderBy(styles.label);
+    }
+  }
+
+  async getStylesWithOrder(options?: { includeHidden?: boolean }): Promise<(SelectStyle & { displayOrder: number })[]> {
+    if (!db) {
+      return [];
+    }
+
+    const includeHidden = options?.includeHidden ?? false;
+    
+    const allStyles = includeHidden 
+      ? await db.select().from(styles)
+      : await db.select().from(styles).where(eq(styles.isHidden, false));
+    
+    const allTemplates = await db.select().from(promptTemplates);
+    
+    const templateOrderMap = new Map<string, number>();
+    for (const template of allTemplates) {
+      templateOrderMap.set(template.styleId, template.displayOrder);
+    }
+    
+    const stylesWithOrder = allStyles.map(style => ({
+      ...style,
+      displayOrder: templateOrderMap.get(style.id) ?? 9999,
+    }));
+    
+    stylesWithOrder.sort((a, b) => a.displayOrder - b.displayOrder);
+    
+    return stylesWithOrder;
   }
 
   async getStyle(styleId: string): Promise<SelectStyle | null> {
@@ -245,8 +360,237 @@ export class MemStorage implements IStorage {
       const existing = await this.getStyle(style.id);
       if (!existing) {
         await this.createStyle({ ...style, isBuiltIn: true });
+      } else if (existing.isBuiltIn) {
+        // Update existing built-in styles to ensure they have latest reference images
+        await this.updateStyle(style.id, { 
+          referenceImageUrl: style.referenceImageUrl,
+          label: style.label,
+          description: style.description,
+          basePrompt: style.basePrompt,
+          engines: style.engines,
+          defaultColors: style.defaultColors,
+        });
       }
     }
+  }
+
+  // Storyboard CRUD operations
+  async getAllStoryboards(): Promise<SelectStoryboard[]> {
+    if (!db) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(storyboards)
+      .orderBy(desc(storyboards.updatedAt));
+  }
+
+  async getStoryboard(id: number): Promise<SelectStoryboard | null> {
+    if (!db) {
+      return null;
+    }
+
+    const results = await db
+      .select()
+      .from(storyboards)
+      .where(eq(storyboards.id, id))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
+  async createStoryboard(data: InsertStoryboard): Promise<SelectStoryboard> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const [result] = await db
+      .insert(storyboards)
+      .values({
+        name: data.name,
+        description: data.description ?? "",
+        styleId: data.styleId,
+        engine: data.engine,
+      })
+      .returning();
+    return result;
+  }
+
+  async updateStoryboard(id: number, data: UpdateStoryboard): Promise<SelectStoryboard | null> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const updateData: any = { updatedAt: new Date() };
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.styleId !== undefined) updateData.styleId = data.styleId;
+    if (data.engine !== undefined) updateData.engine = data.engine;
+
+    const [result] = await db
+      .update(storyboards)
+      .set(updateData)
+      .where(eq(storyboards.id, id))
+      .returning();
+    return result || null;
+  }
+
+  async deleteStoryboard(id: number): Promise<boolean> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const storyboard = await this.getStoryboard(id);
+    if (!storyboard) {
+      return false;
+    }
+
+    // Delete all scenes in this storyboard
+    await db.delete(storyboardScenes).where(eq(storyboardScenes.storyboardId, id));
+
+    // Delete all versions of this storyboard
+    await db.delete(storyboardVersions).where(eq(storyboardVersions.storyboardId, id));
+
+    // Delete the storyboard
+    await db.delete(storyboards).where(eq(storyboards.id, id));
+    return true;
+  }
+
+  // Storyboard version operations
+  async getStoryboardVersions(storyboardId: number): Promise<SelectStoryboardVersion[]> {
+    if (!db) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(storyboardVersions)
+      .where(eq(storyboardVersions.storyboardId, storyboardId))
+      .orderBy(desc(storyboardVersions.versionNumber));
+  }
+
+  async getStoryboardVersion(id: number): Promise<SelectStoryboardVersion | null> {
+    if (!db) {
+      return null;
+    }
+
+    const results = await db
+      .select()
+      .from(storyboardVersions)
+      .where(eq(storyboardVersions.id, id))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
+  async createStoryboardVersion(storyboardId: number, name: string, description: string = ""): Promise<SelectStoryboardVersion> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Get the storyboard
+    const storyboard = await this.getStoryboard(storyboardId);
+    if (!storyboard) {
+      throw new Error("Storyboard not found");
+    }
+
+    // Get current scenes
+    const scenes = await this.getScenesByStoryboardId(storyboardId);
+
+    // Get next version number
+    const existingVersions = await this.getStoryboardVersions(storyboardId);
+    const nextVersionNumber = existingVersions.length > 0 
+      ? Math.max(...existingVersions.map(v => v.versionNumber)) + 1 
+      : 1;
+
+    // Create snapshot of scenes (store essential data)
+    const scenesSnapshot = scenes.map(scene => ({
+      orderIndex: scene.orderIndex,
+      voiceOver: scene.voiceOver,
+      visualDescription: scene.visualDescription,
+      generatedImageUrl: scene.generatedImageUrl,
+      styleId: scene.styleId,
+      engine: scene.engine,
+    }));
+
+    const [result] = await db
+      .insert(storyboardVersions)
+      .values({
+        storyboardId,
+        versionNumber: nextVersionNumber,
+        name,
+        description,
+        scenesSnapshot,
+        styleId: storyboard.styleId,
+        engine: storyboard.engine,
+      })
+      .returning();
+    return result;
+  }
+
+  async restoreStoryboardVersion(versionId: number): Promise<SelectStoryboard | null> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Get the version
+    const version = await this.getStoryboardVersion(versionId);
+    if (!version) {
+      return null;
+    }
+
+    // Get the storyboard
+    const storyboard = await this.getStoryboard(version.storyboardId);
+    if (!storyboard) {
+      return null;
+    }
+
+    // Delete current scenes
+    await db.delete(storyboardScenes).where(eq(storyboardScenes.storyboardId, version.storyboardId));
+
+    // Restore scenes from snapshot
+    const scenesSnapshot = version.scenesSnapshot as any[];
+    for (const sceneData of scenesSnapshot) {
+      await db
+        .insert(storyboardScenes)
+        .values({
+          storyboardId: version.storyboardId,
+          orderIndex: sceneData.orderIndex,
+          voiceOver: sceneData.voiceOver || "",
+          visualDescription: sceneData.visualDescription || "",
+          generatedImageUrl: sceneData.generatedImageUrl,
+          styleId: sceneData.styleId,
+          engine: sceneData.engine,
+        });
+    }
+
+    // Update storyboard settings if they were different
+    const [updatedStoryboard] = await db
+      .update(storyboards)
+      .set({
+        styleId: version.styleId,
+        engine: version.engine,
+        updatedAt: new Date(),
+      })
+      .where(eq(storyboards.id, version.storyboardId))
+      .returning();
+
+    return updatedStoryboard;
+  }
+
+  async deleteStoryboardVersion(id: number): Promise<boolean> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    const version = await this.getStoryboardVersion(id);
+    if (!version) {
+      return false;
+    }
+
+    await db.delete(storyboardVersions).where(eq(storyboardVersions.id, id));
+    return true;
   }
 
   // Storyboard scene operations
@@ -280,15 +624,25 @@ export class MemStorage implements IStorage {
       throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
     }
 
-    // Get the next order index
-    const allScenes = await this.getAllScenes();
-    const nextOrderIndex = data.orderIndex ?? allScenes.length;
+    // Get the next order index for scenes in the same storyboard
+    let nextOrderIndex = data.orderIndex;
+    if (nextOrderIndex === undefined) {
+      if (data.storyboardId) {
+        const storyboardScenesList = await this.getScenesByStoryboardId(data.storyboardId);
+        nextOrderIndex = storyboardScenesList.length;
+      } else {
+        const allScenes = await this.getAllScenes();
+        nextOrderIndex = allScenes.length;
+      }
+    }
 
     const [result] = await db
       .insert(storyboardScenes)
       .values({
+        storyboardId: data.storyboardId,
         orderIndex: nextOrderIndex,
-        prompt: data.prompt ?? "",
+        voiceOver: data.voiceOver ?? "",
+        visualDescription: data.visualDescription ?? "",
         generatedImageUrl: data.generatedImageUrl,
         styleId: data.styleId,
         engine: data.engine,
@@ -304,10 +658,12 @@ export class MemStorage implements IStorage {
 
     const updateData: any = { updatedAt: new Date() };
     if (data.orderIndex !== undefined) updateData.orderIndex = data.orderIndex;
-    if (data.prompt !== undefined) updateData.prompt = data.prompt;
+    if (data.voiceOver !== undefined) updateData.voiceOver = data.voiceOver;
+    if (data.visualDescription !== undefined) updateData.visualDescription = data.visualDescription;
     if (data.generatedImageUrl !== undefined) updateData.generatedImageUrl = data.generatedImageUrl;
     if (data.styleId !== undefined) updateData.styleId = data.styleId;
     if (data.engine !== undefined) updateData.engine = data.engine;
+    if (data.selectedCharacterIds !== undefined) updateData.selectedCharacterIds = data.selectedCharacterIds;
 
     const [result] = await db
       .update(storyboardScenes)
@@ -336,11 +692,102 @@ export class MemStorage implements IStorage {
       throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
     }
 
-    for (let i = 0; i < sceneIds.length; i++) {
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < sceneIds.length; i++) {
+        await tx
+          .update(storyboardScenes)
+          .set({ orderIndex: i, updatedAt: new Date() })
+          .where(eq(storyboardScenes.id, sceneIds[i]));
+      }
+    });
+  }
+
+  // ===== Character CRUD Operations =====
+
+  async getAllCharacters() {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    return await db.select().from(characters).orderBy(desc(characters.createdAt));
+  }
+
+  async getCharacter(id: string) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.select().from(characters).where(eq(characters.id, id));
+    return result[0] || null;
+  }
+
+  async createCharacter(data: InsertCharacter) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.insert(characters).values(data).returning();
+    return result[0];
+  }
+
+  async updateCharacter(id: string, data: UpdateCharacter) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db
+      .update(characters)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(characters.id, id))
+      .returning();
+    return result[0] || null;
+  }
+
+  async deleteCharacter(id: string) {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.delete(characters).where(eq(characters.id, id)).returning();
+    return result.length > 0;
+  }
+
+
+  // Get scenes by storyboard ID
+  async getScenesByStoryboardId(storyboardId: number): Promise<SelectStoryboardScene[]> {
+    if (!db) {
+      return [];
+    }
+
+    return await db
+      .select()
+      .from(storyboardScenes)
+      .where(eq(storyboardScenes.storyboardId, storyboardId))
+      .orderBy(storyboardScenes.orderIndex);
+  }
+
+  // Migrate orphan scenes (null storyboardId) to a specific storyboard
+  async migrateScenesToStoryboard(storyboardId: number): Promise<void> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+
+    // Find all scenes without a storyboardId
+    const orphanScenes = await db
+      .select()
+      .from(storyboardScenes)
+      .where(isNull(storyboardScenes.storyboardId))
+      .orderBy(storyboardScenes.orderIndex);
+
+    // Get current max order index in target storyboard
+    const existingScenes = await this.getScenesByStoryboardId(storyboardId);
+    let nextOrderIndex = existingScenes.length;
+
+    // Update orphan scenes to belong to the storyboard
+    for (const scene of orphanScenes) {
       await db
         .update(storyboardScenes)
-        .set({ orderIndex: i, updatedAt: new Date() })
-        .where(eq(storyboardScenes.id, sceneIds[i]));
+        .set({ 
+          storyboardId, 
+          orderIndex: nextOrderIndex++,
+          updatedAt: new Date() 
+        })
+        .where(eq(storyboardScenes.id, scene.id));
     }
   }
 }
