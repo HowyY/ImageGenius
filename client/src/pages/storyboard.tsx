@@ -512,15 +512,33 @@ export default function Storyboard() {
     mutationFn: async ({ sceneId, characterIds }: { sceneId: number; characterIds: string[] }) => {
       return apiRequest("PATCH", `/api/scenes/${sceneId}`, { selectedCharacterIds: characterIds });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+    onMutate: async ({ sceneId, characterIds }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+      const previousScenes = queryClient.getQueryData<SelectStoryboardScene[]>(["/api/scenes", currentStoryboardId]);
+      
+      if (previousScenes) {
+        const updatedScenes = previousScenes.map(scene => 
+          scene.id === sceneId 
+            ? { ...scene, selectedCharacterIds: characterIds }
+            : scene
+        );
+        queryClient.setQueryData(["/api/scenes", currentStoryboardId], updatedScenes);
+      }
+      
+      return { previousScenes };
     },
-    onError: () => {
+    onError: (_error, _variables, context) => {
+      if (context?.previousScenes) {
+        queryClient.setQueryData(["/api/scenes", currentStoryboardId], context.previousScenes);
+      }
       toast({
         title: "Error",
         description: "Failed to update scene characters",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
     },
   });
 
@@ -532,22 +550,43 @@ export default function Storyboard() {
         )
       );
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+    onMutate: async ({ sceneIds, characterIds }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+      const previousScenes = queryClient.getQueryData<SelectStoryboardScene[]>(["/api/scenes", currentStoryboardId]);
+      
+      if (previousScenes) {
+        const updatedScenes = previousScenes.map(scene => 
+          sceneIds.includes(scene.id)
+            ? { ...scene, selectedCharacterIds: characterIds }
+            : scene
+        );
+        queryClient.setQueryData(["/api/scenes", currentStoryboardId], updatedScenes);
+      }
+      
       setCopyCharsDialogOpen(false);
       setCopyCharsSourceScene(null);
       setCopyCharsTargetScenes([]);
+      
+      return { previousScenes };
+    },
+    onSuccess: () => {
       toast({
         title: "Success",
         description: "Characters copied to selected scenes",
       });
     },
-    onError: () => {
+    onError: (_error, _variables, context) => {
+      if (context?.previousScenes) {
+        queryClient.setQueryData(["/api/scenes", currentStoryboardId], context.previousScenes);
+      }
       toast({
         title: "Error",
         description: "Failed to copy characters to scenes",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
     },
   });
 
