@@ -132,13 +132,22 @@ Experimental node-based editor for composing visual elements:
     - 7 node types: Character, Background, Prop, Style, Angle, Pose, Output
     - Save/Load/Delete workflow functionality with named workflows
     - Real-time node data updates via onChange callbacks
--   **Node Components**: Each node type has specialized inputs:
-    - CharacterNode: Name and visual prompt fields
-    - BackgroundNode: Asset selector and custom prompt
-    - PropNode: Asset selector and custom prompt
-    - StyleNode: Style preset dropdown
+    - Box selection (Shift+drag), multi-select (Cmd/Ctrl+click)
+    - Keyboard shortcuts: Delete/Backspace to remove selected elements
+    - MiniMap for navigation, snap-to-grid, pan controls
+    - Right-click context menus for nodes, edges, and canvas
+-   **Node Components**: Each node type has specialized inputs and inline creation:
+    - CharacterNode: Combobox to select existing characters with avatar display, "Create New Character" option opens inline dialog, auto-populates characterId/name/visualPrompt on selection
+    - BackgroundNode: Combobox for background assets with thumbnail preview, "Create New Background" inline dialog, auto-populates assetId/name/visualPrompt
+    - PropNode: Combobox for prop assets with thumbnail preview, "Create New Prop" inline dialog, amber color theme
+    - StyleNode: Style preset dropdown with all available styles
     - AngleNode/PoseNode: Preset selectors for camera angle and character pose
     - OutputNode: Aggregates connected nodes and displays preview
+-   **Node Data Structure**:
+    - CharacterNode: `{ characterId: string, name: string, visualPrompt: string }`
+    - BackgroundNode/PropNode: `{ assetId: string, name: string, visualPrompt: string }`
+    - Selection auto-populates all fields from database entity
+    - Inline creation saves to database and auto-selects the new entity
 -   **Use Case**: Designers can create reusable element combinations and experiment with different compositions before generating final images
 
 ### Type Safety and Code Sharing
