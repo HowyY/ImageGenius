@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Home, History, Sparkles, LayoutGrid, Menu, Users } from "lucide-react";
+import { Home, History, Sparkles, LayoutGrid, Menu, Users, GitBranch } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
@@ -16,6 +17,7 @@ const navItems = [
   { href: "/history", label: "History", icon: History, testId: "button-nav-history" },
   { href: "/style-editor", label: "Style Editor", icon: Sparkles, testId: "button-nav-style-editor" },
   { href: "/characters", label: "Characters", icon: Users, testId: "button-nav-characters" },
+  { href: "/node-editor", label: "Node Editor", icon: GitBranch, testId: "button-nav-node-editor", isBeta: true },
 ];
 
 export function Navigation() {
@@ -44,6 +46,11 @@ export function Navigation() {
                 <Link href={item.href}>
                   <item.icon className="w-4 h-4 mr-1.5" />
                   {item.label}
+                  {"isBeta" in item && item.isBeta && (
+                    <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
+                      Beta
+                    </Badge>
+                  )}
                 </Link>
               </Button>
             ))}
@@ -76,6 +83,11 @@ export function Navigation() {
                     <Link href={item.href}>
                       <item.icon className="w-4 h-4 mr-2" />
                       {item.label}
+                      {"isBeta" in item && item.isBeta && (
+                        <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
+                          Beta
+                        </Badge>
+                      )}
                     </Link>
                   </Button>
                 ))}

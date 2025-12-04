@@ -12,6 +12,7 @@ import Storyboard from "@/pages/storyboard";
 import StyleEditor from "@/pages/style-editor";
 import CharacterEditor from "./pages/character-editor";
 import PromptEditor from "./pages/prompt-editor";
+import NodeEditor from "./pages/node-editor";
 import NotFound from "./pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/style-editor" component={StyleEditor} />
       <Route path="/characters" component={CharacterEditor} />
       <Route path="/prompt-editor" component={PromptEditor} />
+      <Route path="/node-editor" component={NodeEditor} />
       <Route component={NotFound} />
     </Switch>
   );
