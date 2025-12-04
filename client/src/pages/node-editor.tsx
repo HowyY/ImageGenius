@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useRef } from "react";
 import {
   ReactFlow,
   Controls,
   Background,
+  MiniMap,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -11,6 +12,11 @@ import {
   BackgroundVariant,
   Panel,
   Node,
+  useReactFlow,
+  ReactFlowProvider,
+  SelectionMode,
+  NodeMouseHandler,
+  EdgeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -42,7 +48,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Save, FolderOpen, Plus, Trash2 } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import { Sparkles, Save, FolderOpen, Plus, Trash2, Copy, Clipboard } from "lucide-react";
 import type { SelectNodeWorkflow } from "@shared/schema";
 
 const nodeTypes = {
@@ -99,7 +112,15 @@ const initialEdges: Edge[] = [
   { id: "e-pose-output", source: "pose-1", target: "output-1", animated: true },
 ];
 
-export default function NodeEditor() {
+interface ContextMenuState {
+  show: boolean;
+  x: number;
+  y: number;
+  type: "node" | "edge" | "pane" | null;
+  targetId: string | null;
+}
+
+function NodeEditorContent() {
   const [nodes, setNodes, onNodesChange] = useNodesState(createInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [currentWorkflowId, setCurrentWorkflowId] = useState<number | null>(null);
@@ -107,7 +128,16 @@ export default function NodeEditor() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState("");
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    show: false,
+    x: 0,
+    y: 0,
+    type: null,
+    targetId: null,
+  });
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { getNodes, getEdges, screenToFlowPosition } = useReactFlow();
 
   const { data: workflows = [] } = useQuery<SelectNodeWorkflow[]>({
     queryKey: ["/api/node-workflows"],
@@ -209,18 +239,132 @@ export default function NodeEditor() {
   }, [nodes, updateNodeData]);
 
   const addNode = useCallback(
-    (type: string) => {
+    (type: string, position?: { x: number; y: number }) => {
       const id = `${type}-${Date.now()}`;
+      const nodePosition = position || { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 };
       const newNode: Node<NodeData> = {
         id,
         type,
-        position: { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 },
+        position: nodePosition,
         data: getDefaultDataForType(type),
       };
       setNodes((nds) => [...nds, newNode]);
     },
     [setNodes]
   );
+
+  const deleteSelectedElements = useCallback(() => {
+    const selectedNodes = nodes.filter((node) => node.selected);
+    const selectedEdges = edges.filter((edge) => edge.selected);
+    
+    if (selectedNodes.length === 0 && selectedEdges.length === 0) {
+      return;
+    }
+
+    const nodeIdsToDelete = new Set(selectedNodes.map((node) => node.id));
+    
+    setNodes((nds) => nds.filter((node) => !nodeIdsToDelete.has(node.id)));
+    setEdges((eds) =>
+      eds.filter(
+        (edge) =>
+          !edge.selected &&
+          !nodeIdsToDelete.has(edge.source) &&
+          !nodeIdsToDelete.has(edge.target)
+      )
+    );
+
+    toast({
+      title: "Deleted",
+      description: `Deleted ${selectedNodes.length} node(s) and ${selectedEdges.length} edge(s).`,
+    });
+  }, [nodes, edges, setNodes, setEdges, toast]);
+
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+      setEdges((eds) =>
+        eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+      );
+    },
+    [setNodes, setEdges]
+  );
+
+  const deleteEdge = useCallback(
+    (edgeId: string) => {
+      setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+    },
+    [setEdges]
+  );
+
+  const duplicateNode = useCallback(
+    (nodeId: string) => {
+      const nodeToDuplicate = nodes.find((node) => node.id === nodeId);
+      if (!nodeToDuplicate) return;
+
+      const newNode: Node<NodeData> = {
+        ...nodeToDuplicate,
+        id: `${nodeToDuplicate.type}-${Date.now()}`,
+        position: {
+          x: nodeToDuplicate.position.x + 50,
+          y: nodeToDuplicate.position.y + 50,
+        },
+        selected: false,
+        data: { ...nodeToDuplicate.data },
+      };
+      setNodes((nds) => [...nds, newNode]);
+      toast({
+        title: "Node duplicated",
+        description: "A copy of the node has been created.",
+      });
+    },
+    [nodes, setNodes, toast]
+  );
+
+  const onNodeContextMenu: NodeMouseHandler = useCallback(
+    (event, node) => {
+      event.preventDefault();
+      setContextMenu({
+        show: true,
+        x: event.clientX,
+        y: event.clientY,
+        type: "node",
+        targetId: node.id,
+      });
+    },
+    []
+  );
+
+  const onEdgeContextMenu: EdgeMouseHandler = useCallback(
+    (event, edge) => {
+      event.preventDefault();
+      setContextMenu({
+        show: true,
+        x: event.clientX,
+        y: event.clientY,
+        type: "edge",
+        targetId: edge.id,
+      });
+    },
+    []
+  );
+
+  const onPaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      event.preventDefault();
+      setContextMenu({
+        show: true,
+        x: event.clientX,
+        y: event.clientY,
+        type: "pane",
+        targetId: null,
+      });
+    },
+    []
+  );
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, show: false }));
+  }, []);
 
   const handleSave = () => {
     if (currentWorkflowId && currentWorkflowName) {
@@ -295,7 +439,12 @@ export default function NodeEditor() {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] w-full" data-testid="node-editor-page">
+    <div
+      ref={reactFlowWrapper}
+      className="h-[calc(100vh-3.5rem)] w-full"
+      data-testid="node-editor-page"
+      onClick={closeContextMenu}
+    >
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
@@ -303,6 +452,18 @@ export default function NodeEditor() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
+        onPaneContextMenu={onPaneContextMenu}
+        onPaneClick={closeContextMenu}
+        deleteKeyCode={["Backspace", "Delete"]}
+        multiSelectionKeyCode={["Shift", "Meta", "Control"]}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[1, 2]}
+        selectNodesOnDrag
+        snapToGrid
+        snapGrid={[15, 15]}
         fitView
         className="bg-background"
       >
@@ -316,7 +477,7 @@ export default function NodeEditor() {
           </span>
         </Panel>
 
-        <Panel position="top-right" className="flex items-center gap-2 mr-2">
+        <Panel position="top-center" className="flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -348,8 +509,113 @@ export default function NodeEditor() {
 
         <NodeToolbar onAddNode={addNode} />
         <Controls className="bg-card border rounded-md" />
+        <MiniMap
+          className="bg-card border rounded-md"
+          nodeColor={(node) => {
+            switch (node.type) {
+              case "character":
+                return "#3b82f6";
+              case "background":
+                return "#10b981";
+              case "prop":
+                return "#f59e0b";
+              case "style":
+                return "#a855f7";
+              case "angle":
+                return "#22c55e";
+              case "pose":
+                return "#f97316";
+              case "output":
+                return "#06b6d4";
+              default:
+                return "#6b7280";
+            }
+          }}
+          maskColor="rgba(0, 0, 0, 0.1)"
+        />
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} className="bg-background" />
       </ReactFlow>
+
+      {contextMenu.show && (
+        <div
+          className="fixed z-50 min-w-[160px] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {contextMenu.type === "node" && contextMenu.targetId && (
+            <>
+              <button
+                className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                onClick={() => {
+                  duplicateNode(contextMenu.targetId!);
+                  closeContextMenu();
+                }}
+                data-testid="context-menu-duplicate"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Duplicate
+              </button>
+              <button
+                className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground text-destructive"
+                onClick={() => {
+                  deleteNode(contextMenu.targetId!);
+                  closeContextMenu();
+                }}
+                data-testid="context-menu-delete-node"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Node
+              </button>
+            </>
+          )}
+          {contextMenu.type === "edge" && contextMenu.targetId && (
+            <button
+              className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground text-destructive"
+              onClick={() => {
+                deleteEdge(contextMenu.targetId!);
+                closeContextMenu();
+              }}
+              data-testid="context-menu-delete-edge"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Edge
+            </button>
+          )}
+          {contextMenu.type === "pane" && (
+            <>
+              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                Add Node
+              </div>
+              {[
+                { type: "character", label: "Character" },
+                { type: "background", label: "Background" },
+                { type: "prop", label: "Prop" },
+                { type: "style", label: "Style" },
+                { type: "angle", label: "Angle" },
+                { type: "pose", label: "Pose" },
+                { type: "output", label: "Output" },
+              ].map(({ type, label }) => (
+                <button
+                  key={type}
+                  className="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => {
+                    const position = screenToFlowPosition({
+                      x: contextMenu.x,
+                      y: contextMenu.y,
+                    });
+                    addNode(type, position);
+                    closeContextMenu();
+                  }}
+                  data-testid={`context-menu-add-${type}`}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {label}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent>
@@ -447,4 +713,12 @@ function getDefaultDataForType(type: string): NodeData {
     default:
       return {};
   }
+}
+
+export default function NodeEditor() {
+  return (
+    <ReactFlowProvider>
+      <NodeEditorContent />
+    </ReactFlowProvider>
+  );
 }
