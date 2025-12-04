@@ -1,6 +1,6 @@
 import { Panel } from "@xyflow/react";
 import { Button } from "@/components/ui/button";
-import { User, Palette, RotateCcw, PersonStanding, Sparkles } from "lucide-react";
+import { User, Palette, RotateCcw, PersonStanding, Sparkles, Image, Package } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -13,10 +13,12 @@ interface NodeToolbarProps {
 
 const nodeTypes = [
   { type: "character", icon: User, label: "Character", color: "text-blue-500" },
+  { type: "background", icon: Image, label: "Background", color: "text-emerald-500" },
+  { type: "prop", icon: Package, label: "Prop", color: "text-amber-500" },
   { type: "style", icon: Palette, label: "Style", color: "text-purple-500" },
   { type: "angle", icon: RotateCcw, label: "Angle", color: "text-green-500" },
   { type: "pose", icon: PersonStanding, label: "Pose", color: "text-orange-500" },
-  { type: "output", icon: Sparkles, label: "Output", color: "text-amber-500" },
+  { type: "output", icon: Sparkles, label: "Output", color: "text-cyan-500" },
 ];
 
 export function NodeToolbar({ onAddNode }: NodeToolbarProps) {

@@ -418,3 +418,109 @@ export type AnyTemplate = PromptTemplate | SimpleTemplate | UniversalTemplate | 
 export type StylePreset = z.infer<typeof stylePresetSchema>;
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;
 export type GenerateResponse = z.infer<typeof generateResponseSchema>;
+
+// ============================================
+// Assets System (Backgrounds, Props)
+// ============================================
+
+// Reference image schema for assets
+export const assetReferenceImageSchema = z.object({
+  url: z.string().url(),
+  styleId: z.string().optional(), // optional style association
+});
+
+export type AssetReferenceImage = z.infer<typeof assetReferenceImageSchema>;
+
+// Assets table for backgrounds and props (reusable visual elements)
+export const assets = pgTable("assets", {
+  id: text("id").primaryKey(), // e.g., "bg_1234567890" or "prop_1234567890"
+  type: text("type").notNull(), // "background" | "prop"
+  name: text("name").notNull(),
+  visualPrompt: text("visual_prompt").notNull().default(""),
+  referenceImages: jsonb("reference_images").$type<AssetReferenceImage[]>().default([]),
+  tags: text("tags").array().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Insert schema for assets
+export const insertAssetSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(["background", "prop"]),
+  name: z.string().min(1, "Asset name is required"),
+  visualPrompt: z.string().default(""),
+  referenceImages: z.array(assetReferenceImageSchema).optional().default([]),
+  tags: z.array(z.string()).optional().default([]),
+});
+
+export const updateAssetSchema = z.object({
+  name: z.string().min(1).optional(),
+  visualPrompt: z.string().optional(),
+  referenceImages: z.array(assetReferenceImageSchema).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export type InsertAsset = z.infer<typeof insertAssetSchema>;
+export type UpdateAsset = z.infer<typeof updateAssetSchema>;
+export type SelectAsset = typeof assets.$inferSelect;
+
+// ============================================
+// Node Workflows System
+// ============================================
+
+// Node data schema (flexible for different node types)
+export const nodeDataSchema = z.record(z.string(), z.unknown());
+
+// React Flow node schema
+export const workflowNodeSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }),
+  data: nodeDataSchema,
+});
+
+// React Flow edge schema
+export const workflowEdgeSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  target: z.string(),
+  sourceHandle: z.string().optional(),
+  targetHandle: z.string().optional(),
+  animated: z.boolean().optional(),
+});
+
+export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
+export type WorkflowEdge = z.infer<typeof workflowEdgeSchema>;
+
+// Node workflows table for saving/loading node editor configurations
+export const nodeWorkflows = pgTable("node_workflows", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  nodes: jsonb("nodes").$type<WorkflowNode[]>().default([]),
+  edges: jsonb("edges").$type<WorkflowEdge[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Insert schema for node workflows
+export const insertNodeWorkflowSchema = z.object({
+  name: z.string().min(1, "Workflow name is required"),
+  description: z.string().default(""),
+  nodes: z.array(workflowNodeSchema).optional().default([]),
+  edges: z.array(workflowEdgeSchema).optional().default([]),
+});
+
+export const updateNodeWorkflowSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  nodes: z.array(workflowNodeSchema).optional(),
+  edges: z.array(workflowEdgeSchema).optional(),
+});
+
+export type InsertNodeWorkflow = z.infer<typeof insertNodeWorkflowSchema>;
+export type UpdateNodeWorkflow = z.infer<typeof updateNodeWorkflowSchema>;
+export type SelectNodeWorkflow = typeof nodeWorkflows.$inferSelect;

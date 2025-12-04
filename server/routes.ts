@@ -2609,6 +2609,284 @@ ${negativePrompt}`;
     }
   });
 
+  // ===== Asset API Routes (backgrounds, props) =====
+
+  // Get all assets (optionally filter by type)
+  app.get("/api/assets", async (req, res) => {
+    try {
+      const type = req.query.type as "background" | "prop" | undefined;
+      const assetList = await storage.getAllAssets(type);
+      res.json(assetList);
+    } catch (error) {
+      console.error("Error fetching assets:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch assets",
+      });
+    }
+  });
+
+  // Get single asset by ID
+  app.get("/api/assets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const asset = await storage.getAsset(id);
+      
+      if (!asset) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Asset ${id} not found`,
+        });
+      }
+
+      res.json(asset);
+    } catch (error) {
+      console.error("Error fetching asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch asset",
+      });
+    }
+  });
+
+  // Create a new asset
+  app.post("/api/assets", async (req, res) => {
+    try {
+      const { id, type, name, visualPrompt, referenceImages, tags } = req.body;
+      
+      if (!id || !type || !name) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "id, type, and name are required",
+        });
+      }
+
+      if (type !== "background" && type !== "prop") {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "type must be 'background' or 'prop'",
+        });
+      }
+
+      const asset = await storage.createAsset({
+        id,
+        type,
+        name,
+        visualPrompt: visualPrompt || "",
+        referenceImages: referenceImages || [],
+        tags: tags || [],
+      });
+
+      res.status(201).json(asset);
+    } catch (error) {
+      console.error("Error creating asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Failed to create asset",
+      });
+    }
+  });
+
+  // Update an asset
+  app.patch("/api/assets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, visualPrompt, referenceImages, tags } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (visualPrompt !== undefined) updateData.visualPrompt = visualPrompt;
+      if (referenceImages !== undefined) updateData.referenceImages = referenceImages;
+      if (tags !== undefined) updateData.tags = tags;
+
+      const updated = await storage.updateAsset(id, updateData);
+      
+      if (!updated) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Asset ${id} not found`,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update asset",
+      });
+    }
+  });
+
+  // Delete an asset
+  app.delete("/api/assets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteAsset(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Asset ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete asset",
+      });
+    }
+  });
+
+  // ===== Node Workflow API Routes =====
+
+  // Get all node workflows
+  app.get("/api/node-workflows", async (req, res) => {
+    try {
+      const workflows = await storage.getAllNodeWorkflows();
+      res.json(workflows);
+    } catch (error) {
+      console.error("Error fetching node workflows:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch node workflows",
+      });
+    }
+  });
+
+  // Get single node workflow by ID
+  app.get("/api/node-workflows/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid workflow ID",
+        });
+      }
+
+      const workflow = await storage.getNodeWorkflow(id);
+      
+      if (!workflow) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Node workflow ${id} not found`,
+        });
+      }
+
+      res.json(workflow);
+    } catch (error) {
+      console.error("Error fetching node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch node workflow",
+      });
+    }
+  });
+
+  // Create a new node workflow
+  app.post("/api/node-workflows", async (req, res) => {
+    try {
+      const { name, description, nodes, edges } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "name is required",
+        });
+      }
+
+      const workflow = await storage.createNodeWorkflow({
+        name,
+        description: description || "",
+        nodes: nodes || [],
+        edges: edges || [],
+      });
+
+      res.status(201).json(workflow);
+    } catch (error) {
+      console.error("Error creating node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Failed to create node workflow",
+      });
+    }
+  });
+
+  // Update a node workflow
+  app.patch("/api/node-workflows/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid workflow ID",
+        });
+      }
+
+      const { name, description, nodes, edges } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (nodes !== undefined) updateData.nodes = nodes;
+      if (edges !== undefined) updateData.edges = edges;
+
+      const updated = await storage.updateNodeWorkflow(id, updateData);
+      
+      if (!updated) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Node workflow ${id} not found`,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update node workflow",
+      });
+    }
+  });
+
+  // Delete a node workflow
+  app.delete("/api/node-workflows/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid workflow ID",
+        });
+      }
+
+      const deleted = await storage.deleteNodeWorkflow(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Node workflow ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete node workflow",
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

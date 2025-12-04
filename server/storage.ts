@@ -34,6 +34,14 @@ import {
   type InsertCharacter,
   type UpdateCharacter,
   type SelectCharacter,
+  assets,
+  type InsertAsset,
+  type UpdateAsset,
+  type SelectAsset,
+  nodeWorkflows,
+  type InsertNodeWorkflow,
+  type UpdateNodeWorkflow,
+  type SelectNodeWorkflow,
 } from "@shared/schema";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -89,6 +97,18 @@ export interface IStorage {
   createCharacter(data: InsertCharacter): Promise<SelectCharacter>;
   updateCharacter(id: string, data: UpdateCharacter): Promise<SelectCharacter | null>;
   deleteCharacter(id: string): Promise<boolean>;
+  // Asset CRUD Operations (backgrounds, props)
+  getAllAssets(type?: "background" | "prop"): Promise<SelectAsset[]>;
+  getAsset(id: string): Promise<SelectAsset | null>;
+  createAsset(data: InsertAsset): Promise<SelectAsset>;
+  updateAsset(id: string, data: UpdateAsset): Promise<SelectAsset | null>;
+  deleteAsset(id: string): Promise<boolean>;
+  // Node Workflow CRUD Operations
+  getAllNodeWorkflows(): Promise<SelectNodeWorkflow[]>;
+  getNodeWorkflow(id: number): Promise<SelectNodeWorkflow | null>;
+  createNodeWorkflow(data: InsertNodeWorkflow): Promise<SelectNodeWorkflow>;
+  updateNodeWorkflow(id: number, data: UpdateNodeWorkflow): Promise<SelectNodeWorkflow | null>;
+  deleteNodeWorkflow(id: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -789,6 +809,111 @@ export class MemStorage implements IStorage {
         })
         .where(eq(storyboardScenes.id, scene.id));
     }
+  }
+
+  // ===== Asset CRUD Operations (backgrounds, props) =====
+
+  async getAllAssets(type?: "background" | "prop"): Promise<SelectAsset[]> {
+    if (!db) {
+      return [];
+    }
+    
+    if (type) {
+      return await db
+        .select()
+        .from(assets)
+        .where(eq(assets.type, type))
+        .orderBy(desc(assets.createdAt));
+    }
+    
+    return await db
+      .select()
+      .from(assets)
+      .orderBy(desc(assets.createdAt));
+  }
+
+  async getAsset(id: string): Promise<SelectAsset | null> {
+    if (!db) {
+      return null;
+    }
+    const result = await db.select().from(assets).where(eq(assets.id, id));
+    return result[0] || null;
+  }
+
+  async createAsset(data: InsertAsset): Promise<SelectAsset> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.insert(assets).values(data).returning();
+    return result[0];
+  }
+
+  async updateAsset(id: string, data: UpdateAsset): Promise<SelectAsset | null> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db
+      .update(assets)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(assets.id, id))
+      .returning();
+    return result[0] || null;
+  }
+
+  async deleteAsset(id: string): Promise<boolean> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.delete(assets).where(eq(assets.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ===== Node Workflow CRUD Operations =====
+
+  async getAllNodeWorkflows(): Promise<SelectNodeWorkflow[]> {
+    if (!db) {
+      return [];
+    }
+    return await db
+      .select()
+      .from(nodeWorkflows)
+      .orderBy(desc(nodeWorkflows.updatedAt));
+  }
+
+  async getNodeWorkflow(id: number): Promise<SelectNodeWorkflow | null> {
+    if (!db) {
+      return null;
+    }
+    const result = await db.select().from(nodeWorkflows).where(eq(nodeWorkflows.id, id));
+    return result[0] || null;
+  }
+
+  async createNodeWorkflow(data: InsertNodeWorkflow): Promise<SelectNodeWorkflow> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.insert(nodeWorkflows).values(data).returning();
+    return result[0];
+  }
+
+  async updateNodeWorkflow(id: number, data: UpdateNodeWorkflow): Promise<SelectNodeWorkflow | null> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db
+      .update(nodeWorkflows)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(nodeWorkflows.id, id))
+      .returning();
+    return result[0] || null;
+  }
+
+  async deleteNodeWorkflow(id: number): Promise<boolean> {
+    if (!db) {
+      throw new Error("Database is not configured. Set DATABASE_URL environment variable.");
+    }
+    const result = await db.delete(nodeWorkflows).where(eq(nodeWorkflows.id, id)).returning();
+    return result.length > 0;
   }
 }
 
