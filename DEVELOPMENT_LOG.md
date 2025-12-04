@@ -315,6 +315,32 @@ _Add any additional notes, learnings, or decisions here._
 - Added display of avatar thumbnails in the character list for easier identification.
 - Backend logic for avatar generation via API is in place.
 
+### Session: Dec 3, 2025
+**Reference Image System Improvements**
+- **Reference Image File Management**:
+  - Implemented server-side endpoint to physically delete reference image files from disk
+  - Added proper file system cleanup when reference images are removed
+  - Console logging for successful file deletions (e.g., "✓ Deleted reference image file: /reference-images/warm/color.png")
+- **Code Quality**: 
+  - Cleaned up orphaned reference image files in various style directories
+  - Improved error handling for file operations
+
+### Session: Dec 4, 2025
+**UI Polish & Accessibility Improvements**
+- **Image Component Enhancements**:
+  - Enhanced ImageWithFallback component with better loading states
+  - Improved image loading transitions with opacity effects
+  - Added letter-based fallback avatars for broken/missing images
+  - Better error state handling for missing or invalid image URLs
+- **Accessibility Fixes**:
+  - Fixed Dialog component accessibility warnings (missing aria-describedby)
+  - Added proper DialogDescription components to all Dialog instances
+  - Improved screen reader compatibility across the application
+- **Style Editor Refinements**:
+  - Improved image thumbnail display in reference image manager
+  - Enhanced visual feedback for image loading and error states
+  - Better handling of image preview transitions
+
 ---
 
-*Last Updated: December 2, 2025 - Avatar Profile System Completed*
+*Last Updated: December 4, 2025 - UI Polish & Accessibility Improvements*
