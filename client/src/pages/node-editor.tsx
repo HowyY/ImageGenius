@@ -75,7 +75,7 @@ const createInitialNodes = (): Node<NodeData>[] => [
     id: "character-1",
     type: "character",
     position: { x: 50, y: 150 },
-    data: { name: "", visualPrompt: "" },
+    data: { characterId: "", name: "", visualPrompt: "" },
   },
   {
     id: "style-1",
@@ -697,11 +697,11 @@ function NodeEditorContent() {
 function getDefaultDataForType(type: string): NodeData {
   switch (type) {
     case "character":
-      return { name: "", visualPrompt: "" };
+      return { characterId: "", name: "", visualPrompt: "" };
     case "background":
-      return { name: "", visualPrompt: "" };
+      return { assetId: "", name: "", visualPrompt: "" };
     case "prop":
-      return { name: "", visualPrompt: "" };
+      return { assetId: "", name: "", visualPrompt: "" };
     case "style":
       return { styleId: "" };
     case "angle":

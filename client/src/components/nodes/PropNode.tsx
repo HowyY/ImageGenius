@@ -1,70 +1,258 @@
-import { memo, useCallback, type ChangeEvent } from "react";
+import { memo, useCallback, useState } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Package } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
+import { Box, ChevronDown, Plus, Check } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
+import type { SelectAsset } from "@shared/schema";
 
 interface PropNodeData {
+  assetId?: string;
   name?: string;
   visualPrompt?: string;
-  onChange?: (data: Record<string, unknown>) => void;
+  onChange?: (data: { assetId?: string; name?: string; visualPrompt?: string }) => void;
 }
 
 function PropNodeComponent({ data, id }: NodeProps) {
   const nodeData = data as unknown as PropNodeData;
+  const [open, setOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newAssetName, setNewAssetName] = useState("");
+  const [newAssetPrompt, setNewAssetPrompt] = useState("");
 
-  const handleNameChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      nodeData.onChange?.({ name: e.target.value });
+  const { data: assets = [] } = useQuery<SelectAsset[]>({
+    queryKey: ["/api/assets"],
+  });
+
+  const propAssets = assets.filter((a) => a.type === "prop");
+
+  const createAssetMutation = useMutation({
+    mutationFn: async (data: { name: string; visualPrompt: string }) => {
+      const assetId = `prop_${Date.now()}`;
+      return apiRequest("POST", "/api/assets", {
+        id: assetId,
+        type: "prop",
+        name: data.name,
+        visualPrompt: data.visualPrompt,
+        referenceImages: [],
+        tags: [],
+      });
+    },
+    onSuccess: async (response) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/assets"] });
+      const newAsset = await response.json();
+      nodeData.onChange?.({
+        assetId: newAsset.id,
+        name: newAsset.name,
+        visualPrompt: newAsset.visualPrompt,
+      });
+      setCreateDialogOpen(false);
+      setNewAssetName("");
+      setNewAssetPrompt("");
+    },
+  });
+
+  const handleSelectAsset = useCallback(
+    (asset: SelectAsset) => {
+      nodeData.onChange?.({
+        assetId: asset.id,
+        name: asset.name,
+        visualPrompt: asset.visualPrompt || "",
+      });
+      setOpen(false);
     },
     [nodeData]
   );
 
-  const handlePromptChange = useCallback(
-    (e: ChangeEvent<HTMLTextAreaElement>) => {
-      nodeData.onChange?.({ visualPrompt: e.target.value });
-    },
-    [nodeData]
-  );
+  const handleCreateNew = useCallback(() => {
+    setOpen(false);
+    setCreateDialogOpen(true);
+  }, []);
+
+  const handleCreateSubmit = useCallback(() => {
+    if (!newAssetName.trim()) return;
+    createAssetMutation.mutate({
+      name: newAssetName.trim(),
+      visualPrompt: newAssetPrompt.trim(),
+    });
+  }, [newAssetName, newAssetPrompt, createAssetMutation]);
+
+  const getAssetThumbnail = useCallback((asset: SelectAsset) => {
+    const refs = asset.referenceImages || [];
+    if (refs.length > 0 && refs[0].url) {
+      return refs[0].url;
+    }
+    return null;
+  }, []);
+
+  const selectedAsset = propAssets.find((a) => a.id === nodeData.assetId);
 
   return (
-    <Card className="w-[280px] shadow-lg border-2 border-amber-500/50 bg-card" data-testid={`node-prop-${id}`}>
-      <CardHeader className="p-3 pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Package className="w-4 h-4 text-amber-500" />
-          Prop / Element
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-3 pt-0 space-y-3">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Name</Label>
-          <Input
-            value={nodeData.name || ""}
-            onChange={handleNameChange}
-            placeholder="Prop name..."
-            className="h-8 text-sm"
-            data-testid={`input-prop-name-${id}`}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Visual Prompt</Label>
-          <Textarea
-            value={nodeData.visualPrompt || ""}
-            onChange={handlePromptChange}
-            placeholder="Describe prop..."
-            className="min-h-[60px] text-sm resize-none"
-            data-testid={`textarea-prop-prompt-${id}`}
-          />
-        </div>
-      </CardContent>
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-3 h-3 !bg-amber-500"
-      />
-    </Card>
+    <>
+      <Card className="w-[280px] shadow-lg border-2 border-amber-500/50 bg-card" data-testid={`node-prop-${id}`}>
+        <CardHeader className="p-3 pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-amber-500/10">
+              <Box className="w-4 h-4 text-amber-500" />
+            </div>
+            Prop
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3 pt-0 space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Select Prop</Label>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={open}
+                  className="w-full justify-between h-9 text-sm"
+                  data-testid="button-select-prop"
+                >
+                  {selectedAsset ? (
+                    <div className="flex items-center gap-2">
+                      {getAssetThumbnail(selectedAsset) ? (
+                        <div className="w-5 h-5 rounded overflow-hidden bg-muted">
+                          <img
+                            src={getAssetThumbnail(selectedAsset)!}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded bg-amber-500/20 flex items-center justify-center">
+                          <Box className="w-3 h-3 text-amber-500" />
+                        </div>
+                      )}
+                      <span className="truncate">{selectedAsset.name}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">Select prop...</span>
+                  )}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[260px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search props..." />
+                  <CommandList>
+                    <CommandEmpty>No props found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        onSelect={handleCreateNew}
+                        className="text-amber-600 dark:text-amber-400"
+                        data-testid="option-create-prop"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create New Prop
+                      </CommandItem>
+                    </CommandGroup>
+                    <CommandSeparator />
+                    <CommandGroup heading="Props">
+                      {propAssets.map((asset) => (
+                        <CommandItem
+                          key={asset.id}
+                          value={asset.name}
+                          onSelect={() => handleSelectAsset(asset)}
+                          data-testid={`option-prop-${asset.id}`}
+                        >
+                          <div className="flex items-center gap-2 flex-1">
+                            {getAssetThumbnail(asset) ? (
+                              <div className="w-6 h-6 rounded overflow-hidden bg-muted">
+                                <img
+                                  src={getAssetThumbnail(asset)!}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded bg-amber-500/20 flex items-center justify-center">
+                                <Box className="w-3 h-3 text-amber-500" />
+                              </div>
+                            )}
+                            <span className="truncate">{asset.name}</span>
+                          </div>
+                          <Check
+                            className={cn(
+                              "ml-auto h-4 w-4",
+                              nodeData.assetId === asset.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {selectedAsset && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Visual Description</Label>
+              <div className="text-xs text-foreground bg-muted/50 rounded-md p-2 max-h-[60px] overflow-y-auto">
+                {nodeData.visualPrompt || <span className="text-muted-foreground italic">No description</span>}
+              </div>
+            </div>
+          )}
+        </CardContent>
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="w-3 h-3 !bg-amber-500"
+        />
+      </Card>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Create New Prop</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input
+                value={newAssetName}
+                onChange={(e) => setNewAssetName(e.target.value)}
+                placeholder="Prop name..."
+                data-testid="input-new-prop-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Visual Description</Label>
+              <Textarea
+                value={newAssetPrompt}
+                onChange={(e) => setNewAssetPrompt(e.target.value)}
+                placeholder="Describe the prop..."
+                className="min-h-[100px]"
+                data-testid="input-new-prop-prompt"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateSubmit}
+              disabled={!newAssetName.trim() || createAssetMutation.isPending}
+              data-testid="button-create-prop-submit"
+            >
+              {createAssetMutation.isPending ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
