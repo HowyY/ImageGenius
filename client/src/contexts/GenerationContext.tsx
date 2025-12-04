@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { GenerateRequest, GenerateResponse } from "@shared/schema";
 
 export type GenerationStatus = "pending" | "generating" | "completed" | "failed";
@@ -82,6 +82,14 @@ export function GenerationProvider({ children }: GenerationProviderProps) {
         imageUrl: result.imageUrl,
         completedAt: Date.now(),
       });
+
+      // Invalidate history cache to show new generation immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/history"] });
+      
+      // Also invalidate scene-specific history if this was a scene generation
+      if (request.sceneId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/history/scene", request.sceneId] });
+      }
 
       return result;
     } catch (error) {
