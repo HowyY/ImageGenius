@@ -8,21 +8,26 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
-import { Image, ChevronDown, Plus, Check } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Image, ChevronDown, Plus, Check, Sparkles, Loader2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import type { SelectAsset } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import type { SelectAsset, SelectStyle } from "@shared/schema";
 
 interface BackgroundNodeData {
   assetId?: string;
   name?: string;
   visualPrompt?: string;
-  onChange?: (data: { assetId?: string; name?: string; visualPrompt?: string }) => void;
+  styleId?: string;
+  generatedImage?: string;
+  onChange?: (data: { assetId?: string; name?: string; visualPrompt?: string; styleId?: string; generatedImage?: string }) => void;
 }
 
 function BackgroundNodeComponent({ data, id }: NodeProps) {
   const nodeData = data as unknown as BackgroundNodeData;
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newAssetName, setNewAssetName] = useState("");
@@ -32,6 +37,11 @@ function BackgroundNodeComponent({ data, id }: NodeProps) {
     queryKey: ["/api/assets"],
   });
 
+  const { data: styles = [] } = useQuery<SelectStyle[]>({
+    queryKey: ["/api/styles"],
+  });
+
+  const visibleStyles = styles.filter((s) => !s.isHidden);
   const backgroundAssets = assets.filter((a) => a.type === "background");
 
   const createAssetMutation = useMutation({
@@ -60,12 +70,64 @@ function BackgroundNodeComponent({ data, id }: NodeProps) {
     },
   });
 
+  const generateMutation = useMutation({
+    mutationFn: async ({ prompt, styleId }: { prompt: string; styleId: string }) => {
+      const style = styles.find((s) => s.id === styleId);
+      const engine = style?.engines?.[0] || "nano-banana";
+      
+      const response = await apiRequest("POST", "/api/generate", {
+        prompt,
+        styleId,
+        engine,
+        userReferenceImages: [],
+      });
+      return response.json();
+    },
+    onSuccess: async (result) => {
+      if (result.imageUrl && nodeData.assetId) {
+        const asset = backgroundAssets.find((a) => a.id === nodeData.assetId);
+        if (asset) {
+          const existingRefs = asset.referenceImages || [];
+          const newRef = {
+            url: result.imageUrl,
+            styleId: nodeData.styleId,
+          };
+          
+          await apiRequest("PATCH", `/api/assets/${nodeData.assetId}`, {
+            referenceImages: [...existingRefs, newRef],
+          });
+          
+          await queryClient.invalidateQueries({ queryKey: ["/api/assets"] });
+          
+          nodeData.onChange?.({
+            ...nodeData,
+            generatedImage: result.imageUrl,
+          });
+          
+          toast({
+            title: "Background Generated",
+            description: "Background image has been saved to asset references.",
+          });
+        }
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "Failed to generate image",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSelectAsset = useCallback(
     (asset: SelectAsset) => {
+      const thumbnail = getAssetThumbnail(asset);
       nodeData.onChange?.({
         assetId: asset.id,
         name: asset.name,
         visualPrompt: asset.visualPrompt || "",
+        generatedImage: thumbnail || undefined,
       });
       setOpen(false);
     },
@@ -85,6 +147,50 @@ function BackgroundNodeComponent({ data, id }: NodeProps) {
     });
   }, [newAssetName, newAssetPrompt, createAssetMutation]);
 
+  const handleStyleChange = useCallback(
+    (styleId: string) => {
+      nodeData.onChange?.({
+        ...nodeData,
+        styleId,
+      });
+    },
+    [nodeData]
+  );
+
+  const handleGenerate = useCallback(() => {
+    if (!nodeData.assetId) {
+      toast({
+        title: "Cannot Generate",
+        description: "Please select a background first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!nodeData.visualPrompt) {
+      toast({
+        title: "Cannot Generate",
+        description: "Background has no visual description.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!nodeData.styleId) {
+      toast({
+        title: "Cannot Generate",
+        description: "Please select a style first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    generateMutation.mutate({
+      prompt: `Background scene: ${nodeData.visualPrompt}`,
+      styleId: nodeData.styleId,
+    });
+  }, [nodeData, generateMutation, toast]);
+
   const getAssetThumbnail = useCallback((asset: SelectAsset) => {
     const refs = asset.referenceImages || [];
     if (refs.length > 0 && refs[0].url) {
@@ -94,6 +200,7 @@ function BackgroundNodeComponent({ data, id }: NodeProps) {
   }, []);
 
   const selectedAsset = backgroundAssets.find((a) => a.id === nodeData.assetId);
+  const displayImage = nodeData.generatedImage || (selectedAsset ? getAssetThumbnail(selectedAsset) : null);
 
   return (
     <>
@@ -197,12 +304,63 @@ function BackgroundNodeComponent({ data, id }: NodeProps) {
           </div>
 
           {selectedAsset && (
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Visual Description</Label>
-              <div className="text-xs text-foreground bg-muted/50 rounded-md p-2 max-h-[60px] overflow-y-auto">
-                {nodeData.visualPrompt || <span className="text-muted-foreground italic">No description</span>}
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Style</Label>
+                <Select value={nodeData.styleId || ""} onValueChange={handleStyleChange}>
+                  <SelectTrigger className="h-9 text-sm" data-testid="select-background-style">
+                    <SelectValue placeholder="Select style..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleStyles.map((style) => (
+                      <SelectItem key={style.id} value={style.id}>
+                        {style.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Visual Description</Label>
+                <div className="text-xs text-foreground bg-muted/50 rounded-md p-2 max-h-[60px] overflow-y-auto">
+                  {nodeData.visualPrompt || <span className="text-muted-foreground italic">No description</span>}
+                </div>
+              </div>
+
+              {displayImage && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Preview</Label>
+                  <div className="rounded-md overflow-hidden border bg-muted aspect-video">
+                    <img
+                      src={displayImage}
+                      alt={nodeData.name || "Background"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={handleGenerate}
+                disabled={!nodeData.assetId || !nodeData.visualPrompt || !nodeData.styleId || generateMutation.isPending}
+                data-testid="button-generate-background"
+              >
+                {generateMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate
+                  </>
+                )}
+              </Button>
+            </>
           )}
         </CardContent>
         <Handle

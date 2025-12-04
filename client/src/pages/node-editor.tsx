@@ -697,11 +697,11 @@ function NodeEditorContent() {
 function getDefaultDataForType(type: string): NodeData {
   switch (type) {
     case "character":
-      return { characterId: "", name: "", visualPrompt: "" };
+      return { characterId: "", name: "", visualPrompt: "", styleId: "", generatedImage: "" };
     case "background":
-      return { assetId: "", name: "", visualPrompt: "" };
+      return { assetId: "", name: "", visualPrompt: "", styleId: "", generatedImage: "" };
     case "prop":
-      return { assetId: "", name: "", visualPrompt: "" };
+      return { assetId: "", name: "", visualPrompt: "", styleId: "", generatedImage: "" };
     case "style":
       return { styleId: "" };
     case "angle":

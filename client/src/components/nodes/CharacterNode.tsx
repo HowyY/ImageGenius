@@ -8,22 +8,27 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, ChevronDown, Plus, Check } from "lucide-react";
+import { User, ChevronDown, Plus, Check, Sparkles, Loader2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import type { SelectCharacter, CharacterCard } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import type { SelectCharacter, CharacterCard, SelectStyle } from "@shared/schema";
 
 interface CharacterNodeData {
   characterId?: string;
   name: string;
   visualPrompt: string;
-  onChange?: (data: { characterId?: string; name?: string; visualPrompt?: string }) => void;
+  styleId?: string;
+  generatedImage?: string;
+  onChange?: (data: { characterId?: string; name?: string; visualPrompt?: string; styleId?: string; generatedImage?: string }) => void;
 }
 
 function CharacterNodeComponent({ data, id }: NodeProps) {
   const nodeData = data as unknown as CharacterNodeData;
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newCharacterName, setNewCharacterName] = useState("");
@@ -32,6 +37,12 @@ function CharacterNodeComponent({ data, id }: NodeProps) {
   const { data: characters = [] } = useQuery<SelectCharacter[]>({
     queryKey: ["/api/characters"],
   });
+
+  const { data: styles = [] } = useQuery<SelectStyle[]>({
+    queryKey: ["/api/styles"],
+  });
+
+  const visibleStyles = styles.filter((s) => !s.isHidden);
 
   const createCharacterMutation = useMutation({
     mutationFn: async (data: { name: string; visualPrompt: string }) => {
@@ -58,12 +69,68 @@ function CharacterNodeComponent({ data, id }: NodeProps) {
     },
   });
 
+  const generateMutation = useMutation({
+    mutationFn: async ({ prompt, styleId }: { prompt: string; styleId: string }) => {
+      const style = styles.find((s) => s.id === styleId);
+      const engine = style?.engines?.[0] || "nano-banana";
+      
+      const response = await apiRequest("POST", "/api/generate", {
+        prompt,
+        styleId,
+        engine,
+        userReferenceImages: [],
+      });
+      return response.json();
+    },
+    onSuccess: async (result) => {
+      if (result.imageUrl && nodeData.characterId) {
+        const character = characters.find((c) => c.id === nodeData.characterId);
+        if (character) {
+          const existingCards = (character.characterCards as CharacterCard[] | null) || [];
+          const newCard: CharacterCard = {
+            id: `card_${Date.now()}`,
+            styleId: nodeData.styleId || "",
+            imageUrl: result.imageUrl,
+            prompt: nodeData.visualPrompt,
+            createdAt: new Date().toISOString(),
+          };
+          
+          await apiRequest("PATCH", `/api/characters/${nodeData.characterId}`, {
+            characterCards: [...existingCards, newCard],
+            selectedCardId: newCard.id,
+          });
+          
+          await queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+          
+          nodeData.onChange?.({
+            ...nodeData,
+            generatedImage: result.imageUrl,
+          });
+          
+          toast({
+            title: "Character Generated",
+            description: "Character image has been saved to character cards.",
+          });
+        }
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "Failed to generate image",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSelectCharacter = useCallback(
     (character: SelectCharacter) => {
+      const avatar = getCharacterAvatar(character);
       nodeData.onChange?.({
         characterId: character.id,
         name: character.name,
         visualPrompt: character.visualPrompt || "",
+        generatedImage: avatar || undefined,
       });
       setOpen(false);
     },
@@ -83,6 +150,50 @@ function CharacterNodeComponent({ data, id }: NodeProps) {
     });
   }, [newCharacterName, newCharacterPrompt, createCharacterMutation]);
 
+  const handleStyleChange = useCallback(
+    (styleId: string) => {
+      nodeData.onChange?.({
+        ...nodeData,
+        styleId,
+      });
+    },
+    [nodeData]
+  );
+
+  const handleGenerate = useCallback(() => {
+    if (!nodeData.characterId) {
+      toast({
+        title: "Cannot Generate",
+        description: "Please select a character first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!nodeData.visualPrompt) {
+      toast({
+        title: "Cannot Generate",
+        description: "Character has no visual description.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!nodeData.styleId) {
+      toast({
+        title: "Cannot Generate",
+        description: "Please select a style first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    generateMutation.mutate({
+      prompt: `Character portrait: ${nodeData.visualPrompt}`,
+      styleId: nodeData.styleId,
+    });
+  }, [nodeData, generateMutation, toast]);
+
   const getCharacterAvatar = useCallback((character: SelectCharacter) => {
     const cards = (character.characterCards as CharacterCard[] | null) || [];
     if (character.selectedCardId) {
@@ -94,6 +205,7 @@ function CharacterNodeComponent({ data, id }: NodeProps) {
   }, []);
 
   const selectedCharacter = characters.find((c) => c.id === nodeData.characterId);
+  const displayImage = nodeData.generatedImage || (selectedCharacter ? getCharacterAvatar(selectedCharacter) : null);
 
   return (
     <>
@@ -183,12 +295,63 @@ function CharacterNodeComponent({ data, id }: NodeProps) {
           </div>
 
           {selectedCharacter && (
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Visual Description</Label>
-              <div className="text-xs text-foreground bg-muted/50 rounded-md p-2 max-h-[60px] overflow-y-auto">
-                {nodeData.visualPrompt || <span className="text-muted-foreground italic">No description</span>}
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Style</Label>
+                <Select value={nodeData.styleId || ""} onValueChange={handleStyleChange}>
+                  <SelectTrigger className="h-9 text-sm" data-testid="select-character-style">
+                    <SelectValue placeholder="Select style..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleStyles.map((style) => (
+                      <SelectItem key={style.id} value={style.id}>
+                        {style.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Visual Description</Label>
+                <div className="text-xs text-foreground bg-muted/50 rounded-md p-2 max-h-[60px] overflow-y-auto">
+                  {nodeData.visualPrompt || <span className="text-muted-foreground italic">No description</span>}
+                </div>
+              </div>
+
+              {displayImage && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Preview</Label>
+                  <div className="rounded-md overflow-hidden border bg-muted aspect-square">
+                    <img
+                      src={displayImage}
+                      alt={nodeData.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={handleGenerate}
+                disabled={!nodeData.characterId || !nodeData.visualPrompt || !nodeData.styleId || generateMutation.isPending}
+                data-testid="button-generate-character"
+              >
+                {generateMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate
+                  </>
+                )}
+              </Button>
+            </>
           )}
         </CardContent>
         <Handle
