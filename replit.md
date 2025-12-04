@@ -92,7 +92,7 @@ Palette fallback hierarchy: User override → Template default → Style default
 
 ### Data Storage Solutions
 
--   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs), prompt templates, storyboards, storyboard versions, and storyboard scenes. All data is defined by Drizzle ORM schemas.
+-   **Active Database**: PostgreSQL (Neon) stores generation history (images, prompts, reference URLs), prompt templates, storyboards, storyboard versions, storyboard scenes, assets (backgrounds/props), and node workflows. All data is defined by Drizzle ORM schemas.
 -   **Multiple Storyboards**: Users can create, switch between, rename, and delete different storyboard projects. Each storyboard is isolated with its own scenes. The currently selected storyboard ID is persisted in localStorage for cross-session continuity.
 -   **Version Control**: Each storyboard supports named versions (snapshots) that can be saved and restored. Versions capture the complete scene state including descriptions, generated images, style settings, and engine choices.
 -   **Storyboard Scenes**: Script-driven scene cards in a 3-column grid layout. Each scene has:
@@ -104,6 +104,42 @@ Palette fallback hierarchy: User override → Template default → Style default
 -   **Client-Side Persistence**: localStorage is used for user preferences like style lock status, selected reference images, and current storyboard ID. Template data and last generated image are fetched from PostgreSQL for cross-domain consistency.
 -   **Reference Image Storage**: The KIE File Upload API stores reference images, uploading them on-demand with temporary URLs and promise-based caching to prevent duplicate uploads.
 -   **Migration Logic**: On server startup, orphan scenes (without a storyboard) are automatically migrated to a "Default Storyboard" for backward compatibility.
+
+### Asset System
+
+The application supports reusable visual assets (backgrounds and props) that can be composed together in the Node Editor:
+
+-   **Database**: `assets` table with fields:
+    - `id`: Text primary key with prefix (bg_xxx or prop_xxx)
+    - `type`: "background" or "prop"
+    - `name`: Asset display name
+    - `visualPrompt`: Description for AI generation
+    - `referenceImages`: Array of `{ url, styleId? }` objects
+    - `tags`: Array of searchable tags
+-   **Asset Editor** (`/assets`): Dedicated page for managing backgrounds and props
+    - Two tabs for filtering by asset type
+    - CRUD operations with create dialog and inline edit form
+    - Reference image management with preview grid
+    - Tag system for organization and search
+-   **API**: `/api/assets` endpoints for CRUD operations
+
+### Node-Based Composition Workflow
+
+Experimental node-based editor for composing visual elements:
+
+-   **Database**: `nodeWorkflows` table stores workflow state as JSONB (nodes, edges)
+-   **Node Editor** (`/node-editor`): React Flow-based visual editor
+    - 7 node types: Character, Background, Prop, Style, Angle, Pose, Output
+    - Save/Load/Delete workflow functionality with named workflows
+    - Real-time node data updates via onChange callbacks
+-   **Node Components**: Each node type has specialized inputs:
+    - CharacterNode: Name and visual prompt fields
+    - BackgroundNode: Asset selector and custom prompt
+    - PropNode: Asset selector and custom prompt
+    - StyleNode: Style preset dropdown
+    - AngleNode/PoseNode: Preset selectors for camera angle and character pose
+    - OutputNode: Aggregates connected nodes and displays preview
+-   **Use Case**: Designers can create reusable element combinations and experiment with different compositions before generating final images
 
 ### Type Safety and Code Sharing
 
