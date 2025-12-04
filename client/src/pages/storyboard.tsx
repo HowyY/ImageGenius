@@ -658,7 +658,7 @@ export default function Storyboard() {
       const generateData = await startGeneration({
         prompt: finalPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
         sceneId: scene.id,
         sceneName: `Scene ${scene.orderIndex + 1}`,
         userReferenceImages: characterRefs.length > 0 ? characterRefs.map(r => r.imageUrl) : undefined,
@@ -734,7 +734,7 @@ export default function Storyboard() {
       const generateData = await startGeneration({
         prompt: editPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
         userReferenceImages: [imageUrl],
         sceneId: sceneIdToEdit,
         sceneName: `Scene Edit`,

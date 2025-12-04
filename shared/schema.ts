@@ -393,8 +393,8 @@ export const anyTemplateSchema = z.union([simpleTemplateSchema, promptTemplateSc
 export const generateRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
   styleId: z.string().min(1, "Style is required"),
-  engine: z.enum(["nanobanana", "seedream", "nanopro", "nanobanana-t2i"], {
-    errorMap: () => ({ message: "Engine must be 'nanobanana', 'seedream', 'nanopro', or 'nanobanana-t2i'" }),
+  engine: z.enum(["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"], {
+    errorMap: () => ({ message: "Engine must be 'nanobanana', 'seedream', 'nanopro', 'nanobanana-t2i', or 'nanopro-t2i'" }),
   }),
   userReferenceImages: z.array(z.string().url()).max(3).optional(),
   customTemplate: anyTemplateSchema.optional(),

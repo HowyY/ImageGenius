@@ -34,7 +34,7 @@ const STYLE_PRESETS: Array<
     label: "Cyan Sketchline Vector",
     description:
       "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "clean sketch-style vector line art, white negative space, minimalist details, modern financial illustration tone",
     defaultColors: {
@@ -52,7 +52,7 @@ const STYLE_PRESETS: Array<
     id: "warm_orange_flat",
     label: "Warm Orange Flat Illustration",
     description: "Warm orange/red flat illustration with strong contrast and almost white background",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
     referenceImageUrl: STYLE_REFERENCE_IMAGES.warm_orange_flat,
@@ -61,7 +61,7 @@ const STYLE_PRESETS: Array<
     id: "simple_cyan_test",
     label: "Simple Cyan (Test)",
     description: "Test style using simple concatenation template - same cyan vector look with minimal prompt structure",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "clean sketch-style vector line art, hand-drawn navy outlines on bright white space, subtle cyan-to-blue gradients, financial illustration vibe, minimalist details, flat color, high quality",
     defaultColors: {
@@ -79,7 +79,7 @@ const STYLE_PRESETS: Array<
     id: "cyan_sketchline_vector_v2",
     label: "Sketchline Vector V2 (Universal)",
     description: "Deep-blue outlines with cyan accents, flat 2D illustration, simple dot eyes, clean vector style",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "clean deep-blue line art, flat 2D illustration, soft cyan-to-blue gradient fills, simple facial features, no textures, no shadows",
     defaultColors: {
@@ -757,6 +757,49 @@ async function pollNanoProResult(taskId: string) {
   throw new Error("NanoPro task timed out");
 }
 
+// Nano Pro Text-to-Image (no reference images needed) - Higher quality 2K/4K resolution
+async function callNanoProT2I(prompt: string, aspectRatio: string = "16:9", resolution: string = "2K") {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
+  }
+
+  console.log(`[NanoPro T2I] Creating text-to-image task...`);
+  console.log(`[NanoPro T2I] Prompt: ${prompt.substring(0, 100)}...`);
+  console.log(`[NanoPro T2I] Aspect Ratio: ${aspectRatio}, Resolution: ${resolution}`);
+
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "nano-banana-pro",
+      input: {
+        prompt,
+        image_input: [],
+        aspect_ratio: aspectRatio,
+        resolution: resolution,
+        output_format: "png",
+      },
+    }),
+  });
+
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`NanoPro T2I failed to create task: ${createResponse.status} ${createJson.msg ?? ""}`);
+  }
+
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("NanoPro T2I response missing taskId");
+  }
+
+  console.log(`[NanoPro T2I] Task created: ${taskId}`);
+  return await pollNanoProResult(taskId);
+}
+
 // DEPRECATED: This function is no longer used for image generation
 // Reference images are now exclusively managed through the Style Editor UI
 // and stored in templateData.referenceImages (database)
@@ -1329,6 +1372,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (engine === "nanobanana-t2i") {
         // Text-to-Image engine - no reference images needed
         imageUrl = await callNanoBananaT2I(finalPrompt, "16:9");
+      } else if (engine === "nanopro-t2i") {
+        // Nano Pro Text-to-Image engine - high quality 2K resolution, no reference images needed
+        imageUrl = await callNanoProT2I(finalPrompt, "16:9", "2K");
       } else {
         imageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
       }
