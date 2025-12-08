@@ -95,11 +95,27 @@ export default function Storyboard() {
   const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
   
 
-  const { data: storyboards, isLoading: storyboardsLoading } = useQuery<SelectStoryboard[]>({
+  const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
     queryKey: ["/api/storyboards"],
   });
 
-  const { data: scenes, isLoading: scenesLoading, refetch } = useQuery<SelectStoryboardScene[]>({
+  useEffect(() => {
+    if (storyboardsError) {
+      toast({
+        title: "Error loading storyboards",
+        description: storyboardsErrorDetails?.message || "Failed to load storyboards. Please try refreshing the page.",
+        variant: "destructive",
+      });
+    }
+  }, [storyboardsError, storyboardsErrorDetails, toast]);
+
+  const handleRetryStoryboards = () => {
+    clearCurrentStoryboardId();
+    setCurrentStoryboardIdState(null);
+    refetchStoryboards();
+  };
+
+  const { data: scenes, isLoading: scenesLoading, isError: scenesError, error: scenesErrorDetails, refetch } = useQuery<SelectStoryboardScene[]>({
     queryKey: ["/api/scenes", currentStoryboardId],
     queryFn: async () => {
       if (!currentStoryboardId) return [];
@@ -110,6 +126,16 @@ export default function Storyboard() {
     enabled: !!currentStoryboardId,
     refetchInterval: 30000,
   });
+
+  useEffect(() => {
+    if (scenesError && scenesErrorDetails) {
+      toast({
+        title: "Error loading scenes",
+        description: scenesErrorDetails.message || "Failed to load scenes. Please try refreshing.",
+        variant: "destructive",
+      });
+    }
+  }, [scenesError, scenesErrorDetails, toast]);
 
   const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
     queryKey: ["/api/styles"],
@@ -122,7 +148,7 @@ export default function Storyboard() {
     enabled: historySceneId !== null,
   });
 
-  const { data: versions, isLoading: versionsLoading, refetch: refetchVersions } = useQuery<SelectStoryboardVersion[]>({
+  const { data: versions, isLoading: versionsLoading, isError: versionsError, refetch: refetchVersions } = useQuery<SelectStoryboardVersion[]>({
     queryKey: ["/api/storyboards", currentStoryboardId, "versions"],
     queryFn: async () => {
       if (!currentStoryboardId) return [];
@@ -132,6 +158,8 @@ export default function Storyboard() {
     },
     enabled: !!currentStoryboardId && versionsDialogOpen,
   });
+
+  const { isLoading: charactersLoading } = useCharacters();
 
   useEffect(() => {
     if (storyboards && storyboards.length > 0) {
@@ -1011,7 +1039,26 @@ export default function Storyboard() {
           </Card>
         )}
 
-        {!currentStoryboardId && !storyboardsLoading ? (
+        {storyboardsError ? (
+          <Card className="p-12">
+            <div className="text-center">
+              <RefreshCw className="mx-auto h-12 w-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2" data-testid="text-storyboards-error-title">
+                Failed to load storyboards
+              </h3>
+              <p className="text-muted-foreground mb-4" data-testid="text-storyboards-error-description">
+                There was an error loading storyboards. Please try again.
+              </p>
+              <Button 
+                onClick={handleRetryStoryboards}
+                data-testid="button-retry-storyboards"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry
+              </Button>
+            </div>
+          </Card>
+        ) : !currentStoryboardId && !storyboardsLoading ? (
           <Card className="p-12">
             <div className="text-center">
               <FolderPlus className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -1027,6 +1074,25 @@ export default function Storyboard() {
               >
                 <FolderPlus className="w-4 h-4 mr-2" />
                 Create Storyboard
+              </Button>
+            </div>
+          </Card>
+        ) : scenesError && currentStoryboardId ? (
+          <Card className="p-12">
+            <div className="text-center">
+              <RefreshCw className="mx-auto h-12 w-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2" data-testid="text-error-title">
+                Failed to load scenes
+              </h3>
+              <p className="text-muted-foreground mb-4" data-testid="text-error-description">
+                There was an error loading scenes. Please try again.
+              </p>
+              <Button 
+                onClick={() => refetch()}
+                data-testid="button-retry-scenes"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry
               </Button>
             </div>
           </Card>
@@ -1203,7 +1269,13 @@ export default function Storyboard() {
                     <PopoverContent className="w-64 p-3" align="start">
                       <div className="space-y-3">
                         <div className="font-medium text-sm">Select Characters</div>
-                        {!characters || characters.length === 0 ? (
+                        {charactersLoading ? (
+                          <div className="space-y-2">
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                          </div>
+                        ) : !characters || characters.length === 0 ? (
                           <p className="text-xs text-muted-foreground">No characters available. Create characters in the Character Editor.</p>
                         ) : (
                           <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -1546,6 +1618,18 @@ export default function Storyboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : versionsError ? (
+              <div className="text-center py-8">
+                <RefreshCw className="mx-auto h-12 w-12 text-destructive mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Failed to load versions</h3>
+                <p className="text-muted-foreground mb-4">
+                  There was an error loading versions. Please try again.
+                </p>
+                <Button onClick={() => refetchVersions()} data-testid="button-retry-versions">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
               </div>
             ) : !versions || versions.length === 0 ? (
               <div className="text-center py-8">

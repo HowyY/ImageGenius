@@ -148,7 +148,7 @@ export default function CharacterEditor() {
     { value: "tired", label: "Tired" },
   ];
 
-  const { data: characters = [], isLoading } = useCharacters();
+  const { data: characters = [], isLoading, isError: charactersError, refetch: refetchCharacters } = useCharacters();
 
   const { data: styles = [] } = useQuery<Style[]>({
     queryKey: ["/api/styles"],
@@ -628,6 +628,20 @@ export default function CharacterEditor() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : charactersError ? (
+          <div className="text-center py-8" data-testid="text-error-state">
+            <RefreshCw className="mx-auto h-8 w-8 text-destructive mb-3" />
+            <p className="text-sm text-muted-foreground mb-3">Failed to load characters</p>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => refetchCharacters()}
+              data-testid="button-retry-characters"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
           </div>
         ) : filteredCharacters.length === 0 ? (
           <div 
