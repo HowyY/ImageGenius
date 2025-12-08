@@ -43,6 +43,18 @@ An experimental node-based editor, built with React Flow, enables visual composi
 
 Shared Zod schemas and TypeScript types in the `shared/` directory ensure type safety and consistency between frontend and backend API contracts and database structures, using path aliases for clean imports.
 
+### Error Handling and Recovery
+
+The application implements comprehensive error handling for all data queries:
+- Storyboard page: Queries for storyboards, scenes, and versions include error states with toast notifications and retry functionality
+- Character Editor: Query error states with loading guards prevent broken UI when data is still loading
+- Retry mechanisms clear stale localStorage IDs (e.g., currentStoryboardId) before refetching to ensure proper recovery from failures
+- Error messages display actual API error details for better user guidance
+
+### Reusable Components
+
+- **GenerationSettings** (`client/src/components/GenerationSettings.tsx`): Encapsulated style and engine selector card with proper TypeScript typing (EngineType, StylePreset)
+
 ## External Dependencies
 
 ### Third-Party UI Libraries
