@@ -30,6 +30,7 @@ import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, Selec
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CroppedAvatar } from "@/components/AvatarCropDialog";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { GenerationSettings, EngineType } from "@/components/GenerationSettings";
 import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -72,7 +73,7 @@ export default function Storyboard() {
   const { startGeneration, isGenerating } = useGeneration();
   const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
   const [selectedStyle, setSelectedStyle] = useState<string>(getSelectedStyleId() || "");
-  const [selectedEngine, setSelectedEngineState] = useState<string>(getEngine() || "nanobanana");
+  const [selectedEngine, setSelectedEngineState] = useState<EngineType>((getEngine() || "nanobanana") as EngineType);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historySceneId, setHistorySceneId] = useState<number | null>(null);
   const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
@@ -198,7 +199,7 @@ export default function Storyboard() {
     setSelectedStyleId(value);
   };
 
-  const handleEngineChange = (value: string) => {
+  const handleEngineChange = (value: EngineType) => {
     setSelectedEngineState(value);
     setEngine(value);
   };
@@ -975,68 +976,15 @@ export default function Storyboard() {
         </div>
 
         {currentStoryboardId && (
-          <Card className="p-4 mb-6">
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="style-select" className="mb-2 block text-sm font-medium">
-                  Style Preset
-                </Label>
-                <Select
-                  value={selectedStyle}
-                  onValueChange={handleStyleChange}
-                  disabled={stylesLoading}
-                >
-                  <SelectTrigger id="style-select" data-testid="select-storyboard-style">
-                    <SelectValue placeholder={stylesLoading ? "Loading styles..." : "Select a style"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stylesLoading ? (
-                      <div className="p-2">
-                        <Skeleton className="h-8 w-full" />
-                      </div>
-                    ) : (
-                      styles?.map((style) => (
-                        <SelectItem key={style.id} value={style.id} data-testid={`option-storyboard-style-${style.id}`}>
-                          {style.label}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="engine-select" className="mb-2 block text-sm font-medium">
-                  Engine
-                </Label>
-                <Select
-                  value={selectedEngine}
-                  onValueChange={handleEngineChange}
-                >
-                  <SelectTrigger id="engine-select" data-testid="select-storyboard-engine">
-                    <SelectValue placeholder="Select engine" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nanobanana" data-testid="option-engine-nanobanana">
-                      NanoBanana Edit
-                    </SelectItem>
-                    <SelectItem value="seedream" data-testid="option-engine-seedream">
-                      SeeDream V4
-                    </SelectItem>
-                    <SelectItem value="nanopro" data-testid="option-engine-nanopro">
-                      Nano Pro (2K/4K)
-                    </SelectItem>
-                    <SelectItem value="nanobanana-t2i" data-testid="option-engine-nanobanana-t2i">
-                      NanoBanana T2I (No Ref)
-                    </SelectItem>
-                    <SelectItem value="nanopro-t2i" data-testid="option-engine-nanopro-t2i">
-                      Nano Pro T2I (2K, No Ref)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </Card>
+          <GenerationSettings
+            selectedStyle={selectedStyle}
+            onStyleChange={handleStyleChange}
+            selectedEngine={selectedEngine}
+            onEngineChange={handleEngineChange}
+            styles={styles}
+            stylesLoading={stylesLoading}
+            className="mb-6"
+          />
         )}
 
         {storyboardsError ? (
