@@ -42,13 +42,45 @@ export const promptTemplates = pgTable("prompt_templates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Projects table - top-level container (Orama hierarchy)
+// Defined early so storyboards can reference it via FK
+// Maps to Orama's projects table
+export const projects = pgTable("projects", {
+  id: text("id").primaryKey(), // uuid format
+  title: text("title").notNull(),
+  objective: text("objective").notNull().default(""),
+  styleId: text("style_id"), // FK to styles table (replaces Orama's style text field)
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Media table - unified storage for all generated/uploaded media (Orama hierarchy)
+// Defined early so storyboard_scenes can reference it via FK
+// Maps to Orama's media table
+export const media = pgTable("media", {
+  id: text("id").primaryKey(), // uuid format, e.g., "media_xxx"
+  type: text("type").notNull(), // "image" | "audio" | "video"
+  url: text("url").notNull(),
+  status: text("status").notNull().default("ok"), // "uploading" | "generating" | "ok" | "failed"
+  sourceType: text("source_type"), // "generation" | "upload" | "external"
+  generationHistoryId: integer("generation_history_id"), // link to generation_history for provenance
+  metadata: jsonb("metadata"), // flexible storage for dimensions, duration, etc.
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Storyboards table - container for scenes
+// Note: In Orama, this maps to "videos" table with project_id FK
 export const storyboards = pgTable("storyboards", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   styleId: text("style_id"),
   engine: text("engine"),
+  // Orama bridge fields (Phase 2) with FK to projects
+  projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }), // FK to projects for Orama migration (nullable for backward compatibility)
+  objective: text("objective").default(""), // Orama: key_messages equivalent
+  currentStage: text("current_stage").default("storyboard"), // Orama workflow stage
+  stageStatus: text("stage_status").default("in_progress"), // Orama stage status
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -67,6 +99,7 @@ export const storyboardVersions = pgTable("storyboard_versions", {
 });
 
 // Storyboard scenes table for script-driven image generation
+// Note: In Orama, this maps to "scenes" table with version_id FK
 export const storyboardScenes = pgTable("storyboard_scenes", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   storyboardId: integer("storyboard_id"), // null for legacy scenes, will be migrated
@@ -77,6 +110,14 @@ export const storyboardScenes = pgTable("storyboard_scenes", {
   styleId: text("style_id"),
   engine: text("engine"),
   selectedCharacterIds: text("selected_character_ids").array().default([]), // character IDs for this scene
+  // Orama bridge fields (Phase 2) - media references with FK constraints
+  // FK to media table with SET NULL on delete for gradual migration flexibility
+  selectedImageId: text("selected_image_id").references(() => media.id, { onDelete: "set null" }),
+  selectedVoiceId: text("selected_voice_id").references(() => media.id, { onDelete: "set null" }),
+  selectedVideoId: text("selected_video_id").references(() => media.id, { onDelete: "set null" }),
+  selectedMusicId: text("selected_music_id").references(() => media.id, { onDelete: "set null" }),
+  taskId: text("task_id"), // Orama: async generation task tracking
+  imagePrompt: text("image_prompt"), // Orama: separate from visualDescription
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -192,12 +233,22 @@ export type InsertStyle = z.infer<typeof insertStyleSchema>;
 export type UpdateStyle = z.infer<typeof updateStyleSchema>;
 export type SelectStyle = typeof styles.$inferSelect;
 
+// Orama workflow enums (defined here for use in storyboard schemas)
+// These are duplicated in the Orama section below for export
+const workflowStageValues = ["outline", "script", "storyboard", "audio", "video"] as const;
+const stageStatusValues = ["in_progress", "in_review", "in_amends", "approved"] as const;
+
 // Insert schema for storyboards
 export const insertStoryboardSchema = z.object({
   name: z.string().min(1, "Storyboard name is required"),
   description: z.string().default(""),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
+  // Orama bridge fields (UUID validated for compatibility)
+  projectId: z.string().uuid().optional().nullable(),
+  objective: z.string().optional().default(""),
+  currentStage: z.enum(workflowStageValues).optional().default("storyboard"),
+  stageStatus: z.enum(stageStatusValues).optional().default("in_progress"),
 });
 
 export const updateStoryboardSchema = z.object({
@@ -205,6 +256,11 @@ export const updateStoryboardSchema = z.object({
   description: z.string().optional(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
+  // Orama bridge fields (UUID validated for compatibility)
+  projectId: z.string().uuid().optional().nullable(),
+  objective: z.string().optional(),
+  currentStage: z.enum(workflowStageValues).optional(),
+  stageStatus: z.enum(stageStatusValues).optional(),
 });
 
 export type InsertStoryboard = z.infer<typeof insertStoryboardSchema>;
@@ -230,6 +286,13 @@ export const insertStoryboardSceneSchema = z.object({
   generatedImageUrl: z.string().url().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
+  // Orama bridge fields (UUID validated for media references)
+  selectedImageId: z.string().uuid().optional().nullable(),
+  selectedVoiceId: z.string().uuid().optional().nullable(),
+  selectedVideoId: z.string().uuid().optional().nullable(),
+  selectedMusicId: z.string().uuid().optional().nullable(),
+  taskId: z.string().optional().nullable(), // taskId is not UUID - it's an external task reference
+  imagePrompt: z.string().optional().nullable(),
 });
 
 export const updateStoryboardSceneSchema = z.object({
@@ -241,6 +304,13 @@ export const updateStoryboardSceneSchema = z.object({
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
   selectedCharacterIds: z.array(z.string()).optional(),
+  // Orama bridge fields (UUID validated for media references)
+  selectedImageId: z.string().uuid().optional().nullable(),
+  selectedVoiceId: z.string().uuid().optional().nullable(),
+  selectedVideoId: z.string().uuid().optional().nullable(),
+  selectedMusicId: z.string().uuid().optional().nullable(),
+  taskId: z.string().optional().nullable(), // taskId is not UUID - it's an external task reference
+  imagePrompt: z.string().optional().nullable(),
 });
 
 export type InsertStoryboardScene = z.infer<typeof insertStoryboardSceneSchema>;
@@ -524,3 +594,121 @@ export const updateNodeWorkflowSchema = z.object({
 export type InsertNodeWorkflow = z.infer<typeof insertNodeWorkflowSchema>;
 export type UpdateNodeWorkflow = z.infer<typeof updateNodeWorkflowSchema>;
 export type SelectNodeWorkflow = typeof nodeWorkflows.$inferSelect;
+
+// ============================================
+// Orama-Aligned Schema (Phase 1: New Tables)
+// ============================================
+// These tables are added to support future migration to Orama's
+// project → video → version → scene hierarchy while maintaining
+// backward compatibility with the current storyboard structure.
+
+// UUID validation helper for Orama-compatible IDs
+const uuidSchema = z.string().uuid();
+
+// Enums for Orama workflow stages and status (using same values as defined earlier)
+export const workflowStageEnum = z.enum(workflowStageValues);
+export const stageStatusEnum = z.enum(stageStatusValues);
+export const mediaTypeEnum = z.enum(["image", "audio", "video"]);
+export const mediaStatusEnum = z.enum(["uploading", "generating", "ok", "failed"]);
+export const mediaRoleEnum = z.enum(["image", "voice", "video", "music", "character_reference", "style_reference"]);
+export const videoFormatEnum = z.enum(["16:9", "1:1", "9:16"]);
+
+export type WorkflowStage = z.infer<typeof workflowStageEnum>;
+export type StageStatus = z.infer<typeof stageStatusEnum>;
+export type MediaType = z.infer<typeof mediaTypeEnum>;
+export type MediaStatus = z.infer<typeof mediaStatusEnum>;
+export type MediaRole = z.infer<typeof mediaRoleEnum>;
+export type VideoFormat = z.infer<typeof videoFormatEnum>;
+
+// Note: projects and media tables are defined earlier in the file to enable FK references
+
+// Scene Media join table - links scenes to media with roles
+// Maps to Orama's scene_media table
+// Note: FK constraints added for referential integrity with storyboard_scenes and media tables
+export const sceneMedia = pgTable("scene_media", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  sceneId: integer("scene_id").notNull().references(() => storyboardScenes.id, { onDelete: "cascade" }),
+  mediaId: text("media_id").notNull().references(() => media.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // "image" | "voice" | "video" | "music" | "character_reference"
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Comments table - for scene-level feedback and collaboration
+// Maps to Orama's comments table
+// Note: FK constraints added for referential integrity
+export const comments = pgTable("comments", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  sceneId: integer("scene_id").notNull().references(() => storyboardScenes.id, { onDelete: "cascade" }),
+  stage: text("stage").notNull().default("storyboard"), // workflow stage
+  status: text("status"), // null | "to_do" | "done"
+  parentId: integer("parent_id"), // FK to comments for threading (self-reference)
+  authorName: text("author_name").notNull().default("Anonymous"), // simplified, no user table yet
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Insert schemas for new tables (with UUID validation for Orama compatibility)
+export const insertProjectSchema = z.object({
+  id: uuidSchema, // UUID format required for Orama compatibility
+  title: z.string().min(1, "Project title is required"),
+  objective: z.string().default(""),
+  styleId: z.string().optional().nullable(),
+});
+
+export const updateProjectSchema = z.object({
+  title: z.string().min(1).optional(),
+  objective: z.string().optional(),
+  styleId: z.string().optional().nullable(),
+});
+
+export const insertMediaSchema = z.object({
+  id: uuidSchema, // UUID format required for Orama compatibility
+  type: mediaTypeEnum,
+  url: z.string().url(),
+  status: mediaStatusEnum.optional().default("ok"),
+  sourceType: z.enum(["generation", "upload", "external"]).optional(),
+  generationHistoryId: z.number().int().optional().nullable(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const updateMediaSchema = z.object({
+  url: z.string().url().optional(),
+  status: mediaStatusEnum.optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const insertSceneMediaSchema = z.object({
+  sceneId: z.number().int(),
+  mediaId: uuidSchema, // UUID format for media reference
+  role: mediaRoleEnum,
+});
+
+export const insertCommentSchema = z.object({
+  sceneId: z.number().int(),
+  stage: workflowStageEnum.optional().default("storyboard"),
+  status: z.enum(["to_do", "done"]).optional().nullable(),
+  parentId: z.number().int().optional().nullable(),
+  authorName: z.string().default("Anonymous"),
+  content: z.string().min(1, "Comment content is required"),
+});
+
+export const updateCommentSchema = z.object({
+  status: z.enum(["to_do", "done"]).optional().nullable(),
+  content: z.string().min(1).optional(),
+});
+
+// Types for new tables
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+export type UpdateProject = z.infer<typeof updateProjectSchema>;
+export type SelectProject = typeof projects.$inferSelect;
+
+export type InsertMedia = z.infer<typeof insertMediaSchema>;
+export type UpdateMedia = z.infer<typeof updateMediaSchema>;
+export type SelectMedia = typeof media.$inferSelect;
+
+export type InsertSceneMedia = z.infer<typeof insertSceneMediaSchema>;
+export type SelectSceneMedia = typeof sceneMedia.$inferSelect;
+
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type UpdateComment = z.infer<typeof updateCommentSchema>;
+export type SelectComment = typeof comments.$inferSelect;

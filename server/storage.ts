@@ -432,6 +432,11 @@ export class MemStorage implements IStorage {
         description: data.description ?? "",
         styleId: data.styleId,
         engine: data.engine,
+        // Orama bridge fields
+        projectId: data.projectId,
+        objective: data.objective ?? "",
+        currentStage: data.currentStage ?? "storyboard",
+        stageStatus: data.stageStatus ?? "in_progress",
       })
       .returning();
     return result;
@@ -447,6 +452,11 @@ export class MemStorage implements IStorage {
     if (data.description !== undefined) updateData.description = data.description;
     if (data.styleId !== undefined) updateData.styleId = data.styleId;
     if (data.engine !== undefined) updateData.engine = data.engine;
+    // Orama bridge fields
+    if (data.projectId !== undefined) updateData.projectId = data.projectId;
+    if (data.objective !== undefined) updateData.objective = data.objective;
+    if (data.currentStage !== undefined) updateData.currentStage = data.currentStage;
+    if (data.stageStatus !== undefined) updateData.stageStatus = data.stageStatus;
 
     const [result] = await db
       .update(storyboards)
@@ -666,6 +676,13 @@ export class MemStorage implements IStorage {
         generatedImageUrl: data.generatedImageUrl,
         styleId: data.styleId,
         engine: data.engine,
+        // Orama bridge fields
+        selectedImageId: data.selectedImageId,
+        selectedVoiceId: data.selectedVoiceId,
+        selectedVideoId: data.selectedVideoId,
+        selectedMusicId: data.selectedMusicId,
+        taskId: data.taskId,
+        imagePrompt: data.imagePrompt,
       })
       .returning();
     return result;
@@ -684,6 +701,13 @@ export class MemStorage implements IStorage {
     if (data.styleId !== undefined) updateData.styleId = data.styleId;
     if (data.engine !== undefined) updateData.engine = data.engine;
     if (data.selectedCharacterIds !== undefined) updateData.selectedCharacterIds = data.selectedCharacterIds;
+    // Orama bridge fields
+    if (data.selectedImageId !== undefined) updateData.selectedImageId = data.selectedImageId;
+    if (data.selectedVoiceId !== undefined) updateData.selectedVoiceId = data.selectedVoiceId;
+    if (data.selectedVideoId !== undefined) updateData.selectedVideoId = data.selectedVideoId;
+    if (data.selectedMusicId !== undefined) updateData.selectedMusicId = data.selectedMusicId;
+    if (data.taskId !== undefined) updateData.taskId = data.taskId;
+    if (data.imagePrompt !== undefined) updateData.imagePrompt = data.imagePrompt;
 
     const [result] = await db
       .update(storyboardScenes)

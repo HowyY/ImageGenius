@@ -31,6 +31,38 @@ The application supports four template types for prompt generation: Structured, 
 
 PostgreSQL (Neon) is the active database, storing generation history, prompt templates, storyboards, assets, and node workflows, all defined by Drizzle ORM schemas. localStorage is used for client-side persistence of user preferences and current storyboard ID. Reference images are stored via the KIE File Upload API. Storyboards support version control, allowing users to save and restore complete scene states.
 
+### Orama Schema Alignment (Migration in Progress)
+
+The schema is being migrated to align with Orama's project hierarchy for future integration:
+
+**New Tables Added (Phase 1):**
+- `projects`: Top-level container for videos/storyboards with title, objective, and style
+- `media`: Unified storage for all media (images, audio, video) with status tracking
+- `scene_media`: Join table linking scenes to media with roles (image, voice, video, music)
+- `comments`: Scene-level feedback with threading support
+
+**Bridge Fields Added (Phase 2):**
+- `storyboards`: Added `projectId`, `objective`, `currentStage`, `stageStatus` for workflow tracking
+- `storyboard_scenes`: Added `selectedImageId`, `selectedVoiceId`, `selectedVideoId`, `selectedMusicId`, `taskId`, `imagePrompt` for media references
+
+**Foreign Key Constraints:**
+- `storyboards.project_id` → `projects.id` (ON DELETE SET NULL)
+- `storyboard_scenes.selected_image_id` → `media.id` (ON DELETE SET NULL)
+- `storyboard_scenes.selected_voice_id` → `media.id` (ON DELETE SET NULL)
+- `storyboard_scenes.selected_video_id` → `media.id` (ON DELETE SET NULL)
+- `storyboard_scenes.selected_music_id` → `media.id` (ON DELETE SET NULL)
+- `scene_media.scene_id` → `storyboard_scenes.id` (ON DELETE CASCADE)
+- `scene_media.media_id` → `media.id` (ON DELETE CASCADE)
+- `comments.scene_id` → `storyboard_scenes.id` (ON DELETE CASCADE)
+
+**Design Decision:** Media table and related Orama tables (projects, media) are defined early in schema.ts to enable proper FK references. The media bridge fields on storyboard_scenes use SET NULL on delete to allow gradual migration while maintaining referential integrity.
+
+**Schema Mapping (ImageGenius → Orama):**
+- `storyboards` → `videos` (with project_id FK)
+- `storyboard_versions` → `versions`  
+- `storyboard_scenes` → `scenes` (with version_id FK)
+- `generation_history` → `media` (via generationHistoryId reference)
+
 ### Asset System
 
 A dedicated Asset Editor (`/assets`) allows management of reusable visual assets (backgrounds, props) with CRUD operations, reference image management, and a tag system. Assets are stored in a database table with unique IDs, types, names, visual prompts, and reference images.
