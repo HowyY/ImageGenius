@@ -1,0 +1,134 @@
+Orama v2.1 Schema
+Tables
+
+projects
+id (uuid)
+title (text)
+owner_id (uuid → users)
+organisation_id (uuid → organisations) - optional
+objective (text)
+style (text)
+videos
+id (uuid)
+project_id (uuid → projects)
+title (text)
+duration (number)
+objective (text)
+key_messages (text)
+style (text) - optional override
+outline (text)
+current_stage (outline | script | storyboard | audio | video)
+stage_status (in_progress | in_review | in_amends | approved)
+video_formats
+video_id (uuid → videos)
+format (16:9 | 1:1 | 9:16)
+versions
+id (uuid)
+video_id (uuid → videos)
+number (integer)
+name (text)
+scenes
+id (uuid)
+version_id (uuid → versions)
+order (integer)
+voice_text (text)
+description (text)
+image_prompt (text)
+selected_image_id (uuid → media)
+selected_voice_id (uuid → media)
+selected_video_id (uuid → media)
+selected_music_id (uuid → media)
+task_id (text)
+scene_media
+scene_id (uuid → scenes)
+media_id (uuid → media)
+role (image | voice | video | music)
+media
+id (uuid)
+type (image | audio | video)
+url (text)
+status (uploading | generating | ok | failed)
+created_at (timestamp)
+comments
+id (uuid)
+scene_id (uuid → scenes)
+stage (outline | script | storyboard | audio | video)
+status (null | to_do | done)
+parent_id (uuid → comments) - optional
+author_id (uuid → users)
+content (text)
+created_at (timestamp)
+users
+id (uuid)
+email (varchar)
+password (varchar)
+full_name (varchar)
+role (super_admin | user)
+organisation_id (uuid → organisations) - optional
+is_active (boolean)
+email_verified (boolean)
+last_login_at (timestamp)
+created_at (timestamp)
+updated_at (timestamp)
+organisations
+id (uuid)
+name (varchar)
+slug (varchar)
+is_active (boolean)
+contact_id (uuid → users)
+created_at (timestamp)
+updated_at (timestamp)
+project_members
+id (uuid)
+project_id (uuid → projects)
+user_id (uuid → users)
+access_level_id (integer → access_levels)
+role (owner | contributor)
+invited_by_id (uuid → users)
+invited_at (timestamp)
+accepted_at (timestamp)
+is_active (boolean)
+access_levels
+id (serial)
+name (varchar)
+display_name (varchar)
+description (text)
+permission_level (integer)
+is_active (boolean)
+
+
+Not yet included:
+AI model schema
+Credits schema
+
+
+
+Key Changes from Array-based to Join Tables
+Was (Array)
+Now (Join Table / Foreign Key)
+projects.videos[]
+videos.project_id
+videos.video_formats[]
+VideoFormats table
+videos.video_versions[]
+versions.video_id
+versions.version_scenes[]
+scenes.version_id + scene_order
+scenes.scene_images[]
+SceneMedia (role: image)
+scenes.scene_voice_clips[]
+SceneMedia (role: voice_clip)
+scenes.scene_video_clips[]
+SceneMedia (role: video_clip)
+scenes.scene_music_tracks[]
+SceneMedia (role: music_track)
+scene_current_image (#)
+scene_selected_image_id (uuid)
+
+Benefits
+Better querying - Can filter, sort, and join media directly
+Referential integrity - Database enforces valid relationships
+No array size limits - Arrays can have performance issues with large sizes
+Easier updates - Add/remove items without rewriting entire array
+
+
