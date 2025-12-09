@@ -2077,45 +2077,39 @@ export default function Storyboard() {
       
       <StageNavigation />
       
-      <SceneInspector
-        isOpen={inspectorOpen}
-        onToggle={() => setInspectorOpen(!inspectorOpen)}
-        selectedScene={selectedSceneId ? scenes?.find(s => s.id === selectedSceneId) || null : null}
-        selectedStyleId={(() => {
-          const scene = selectedSceneId ? scenes?.find(s => s.id === selectedSceneId) : null;
-          return scene?.styleId || selectedStyle;
-        })()}
-        onStyleSelect={(styleId) => {
-          if (selectedSceneId) {
+      {selectedSceneId && (
+        <SceneInspector
+          isOpen={inspectorOpen}
+          onToggle={() => setInspectorOpen(!inspectorOpen)}
+          selectedScene={scenes?.find(s => s.id === selectedSceneId) || null}
+          selectedStyleId={(() => {
+            const scene = scenes?.find(s => s.id === selectedSceneId);
+            return scene?.styleId || selectedStyle;
+          })()}
+          onStyleSelect={(styleId) => {
             updateSceneMutation.mutate({ id: selectedSceneId, styleId });
-          }
-        }}
-        onDescriptionChange={(desc) => {
-          if (selectedSceneId) {
+          }}
+          onDescriptionChange={(desc) => {
             handleDescriptionChange(selectedSceneId, desc);
-          }
-        }}
-        onDescriptionBlur={() => {
-          if (selectedSceneId) {
+          }}
+          onDescriptionBlur={() => {
             const scene = scenes?.find(s => s.id === selectedSceneId);
             if (scene) handleDescriptionBlur(scene);
-          }
-        }}
-        onCharacterToggle={(characterId) => {
-          if (selectedSceneId) {
+          }}
+          onCharacterToggle={(characterId) => {
             const scene = scenes?.find(s => s.id === selectedSceneId);
             if (scene) {
               toggleSceneCharacter(selectedSceneId, characterId, scene.selectedCharacterIds || []);
             }
-          }
-        }}
-        onGenerate={() => {
-          const scene = scenes?.find(s => s.id === selectedSceneId);
-          if (scene) handleGenerateClick(scene);
-        }}
-        isGenerating={selectedSceneId ? isGenerating(selectedSceneId) : false}
-        editingDescription={selectedSceneId ? editingScenes[selectedSceneId]?.sceneDescription : undefined}
-      />
+          }}
+          onGenerate={() => {
+            const scene = scenes?.find(s => s.id === selectedSceneId);
+            if (scene) handleGenerateClick(scene);
+          }}
+          isGenerating={isGenerating(selectedSceneId)}
+          editingDescription={editingScenes[selectedSceneId]?.sceneDescription}
+        />
+      )}
     </div>
   );
 }
