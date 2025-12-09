@@ -1332,7 +1332,20 @@ export default function Storyboard() {
                     </PopoverTrigger>
                     <PopoverContent className="w-64 p-3" align="start">
                       <div className="space-y-3">
-                        <div className="font-medium text-sm">Select Characters</div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium text-sm">Select Characters</div>
+                          {isDesigner && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/characters?from=storyboard&style=${selectedStyle}`)}
+                              data-testid="button-manage-characters-popover"
+                            >
+                              <Settings className="w-3 h-3 mr-1" />
+                              Manage
+                            </Button>
+                          )}
+                        </div>
                         {charactersLoading ? (
                           <div className="space-y-2">
                             <Skeleton className="h-10 w-full" />
