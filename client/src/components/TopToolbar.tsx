@@ -52,11 +52,19 @@ export function TopToolbar() {
     setLocation("/storyboard");
   };
 
+  const handleDoneFromSetup = () => {
+    if (locationPath === "/characters") {
+      setLocation("/storyboard?step=characters");
+    } else {
+      setLocation("/storyboard");
+    }
+  };
+
   return (
     <div className="fixed top-0 left-0 right-0 bg-background border-b z-50">
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-center justify-between h-12">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {isOnToolPage && !isFromSetup && (
               <Button 
                 variant="ghost" 
@@ -66,6 +74,18 @@ export function TopToolbar() {
                 title="Back to Storyboard"
               >
                 <ArrowLeft className="w-4 h-4" />
+              </Button>
+            )}
+            {isOnToolPage && isFromSetup && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={handleDoneFromSetup}
+                data-testid="button-done-setup"
+                title="Done and return to Setup"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Done
               </Button>
             )}
             <Link href="/projects" className="font-semibold text-lg" data-testid="link-home">

@@ -80,7 +80,6 @@ export default function CharacterEditor() {
   const urlParams = new URLSearchParams(searchString);
   const urlCharacterId = urlParams.get("id");
   const urlStyleId = urlParams.get("style");
-  const isFromSetup = urlParams.get("from") === "setup";
   
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(urlCharacterId || "");
   const [searchQuery, setSearchQuery] = useState("");
@@ -873,19 +872,8 @@ export default function CharacterEditor() {
             </p>
           </div>
           
-          {/* Done button and mobile navigation */}
+          {/* Mobile navigation buttons */}
           <div className="flex items-center gap-2">
-            {isFromSetup && (
-              <Button
-                onClick={() => navigate("/storyboard?step=characters")}
-                data-testid="button-done-setup"
-              >
-                <Check className="w-4 h-4 mr-2" />
-                Done
-              </Button>
-            )}
-            
-            {/* Mobile navigation buttons */}
             <div className="flex lg:hidden gap-2">
               <Sheet open={showMobileCharactersPanel} onOpenChange={setShowMobileCharactersPanel}>
                 <SheetTrigger asChild>

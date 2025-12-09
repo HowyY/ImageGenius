@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
@@ -431,9 +431,6 @@ function SortableStyleItem({
 
 export default function StyleEditor() {
   const [, navigate] = useLocation();
-  const searchString = useSearch();
-  const urlParams = new URLSearchParams(searchString);
-  const isFromSetup = urlParams.get("from") === "setup";
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [template, setTemplate] = useState<PromptTemplate>(DEFAULT_TEMPLATE);
@@ -1431,16 +1428,6 @@ ${negativePrompt}`;
           </div>
           
           <div className="flex items-center gap-2">
-            {isFromSetup && (
-              <Button
-                onClick={() => navigate("/storyboard")}
-                data-testid="button-done-setup"
-              >
-                <Check className="w-4 h-4 mr-2" />
-                Done
-              </Button>
-            )}
-            
             {/* Mobile styles panel trigger */}
             <Sheet open={showMobileStylesPanel} onOpenChange={setShowMobileStylesPanel}>
               <SheetTrigger asChild>
