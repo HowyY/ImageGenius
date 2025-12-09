@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,7 +17,8 @@ import {
   Loader2,
   Palette,
   Users,
-  FileText
+  FileText,
+  Settings
 } from "lucide-react";
 import type { StylePreset, SelectCharacter, SelectStoryboardScene } from "@shared/schema";
 import { CroppedAvatar } from "@/components/AvatarCropDialog";
@@ -65,6 +67,7 @@ export function SceneInspector({
   isGenerating,
   editingDescription,
 }: SceneInspectorProps) {
+  const [, navigate] = useLocation();
   const { isDesigner, isViewer } = useRole();
 
   const { data: styles = [] } = useQuery<StylePreset[]>({
@@ -209,10 +212,23 @@ export function SceneInspector({
             </div>
 
             <div>
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2 mb-3">
-                <Users className="w-3 h-3" />
-                Characters ({selectedCharacterIds.length})
-              </Label>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Users className="w-3 h-3" />
+                  Characters ({selectedCharacterIds.length})
+                </Label>
+                {isDesigner && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(`/characters?from=storyboard&style=${selectedStyleId}`)}
+                    data-testid="button-manage-characters"
+                  >
+                    <Settings className="w-3 h-3 mr-1" />
+                    Manage
+                  </Button>
+                )}
+              </div>
               <div className="space-y-2">
                 {characters.map((character) => {
                   const avatar = getCharacterAvatar(character);

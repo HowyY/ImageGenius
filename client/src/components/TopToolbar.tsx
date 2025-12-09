@@ -31,7 +31,9 @@ export function TopToolbar() {
   const [location, setLocation] = useLocation();
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
-  const isFromSetup = urlParams.get("from") === "setup";
+  const fromParam = urlParams.get("from");
+  const isFromSetup = fromParam === "setup";
+  const isFromStoryboard = fromParam === "storyboard";
 
   const designerTools = [
     { label: "Generate", icon: Sparkles, path: "/generate" },
@@ -65,7 +67,7 @@ export function TopToolbar() {
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-center justify-between h-12">
           <div className="flex items-center gap-1">
-            {isOnToolPage && !isFromSetup && (
+            {isOnToolPage && !isFromSetup && !isFromStoryboard && (
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -83,6 +85,18 @@ export function TopToolbar() {
                 onClick={handleDoneFromSetup}
                 data-testid="button-done-setup"
                 title="Done and return to Setup"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Done
+              </Button>
+            )}
+            {isOnToolPage && isFromStoryboard && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setLocation("/storyboard")}
+                data-testid="button-done-storyboard"
+                title="Done and return to Storyboard"
               >
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Done
