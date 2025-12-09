@@ -62,6 +62,16 @@ interface EditDialogState {
 const CURRENT_STORYBOARD_KEY = "currentStoryboardId";
 
 function getCurrentStoryboardId(): number | null {
+  // Check URL parameter first
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlId = urlParams.get("id");
+  if (urlId) {
+    const parsedId = parseInt(urlId, 10);
+    if (!isNaN(parsedId)) {
+      return parsedId;
+    }
+  }
+  // Fall back to localStorage
   const saved = localStorage.getItem(CURRENT_STORYBOARD_KEY);
   return saved ? parseInt(saved, 10) : null;
 }
@@ -170,6 +180,22 @@ export default function Storyboard() {
   });
 
   const { isLoading: charactersLoading } = useCharacters();
+
+  // Sync URL parameter to localStorage on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlId = urlParams.get("id");
+    if (urlId) {
+      const parsedId = parseInt(urlId, 10);
+      if (!isNaN(parsedId)) {
+        // Always sync to localStorage when arriving via URL param
+        setCurrentStoryboardId(parsedId);
+        if (parsedId !== currentStoryboardId) {
+          setCurrentStoryboardIdState(parsedId);
+        }
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (storyboards && storyboards.length > 0) {

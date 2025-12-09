@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, MouseEvent } from "react";
 import { ChevronDown, ChevronUp, Settings, Palette, Pencil, RotateCcw, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -68,8 +68,14 @@ export function SettingsBar({
     setIsExpanded(open);
   };
 
-  const handleEditStyle = () => {
+  const handleEditStyle = (e: MouseEvent) => {
+    e.stopPropagation();
     setLocation("/styles");
+  };
+
+  const handleOpenSetup = (e: MouseEvent) => {
+    e.stopPropagation();
+    onOpenSetupWizard?.();
   };
 
   const handleImageClick = (imageUrl: string) => {
@@ -240,7 +246,7 @@ export function SettingsBar({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={onOpenSetupWizard}
+                    onClick={handleOpenSetup}
                     disabled={disabled}
                     data-testid="button-project-settings"
                   >
