@@ -7,24 +7,26 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { SelectStyle, SelectStoryboard, SelectCharacter } from "@shared/schema";
 
+type SetupStep = "style" | "characters" | "ready";
+
 interface StoryboardSetupProps {
   storyboard: SelectStoryboard;
   onComplete: () => void;
   onOpenStyleEditor: () => void;
   onOpenCharacterEditor: () => void;
+  initialStep?: SetupStep;
 }
-
-type SetupStep = "style" | "characters" | "ready";
 
 export function StoryboardSetup({
   storyboard,
   onComplete,
   onOpenStyleEditor,
   onOpenCharacterEditor,
+  initialStep = "style",
 }: StoryboardSetupProps) {
   const { toast } = useToast();
-  const [styleConfirmed, setStyleConfirmed] = useState(false);
-  const [currentStep, setCurrentStep] = useState<SetupStep>("style");
+  const [styleConfirmed, setStyleConfirmed] = useState(initialStep !== "style");
+  const [currentStep, setCurrentStep] = useState<SetupStep>(initialStep);
 
   const { data: styles } = useQuery<SelectStyle[]>({
     queryKey: ["/api/styles"],

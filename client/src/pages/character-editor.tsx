@@ -877,7 +877,7 @@ export default function CharacterEditor() {
           <div className="flex items-center gap-2">
             {isFromSetup && (
               <Button
-                onClick={() => navigate("/storyboard")}
+                onClick={() => navigate("/storyboard?step=characters")}
                 data-testid="button-done-setup"
               >
                 <Check className="w-4 h-4 mr-2" />

@@ -47,7 +47,7 @@ import { StageNavigation } from "@/components/StageNavigation";
 import { useRole } from "@/contexts/RoleContext";
 import { SceneInspector } from "@/components/SceneInspector";
 import { StoryboardSetup } from "@/components/StoryboardSetup";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 
 interface EditingState {
   sceneDescription: string;
@@ -88,6 +88,9 @@ export default function Storyboard() {
   const { toast } = useToast();
   const { startGeneration, isGenerating } = useGeneration();
   const { isDesigner, isViewer } = useRole();
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const setupStep = urlParams.get("step") as "style" | "characters" | "ready" | null;
   const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
   const [selectedStyle, setSelectedStyle] = useState<string>(getSelectedStyleId() || "");
   const [selectedEngine, setSelectedEngineState] = useState<EngineType>((getEngine() || "nanobanana") as EngineType);
@@ -912,6 +915,7 @@ export default function Storyboard() {
           onComplete={handleSetupComplete}
           onOpenStyleEditor={handleOpenStyleEditor}
           onOpenCharacterEditor={handleOpenCharacterEditor}
+          initialStep={setupStep || "style"}
         />
         <StageNavigation />
       </div>
