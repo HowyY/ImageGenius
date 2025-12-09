@@ -264,18 +264,19 @@ export default function Projects() {
                     <div className="absolute bottom-2 right-2">
                       {getStatusBadge(project.stageStatus)}
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm"
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid={`button-project-menu-${project.id}`}
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="bg-background/80 backdrop-blur-sm"
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid={`button-project-menu-${project.id}`}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
@@ -290,7 +291,8 @@ export default function Projects() {
                           Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
-                    </DropdownMenu>
+                      </DropdownMenu>
+                    </div>
                   </div>
                   <CardContent className="p-3">
                     <h3 className="font-medium truncate" data-testid={`text-project-name-${project.id}`}>
