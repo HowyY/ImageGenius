@@ -24,7 +24,8 @@ import {
   X,
   Users,
   Copy,
-  Download
+  Download,
+  Settings
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -45,6 +46,8 @@ import { useCharacters, CHARACTERS_QUERY_KEY } from "@/hooks/use-characters";
 import { StageNavigation } from "@/components/StageNavigation";
 import { useRole } from "@/contexts/RoleContext";
 import { SceneInspector } from "@/components/SceneInspector";
+import { StoryboardSetup } from "@/components/StoryboardSetup";
+import { useLocation } from "wouter";
 
 interface EditingState {
   sceneDescription: string;
@@ -838,6 +841,49 @@ export default function Storyboard() {
 
   const currentStoryboard = storyboards?.find(s => s.id === currentStoryboardId);
   const isLoading = storyboardsLoading || scenesLoading;
+  const [, navigate] = useLocation();
+
+  const handleSetupComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/storyboards"] });
+  };
+
+  const handleOpenStyleEditor = () => {
+    navigate("/styles");
+  };
+
+  const handleOpenCharacterEditor = () => {
+    navigate("/characters");
+  };
+
+  const reopenSetupMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentStoryboardId) return;
+      return apiRequest("PATCH", `/api/storyboards/${currentStoryboardId}`, {
+        setupCompleted: false,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/storyboards"] });
+    },
+  });
+
+  const handleOpenSetup = () => {
+    reopenSetupMutation.mutate();
+  };
+
+  if (currentStoryboard && !currentStoryboard.setupCompleted && isDesigner) {
+    return (
+      <div className="min-h-screen bg-background pt-14 pb-20">
+        <StoryboardSetup
+          storyboard={currentStoryboard}
+          onComplete={handleSetupComplete}
+          onOpenStyleEditor={handleOpenStyleEditor}
+          onOpenCharacterEditor={handleOpenCharacterEditor}
+        />
+        <StageNavigation />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pt-14 pb-20">
@@ -928,6 +974,15 @@ export default function Storyboard() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    {isDesigner && (
+                      <DropdownMenuItem
+                        onClick={() => handleOpenSetup()}
+                        data-testid="button-project-settings"
+                      >
+                        <Settings className="w-4 h-4 mr-2" />
+                        Project Settings
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onClick={() => {
                         setRenameStoryboardName(currentStoryboard?.name || "");

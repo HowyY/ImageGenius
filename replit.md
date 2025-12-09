@@ -25,6 +25,14 @@ This web application provides an AI-driven image generation platform integrated 
 - Root "/" redirects to Projects page
 - Designer tools (Generate, History, Style/Character/Asset/Node editors) accessible via top Tools menu
 
+**StoryboardSetup Wizard (December 2024):**
+- **Trigger**: Shows automatically when designer enters a storyboard with setupCompleted=false
+- **3-Step Flow**: Style → Characters → Start Creating
+- **Step 1 (Style)**: Shows client's preset style with preview, "Adjust Style" navigates to style editor, "Confirm" marks step done
+- **Step 2 (Characters)**: Shows available characters count, "Create Characters" navigates to character editor, or "Skip" option
+- **Step 3 (Start)**: "Start Creating Storyboard" button sets setupCompleted=true and shows normal interface
+- **Re-access**: "Project Settings" in storyboard menu reopens the wizard
+
 **SceneInspector (December 2024):**
 - **Contextual workflow**: Click scene card to select, right panel shows that scene's properties
 - **Per-scene properties**: Description (editable), Style (persisted per scene), Characters (toggle selection)
@@ -37,6 +45,7 @@ This web application provides an AI-driven image generation platform integrated 
 - `client/src/components/ProtectedRoute.tsx` - Route guard for designer-only pages
 - `client/src/components/TopToolbar.tsx` - Top navigation with tools menu and role/theme controls
 - `client/src/components/StageNavigation.tsx` - Bottom workflow page navigator
+- `client/src/components/StoryboardSetup.tsx` - Designer onboarding wizard for new storyboards
 - `client/src/components/SceneInspector.tsx` - Contextual scene property inspector (replaced ResourcePanel)
 - `client/src/pages/projects.tsx` - Orama-style project list with grid layout
 

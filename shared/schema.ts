@@ -81,6 +81,8 @@ export const storyboards = pgTable("storyboards", {
   objective: text("objective").default(""), // Orama: key_messages equivalent
   currentStage: text("current_stage").default("storyboard"), // Orama workflow stage
   stageStatus: text("stage_status").default("in_progress"), // Orama stage status
+  // Designer setup workflow
+  setupCompleted: boolean("setup_completed").notNull().default(false), // Has designer completed initial style/character setup
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
