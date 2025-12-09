@@ -23,12 +23,15 @@ import {
   PenTool,
   ArrowLeft
 } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 
 export function TopToolbar() {
   const { isDesigner, role, setRole } = useRole();
   const { theme, setTheme } = useTheme();
   const [location, setLocation] = useLocation();
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const isFromSetup = urlParams.get("from") === "setup";
 
   const designerTools = [
     { label: "Generate", icon: Sparkles, path: "/generate" },
@@ -54,7 +57,7 @@ export function TopToolbar() {
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-center justify-between h-12">
           <div className="flex items-center gap-2">
-            {isOnToolPage && (
+            {isOnToolPage && !isFromSetup && (
               <Button 
                 variant="ghost" 
                 size="icon" 
