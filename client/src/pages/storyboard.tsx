@@ -206,6 +206,13 @@ export default function Storyboard() {
       } else {
         const storedIdExists = storyboards.some(s => s.id === currentStoryboardId);
         if (!storedIdExists) {
+          // Check if the ID comes from URL - if so, don't reset yet (new project may not be in cache)
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlId = urlParams.get("id");
+          if (urlId && parseInt(urlId, 10) === currentStoryboardId) {
+            // ID is from URL, wait for cache to update instead of resetting
+            return;
+          }
           const firstStoryboard = storyboards[0];
           setCurrentStoryboardIdState(firstStoryboard.id);
           setCurrentStoryboardId(firstStoryboard.id);
