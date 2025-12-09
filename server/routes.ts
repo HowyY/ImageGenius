@@ -962,6 +962,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
             
+            // Get full reference images array
+            let referenceImages: string[] = [];
+            if (dbTemplate?.referenceImages && dbTemplate.referenceImages.length > 0) {
+              referenceImages = dbTemplate.referenceImages;
+            } else {
+              const defaultTemplate = getDefaultTemplate(id);
+              if (defaultTemplate?.referenceImages && defaultTemplate.referenceImages.length > 0) {
+                referenceImages = defaultTemplate.referenceImages;
+              }
+            }
+            
             return {
               id,
               label,
@@ -973,6 +984,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               isHidden,
               displayOrder,
               referenceImageUrl: thumbnailUrl,
+              referenceImages,
             };
           })
         );
@@ -985,8 +997,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Try to get default template's first reference image
           let thumbnailUrl = referenceImageUrl;
           const defaultTemplate = getDefaultTemplate(id);
+          let referenceImages: string[] = [];
           if (defaultTemplate?.referenceImages && defaultTemplate.referenceImages.length > 0) {
             thumbnailUrl = defaultTemplate.referenceImages[0];
+            referenceImages = defaultTemplate.referenceImages;
           }
           
           return {
@@ -1000,6 +1014,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isHidden: false,
             displayOrder: 9999,
             referenceImageUrl: thumbnailUrl,
+            referenceImages,
           };
         })
       );
@@ -1007,18 +1022,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching styles:", error);
       // Fallback to static styles on error
-      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => ({
-        id,
-        label,
-        description,
-        engines,
-        basePrompt,
-        defaultColors,
-        isBuiltIn: true,
-        isHidden: false,
-        displayOrder: 9999,
-        referenceImageUrl,
-      }));
+      const stylesForFrontend = STYLE_PRESETS.map(({ id, label, description, engines, basePrompt, defaultColors, referenceImageUrl }) => {
+        const defaultTemplate = getDefaultTemplate(id);
+        const referenceImages = defaultTemplate?.referenceImages || [];
+        return {
+          id,
+          label,
+          description,
+          engines,
+          basePrompt,
+          defaultColors,
+          isBuiltIn: true,
+          isHidden: false,
+          displayOrder: 9999,
+          referenceImageUrl,
+          referenceImages,
+        };
+      });
       res.json(stylesForFrontend);
     }
   });

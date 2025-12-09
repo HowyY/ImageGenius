@@ -1054,6 +1054,7 @@ export default function Storyboard() {
               styles={styles}
               stylesLoading={stylesLoading}
               disabled={isViewer}
+              onOpenSetupWizard={isDesigner ? handleOpenSetup : undefined}
             />
           </div>
         )}
