@@ -130,7 +130,7 @@ The application implements comprehensive error handling for all data queries:
 
 ### Reusable Components
 
-- **SettingsBar** (`client/src/components/SettingsBar.tsx`): Collapsible settings bar for style and engine configuration. Shows compact preview (style thumbnail, name, engine) when collapsed; expands to show full style selector, engine selector, and style reference image. Supports `disabled` prop for viewer role-based access control. Exports `EngineType` type for use across the application.
+- **SettingsBar** (`client/src/components/SettingsBar.tsx`): Collapsible settings bar for style and engine configuration. Shows compact preview (style thumbnail, name, engine) when collapsed; expands to show full style selector, engine selector, multiple reference images with click-to-enlarge lightbox, "Edit Style" button (navigates to /styles), and optional "Project Settings" button (reopens setup wizard). Supports `disabled` prop for viewer role-based access control. Exports `EngineType` type for use across the application.
 
 ## External Dependencies
 
