@@ -833,7 +833,7 @@ export default function Storyboard() {
   const isLoading = storyboardsLoading || scenesLoading;
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pt-14 pb-20">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
@@ -1972,12 +1972,7 @@ export default function Storyboard() {
         </DialogContent>
       </Dialog>
 
-      {currentStoryboardId && (
-        <StageNavigation 
-          currentStage={currentStoryboard?.currentStage || "storyboard"}
-          stageStatus={currentStoryboard?.stageStatus}
-        />
-      )}
+      <StageNavigation />
     </div>
   );
 }

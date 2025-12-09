@@ -1,94 +1,75 @@
-import { Check, FileText, Film, Headphones, LayoutGrid, ListTree, Settings, Video } from "lucide-react";
+import { FileText, Film, Headphones, LayoutGrid, ListTree, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link, useLocation } from "wouter";
 
 interface Stage {
   id: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  path: string;
 }
 
 const stages: Stage[] = [
-  { id: "manage", label: "Manage", icon: Settings },
-  { id: "outline", label: "Outline", icon: ListTree },
-  { id: "script", label: "Script", icon: FileText },
-  { id: "storyboard", label: "Storyboard", icon: LayoutGrid },
-  { id: "audio", label: "Audio", icon: Headphones },
-  { id: "video", label: "Video", icon: Film },
+  { id: "manage", label: "Manage", icon: Settings, path: "/projects" },
+  { id: "outline", label: "Outline", icon: ListTree, path: "/outline" },
+  { id: "script", label: "Script", icon: FileText, path: "/script" },
+  { id: "storyboard", label: "Storyboard", icon: LayoutGrid, path: "/storyboard" },
+  { id: "audio", label: "Audio", icon: Headphones, path: "/audio" },
+  { id: "video", label: "Video", icon: Film, path: "/video" },
 ];
 
 interface StageNavigationProps {
-  currentStage?: string | null;
-  stageStatus?: string | null;
-  onStageClick?: (stageId: string) => void;
   className?: string;
 }
 
-export function StageNavigation({ 
-  currentStage = "storyboard", 
-  stageStatus,
-  onStageClick,
-  className 
-}: StageNavigationProps) {
-  const currentIndex = stages.findIndex(s => s.id === currentStage) || 3;
+export function StageNavigation({ className }: StageNavigationProps) {
+  const [location] = useLocation();
   
-  const getStageState = (stage: Stage, index: number) => {
-    if (index < currentIndex) return "completed";
-    if (index === currentIndex) return stageStatus === "completed" ? "completed" : "current";
-    return "upcoming";
+  const getCurrentStageIndex = () => {
+    if (location === "/" || location === "/projects") return 0;
+    const index = stages.findIndex(s => s.path !== "/projects" && location.startsWith(s.path));
+    return index >= 0 ? index : 0;
   };
+  
+  const currentIndex = getCurrentStageIndex();
 
   return (
     <div className={cn("fixed bottom-0 left-0 right-0 bg-background border-t z-40", className)}>
       <div className="max-w-4xl mx-auto px-4">
         <div className="flex items-center justify-between py-3">
           {stages.map((stage, index) => {
-            const state = getStageState(stage, index);
-            const isCompleted = state === "completed";
-            const isCurrent = state === "current";
-            const isClickable = onStageClick && (isCompleted || isCurrent);
+            const isActive = index === currentIndex;
             
             return (
               <div key={stage.id} className="flex items-center">
-                <button
+                <Link
+                  href={stage.path}
                   className={cn(
-                    "flex flex-col items-center gap-1 px-3 py-1 rounded-md transition-colors",
-                    isClickable && "cursor-pointer hover-elevate",
-                    !isClickable && "cursor-default"
+                    "flex flex-col items-center gap-1 px-3 py-1 rounded-md transition-colors cursor-pointer hover-elevate"
                   )}
-                  onClick={() => isClickable && onStageClick?.(stage.id)}
-                  disabled={!isClickable}
                   data-testid={`stage-${stage.id}`}
                 >
                   <div className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
-                    isCompleted && "bg-green-500",
-                    isCurrent && "bg-primary",
-                    !isCompleted && !isCurrent && "bg-muted"
+                    isActive && "bg-primary",
+                    !isActive && "bg-muted"
                   )}>
-                    {isCompleted ? (
-                      <Check className="w-4 h-4 text-white" />
-                    ) : (
-                      <stage.icon className={cn(
-                        "w-4 h-4",
-                        isCurrent ? "text-primary-foreground" : "text-muted-foreground"
-                      )} />
-                    )}
+                    <stage.icon className={cn(
+                      "w-4 h-4",
+                      isActive ? "text-primary-foreground" : "text-muted-foreground"
+                    )} />
                   </div>
                   <span className={cn(
                     "text-xs font-medium",
-                    isCompleted && "text-green-500",
-                    isCurrent && "text-primary",
-                    !isCompleted && !isCurrent && "text-muted-foreground"
+                    isActive && "text-primary",
+                    !isActive && "text-muted-foreground"
                   )}>
                     {stage.label}
                   </span>
-                </button>
+                </Link>
                 
                 {index < stages.length - 1 && (
-                  <div className={cn(
-                    "w-8 h-0.5 mx-1",
-                    index < currentIndex ? "bg-green-500" : "bg-muted"
-                  )} />
+                  <div className="w-8 h-0.5 mx-1 bg-muted" />
                 )}
               </div>
             );

@@ -6,13 +6,17 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { RoleProvider } from "@/contexts/RoleContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { Navigation } from "@/components/navigation";
+import { TopToolbar } from "@/components/TopToolbar";
 import { GenerationProvider } from "@/contexts/GenerationContext";
 import { GenerationStatusPanel } from "@/components/GenerationStatusPanel";
 import Home from "@/pages/home";
 import History from "@/pages/history";
 import Projects from "@/pages/projects";
 import Storyboard from "@/pages/storyboard";
+import Outline from "@/pages/outline";
+import Script from "@/pages/script";
+import Audio from "@/pages/audio";
+import Video from "@/pages/video";
 import StyleEditor from "@/pages/style-editor";
 import CharacterEditor from "./pages/character-editor";
 import PromptEditor from "./pages/prompt-editor";
@@ -23,18 +27,23 @@ import NotFound from "./pages/not-found";
 function Router() {
   return (
     <Switch>
-      <Route path="/">
+      <Route path="/" component={Projects} />
+      <Route path="/projects" component={Projects} />
+      <Route path="/outline" component={Outline} />
+      <Route path="/script" component={Script} />
+      <Route path="/storyboard" component={Storyboard} />
+      <Route path="/audio" component={Audio} />
+      <Route path="/video" component={Video} />
+      <Route path="/generate">
         <ProtectedRoute requiredRole="designer">
           <Home />
         </ProtectedRoute>
       </Route>
-      <Route path="/projects" component={Projects} />
       <Route path="/history">
         <ProtectedRoute requiredRole="designer">
           <History />
         </ProtectedRoute>
       </Route>
-      <Route path="/storyboard" component={Storyboard} />
       <Route path="/style-editor">
         <ProtectedRoute requiredRole="designer">
           <StyleEditor />
@@ -72,7 +81,7 @@ function App() {
         <RoleProvider>
           <TooltipProvider>
             <GenerationProvider>
-              <Navigation />
+              <TopToolbar />
               <Toaster />
               <Router />
               <GenerationStatusPanel />

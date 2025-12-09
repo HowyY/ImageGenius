@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Search, Video, LayoutGrid } from "lucide-react";
 import type { SelectStoryboard } from "@shared/schema";
+import { StageNavigation } from "@/components/StageNavigation";
 
 type StageStatus = "in_progress" | "completed" | "in_production" | "all";
 
@@ -60,7 +61,7 @@ export default function Projects() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-14 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
           <div className="flex items-center gap-3 flex-1 min-w-[200px]">
@@ -178,6 +179,8 @@ export default function Projects() {
           </div>
         )}
       </div>
+      
+      <StageNavigation />
     </div>
   );
 }
