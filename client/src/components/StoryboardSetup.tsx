@@ -83,6 +83,9 @@ export function StoryboardSetup({
             <p className="text-muted-foreground">
               Configure style and characters before creating scenes
             </p>
+            <p className="text-xs text-muted-foreground mt-2" data-testid="text-edit-hint">
+              You can always edit these settings later from the storyboard menu.
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -317,25 +320,20 @@ export function StoryboardSetup({
                     Begin adding scenes and generating images
                   </p>
                   {currentStep === "ready" && (
-                    <div className="space-y-3">
-                      <Button
-                        onClick={handleStartStoryboard}
-                        disabled={completeSetupMutation.isPending}
-                        data-testid="button-start-storyboard"
-                      >
-                        {completeSetupMutation.isPending ? (
-                          "Starting..."
-                        ) : (
-                          <>
-                            Start Creating Storyboard
-                            <ChevronRight className="w-4 h-4 ml-1" />
-                          </>
-                        )}
-                      </Button>
-                      <p className="text-xs text-muted-foreground" data-testid="text-edit-hint">
-                        You can always edit style and characters later from the storyboard settings.
-                      </p>
-                    </div>
+                    <Button
+                      onClick={handleStartStoryboard}
+                      disabled={completeSetupMutation.isPending}
+                      data-testid="button-start-storyboard"
+                    >
+                      {completeSetupMutation.isPending ? (
+                        "Starting..."
+                      ) : (
+                        <>
+                          Start Creating Storyboard
+                          <ChevronRight className="w-4 h-4 ml-1" />
+                        </>
+                      )}
+                    </Button>
                   )}
                 </div>
               </div>
