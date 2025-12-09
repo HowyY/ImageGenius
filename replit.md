@@ -25,11 +25,18 @@ This web application provides an AI-driven image generation platform integrated 
 - Root "/" redirects to Projects page
 - Designer tools (Generate, History, Style/Character/Asset/Node editors) accessible via top Tools menu
 
+**ResourcePanel (December 2024):**
+- **Fixed-position sidebar**: Collapsible right-side panel on Storyboard page
+- **Three tabs**: Styles, Characters, Assets for quick resource access
+- **Role-aware**: Designers can select styles/characters; Viewers see read-only list
+- **Position**: Fixed between TopToolbar (top-14) and StageNavigation (bottom-20)
+
 **Key Files:**
 - `client/src/contexts/RoleContext.tsx` - Role state management with localStorage persistence
 - `client/src/components/ProtectedRoute.tsx` - Route guard for designer-only pages
 - `client/src/components/TopToolbar.tsx` - Top navigation with tools menu and role/theme controls
 - `client/src/components/StageNavigation.tsx` - Bottom workflow page navigator
+- `client/src/components/ResourcePanel.tsx` - Collapsible sidebar with Styles/Characters/Assets tabs
 - `client/src/pages/projects.tsx` - Orama-style project list with grid layout
 
 ## User Preferences

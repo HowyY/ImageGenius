@@ -44,6 +44,7 @@ import { useGeneration } from "@/contexts/GenerationContext";
 import { useCharacters, CHARACTERS_QUERY_KEY } from "@/hooks/use-characters";
 import { StageNavigation } from "@/components/StageNavigation";
 import { useRole } from "@/contexts/RoleContext";
+import { ResourcePanel } from "@/components/ResourcePanel";
 
 interface EditingState {
   sceneDescription: string;
@@ -97,6 +98,7 @@ export default function Storyboard() {
   const [copyCharsDialogOpen, setCopyCharsDialogOpen] = useState(false);
   const [copyCharsSourceScene, setCopyCharsSourceScene] = useState<{ id: number; characterIds: string[] } | null>(null);
   const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
+  const [resourcePanelOpen, setResourcePanelOpen] = useState(true);
   
 
   const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
@@ -1971,8 +1973,15 @@ export default function Storyboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+      
       <StageNavigation />
+      
+      <ResourcePanel
+        isOpen={resourcePanelOpen}
+        onToggle={() => setResourcePanelOpen(!resourcePanelOpen)}
+        selectedStyleId={selectedStyle}
+        onStyleSelect={setSelectedStyle}
+      />
     </div>
   );
 }
