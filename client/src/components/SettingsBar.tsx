@@ -88,7 +88,7 @@ export function SettingsBar({
   return (
     <>
       <Collapsible open={isExpanded && !disabled} onOpenChange={handleOpenChange}>
-        <Card className="overflow-visible" data-testid="card-settings-bar">
+        <Card className="overflow-visible relative" data-testid="card-settings-bar">
           <CollapsibleTrigger asChild>
             <button
               className={`w-full p-3 flex items-center justify-between gap-4 rounded-md transition-colors ${
@@ -98,6 +98,21 @@ export function SettingsBar({
               disabled={disabled}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
+                {!isExpanded && onOpenSetupWizard && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleOpenSetup}
+                    onKeyDown={(e) => e.key === 'Enter' && handleOpenSetup(e as unknown as MouseEvent)}
+                    className={`flex items-center justify-center w-8 h-8 rounded-md shrink-0 ${
+                      disabled ? "opacity-40 cursor-not-allowed bg-muted" : "bg-primary/10 hover-elevate active-elevate-2 cursor-pointer"
+                    }`}
+                    data-testid="button-project-settings-quick"
+                    title="Reopen Setup Wizard"
+                  >
+                    <RotateCcw className="w-4 h-4 text-primary" />
+                  </span>
+                )}
                 <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10 text-primary shrink-0">
                   <Settings className="w-4 h-4" />
                 </div>
