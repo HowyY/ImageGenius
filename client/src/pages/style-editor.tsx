@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
@@ -431,6 +431,9 @@ function SortableStyleItem({
 
 export default function StyleEditor() {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const isFromSetup = urlParams.get("from") === "setup";
   const [selectedStyleId, setSelectedStyleId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [template, setTemplate] = useState<PromptTemplate>(DEFAULT_TEMPLATE);
@@ -1427,21 +1430,33 @@ ${negativePrompt}`;
             <p className="text-muted-foreground hidden sm:block">Create and manage visual styles for image generation</p>
           </div>
           
-          {/* Mobile styles panel trigger */}
-          <Sheet open={showMobileStylesPanel} onOpenChange={setShowMobileStylesPanel}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="lg:hidden" data-testid="button-mobile-styles">
-                <Menu className="w-4 h-4 mr-2" />
-                Styles
+          <div className="flex items-center gap-2">
+            {isFromSetup && (
+              <Button
+                onClick={() => navigate("/storyboard")}
+                data-testid="button-done-setup"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Done
               </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-80 p-4 flex flex-col">
-              <SheetHeader className="mb-4">
-                <SheetTitle>Styles</SheetTitle>
-              </SheetHeader>
-              <StylesNavigatorContent />
-            </SheetContent>
-          </Sheet>
+            )}
+            
+            {/* Mobile styles panel trigger */}
+            <Sheet open={showMobileStylesPanel} onOpenChange={setShowMobileStylesPanel}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="lg:hidden" data-testid="button-mobile-styles">
+                  <Menu className="w-4 h-4 mr-2" />
+                  Styles
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-80 p-4 flex flex-col">
+                <SheetHeader className="mb-4">
+                  <SheetTitle>Styles</SheetTitle>
+                </SheetHeader>
+                <StylesNavigatorContent />
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
 
         <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4">

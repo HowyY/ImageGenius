@@ -881,11 +881,11 @@ export default function Storyboard() {
   };
 
   const handleOpenStyleEditor = () => {
-    navigate("/styles");
+    navigate("/style-editor?from=setup");
   };
 
   const handleOpenCharacterEditor = () => {
-    navigate("/characters");
+    navigate("/characters?from=setup");
   };
 
   const reopenSetupMutation = useMutation({

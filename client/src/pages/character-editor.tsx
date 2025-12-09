@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,11 +74,13 @@ interface GenerationDebugInfo {
 }
 
 export default function CharacterEditor() {
+  const [, navigate] = useLocation();
   // Handle URL params for pre-selection (e.g., from Style Editor's "Generate for this style" button)
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
   const urlCharacterId = urlParams.get("id");
   const urlStyleId = urlParams.get("style");
+  const isFromSetup = urlParams.get("from") === "setup";
   
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(urlCharacterId || "");
   const [searchQuery, setSearchQuery] = useState("");
@@ -871,37 +873,50 @@ export default function CharacterEditor() {
             </p>
           </div>
           
-          {/* Mobile navigation buttons */}
-          <div className="flex lg:hidden gap-2">
-            <Sheet open={showMobileCharactersPanel} onOpenChange={setShowMobileCharactersPanel}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="sm" data-testid="button-mobile-characters">
-                  <Users className="w-4 h-4 mr-1" />
-                  Characters
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-80 p-4 flex flex-col">
-                <SheetHeader className="mb-4">
-                  <SheetTitle>Characters</SheetTitle>
-                </SheetHeader>
-                {characterListContent}
-              </SheetContent>
-            </Sheet>
+          {/* Done button and mobile navigation */}
+          <div className="flex items-center gap-2">
+            {isFromSetup && (
+              <Button
+                onClick={() => navigate("/storyboard")}
+                data-testid="button-done-setup"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Done
+              </Button>
+            )}
             
-            <Sheet open={showMobileCardsPanel} onOpenChange={setShowMobileCardsPanel}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="sm" data-testid="button-mobile-cards">
-                  <Images className="w-4 h-4 mr-1" />
-                  Cards
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-80 p-4 overflow-y-auto">
-                <SheetHeader className="mb-4">
-                  <SheetTitle>Character Cards</SheetTitle>
-                </SheetHeader>
-                {cardsPanelContent}
-              </SheetContent>
-            </Sheet>
+            {/* Mobile navigation buttons */}
+            <div className="flex lg:hidden gap-2">
+              <Sheet open={showMobileCharactersPanel} onOpenChange={setShowMobileCharactersPanel}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-mobile-characters">
+                    <Users className="w-4 h-4 mr-1" />
+                    Characters
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-80 p-4 flex flex-col">
+                  <SheetHeader className="mb-4">
+                    <SheetTitle>Characters</SheetTitle>
+                  </SheetHeader>
+                  {characterListContent}
+                </SheetContent>
+              </Sheet>
+              
+              <Sheet open={showMobileCardsPanel} onOpenChange={setShowMobileCardsPanel}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-mobile-cards">
+                    <Images className="w-4 h-4 mr-1" />
+                    Cards
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-80 p-4 overflow-y-auto">
+                  <SheetHeader className="mb-4">
+                    <SheetTitle>Character Cards</SheetTitle>
+                  </SheetHeader>
+                  {cardsPanelContent}
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         </div>
 
