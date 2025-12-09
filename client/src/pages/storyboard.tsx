@@ -31,7 +31,7 @@ import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, Selec
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CroppedAvatar } from "@/components/AvatarCropDialog";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
-import { GenerationSettings, EngineType } from "@/components/GenerationSettings";
+import { SettingsBar, EngineType } from "@/components/SettingsBar";
 import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1045,15 +1045,17 @@ export default function Storyboard() {
         </div>
 
         {currentStoryboardId && (
-          <GenerationSettings
-            selectedStyle={selectedStyle}
-            onStyleChange={handleStyleChange}
-            selectedEngine={selectedEngine}
-            onEngineChange={handleEngineChange}
-            styles={styles}
-            stylesLoading={stylesLoading}
-            className="mb-6"
-          />
+          <div className="mb-6">
+            <SettingsBar
+              selectedStyle={selectedStyle}
+              onStyleChange={handleStyleChange}
+              selectedEngine={selectedEngine}
+              onEngineChange={handleEngineChange}
+              styles={styles}
+              stylesLoading={stylesLoading}
+              disabled={isViewer}
+            />
+          </div>
         )}
 
         {storyboardsError ? (
