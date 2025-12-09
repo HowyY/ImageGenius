@@ -23,12 +23,14 @@ import {
   Eye,
   X,
   Users,
-  Copy
+  Copy,
+  Download
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CroppedAvatar } from "@/components/AvatarCropDialog";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { GenerationSettings, EngineType } from "@/components/GenerationSettings";
 import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/lib/generationState";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -71,7 +73,7 @@ export default function Storyboard() {
   const { startGeneration, isGenerating } = useGeneration();
   const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
   const [selectedStyle, setSelectedStyle] = useState<string>(getSelectedStyleId() || "");
-  const [selectedEngine, setSelectedEngineState] = useState<string>(getEngine() || "nanobanana");
+  const [selectedEngine, setSelectedEngineState] = useState<EngineType>((getEngine() || "nanobanana") as EngineType);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historySceneId, setHistorySceneId] = useState<number | null>(null);
   const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
@@ -94,11 +96,27 @@ export default function Storyboard() {
   const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
   
 
-  const { data: storyboards, isLoading: storyboardsLoading } = useQuery<SelectStoryboard[]>({
+  const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
     queryKey: ["/api/storyboards"],
   });
 
-  const { data: scenes, isLoading: scenesLoading, refetch } = useQuery<SelectStoryboardScene[]>({
+  useEffect(() => {
+    if (storyboardsError) {
+      toast({
+        title: "Error loading storyboards",
+        description: storyboardsErrorDetails?.message || "Failed to load storyboards. Please try refreshing the page.",
+        variant: "destructive",
+      });
+    }
+  }, [storyboardsError, storyboardsErrorDetails, toast]);
+
+  const handleRetryStoryboards = () => {
+    clearCurrentStoryboardId();
+    setCurrentStoryboardIdState(null);
+    refetchStoryboards();
+  };
+
+  const { data: scenes, isLoading: scenesLoading, isError: scenesError, error: scenesErrorDetails, refetch } = useQuery<SelectStoryboardScene[]>({
     queryKey: ["/api/scenes", currentStoryboardId],
     queryFn: async () => {
       if (!currentStoryboardId) return [];
@@ -109,6 +127,16 @@ export default function Storyboard() {
     enabled: !!currentStoryboardId,
     refetchInterval: 30000,
   });
+
+  useEffect(() => {
+    if (scenesError && scenesErrorDetails) {
+      toast({
+        title: "Error loading scenes",
+        description: scenesErrorDetails.message || "Failed to load scenes. Please try refreshing.",
+        variant: "destructive",
+      });
+    }
+  }, [scenesError, scenesErrorDetails, toast]);
 
   const { data: styles, isLoading: stylesLoading } = useQuery<StylePreset[]>({
     queryKey: ["/api/styles"],
@@ -121,7 +149,7 @@ export default function Storyboard() {
     enabled: historySceneId !== null,
   });
 
-  const { data: versions, isLoading: versionsLoading, refetch: refetchVersions } = useQuery<SelectStoryboardVersion[]>({
+  const { data: versions, isLoading: versionsLoading, isError: versionsError, refetch: refetchVersions } = useQuery<SelectStoryboardVersion[]>({
     queryKey: ["/api/storyboards", currentStoryboardId, "versions"],
     queryFn: async () => {
       if (!currentStoryboardId) return [];
@@ -131,6 +159,8 @@ export default function Storyboard() {
     },
     enabled: !!currentStoryboardId && versionsDialogOpen,
   });
+
+  const { isLoading: charactersLoading } = useCharacters();
 
   useEffect(() => {
     if (storyboards && storyboards.length > 0) {
@@ -169,7 +199,7 @@ export default function Storyboard() {
     setSelectedStyleId(value);
   };
 
-  const handleEngineChange = (value: string) => {
+  const handleEngineChange = (value: EngineType) => {
     setSelectedEngineState(value);
     setEngine(value);
   };
@@ -658,7 +688,7 @@ export default function Storyboard() {
       const generateData = await startGeneration({
         prompt: finalPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
         sceneId: scene.id,
         sceneName: `Scene ${scene.orderIndex + 1}`,
         userReferenceImages: characterRefs.length > 0 ? characterRefs.map(r => r.imageUrl) : undefined,
@@ -734,7 +764,7 @@ export default function Storyboard() {
       const generateData = await startGeneration({
         prompt: editPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
+        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
         userReferenceImages: [imageUrl],
         sceneId: sceneIdToEdit,
         sceneName: `Scene Edit`,
@@ -761,6 +791,28 @@ export default function Storyboard() {
         description: error instanceof Error ? error.message : "Failed to edit image",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleDownloadImage = async (url: string) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const filename = url.split("/").pop() || `image-${Date.now()}.png`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      window.open(url, "_blank");
     }
   };
 
@@ -924,68 +976,37 @@ export default function Storyboard() {
         </div>
 
         {currentStoryboardId && (
-          <Card className="p-4 mb-6">
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="style-select" className="mb-2 block text-sm font-medium">
-                  Style Preset
-                </Label>
-                <Select
-                  value={selectedStyle}
-                  onValueChange={handleStyleChange}
-                  disabled={stylesLoading}
-                >
-                  <SelectTrigger id="style-select" data-testid="select-storyboard-style">
-                    <SelectValue placeholder={stylesLoading ? "Loading styles..." : "Select a style"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stylesLoading ? (
-                      <div className="p-2">
-                        <Skeleton className="h-8 w-full" />
-                      </div>
-                    ) : (
-                      styles?.map((style) => (
-                        <SelectItem key={style.id} value={style.id} data-testid={`option-storyboard-style-${style.id}`}>
-                          {style.label}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="engine-select" className="mb-2 block text-sm font-medium">
-                  Engine
-                </Label>
-                <Select
-                  value={selectedEngine}
-                  onValueChange={handleEngineChange}
-                >
-                  <SelectTrigger id="engine-select" data-testid="select-storyboard-engine">
-                    <SelectValue placeholder="Select engine" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nanobanana" data-testid="option-engine-nanobanana">
-                      NanoBanana Edit
-                    </SelectItem>
-                    <SelectItem value="seedream" data-testid="option-engine-seedream">
-                      SeeDream V4
-                    </SelectItem>
-                    <SelectItem value="nanopro" data-testid="option-engine-nanopro">
-                      Nano Pro (2K/4K)
-                    </SelectItem>
-                    <SelectItem value="nanobanana-t2i" data-testid="option-engine-nanobanana-t2i">
-                      NanoBanana T2I (No Ref)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </Card>
+          <GenerationSettings
+            selectedStyle={selectedStyle}
+            onStyleChange={handleStyleChange}
+            selectedEngine={selectedEngine}
+            onEngineChange={handleEngineChange}
+            styles={styles}
+            stylesLoading={stylesLoading}
+            className="mb-6"
+          />
         )}
 
-        {!currentStoryboardId && !storyboardsLoading ? (
+        {storyboardsError ? (
+          <Card className="p-12">
+            <div className="text-center">
+              <RefreshCw className="mx-auto h-12 w-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2" data-testid="text-storyboards-error-title">
+                Failed to load storyboards
+              </h3>
+              <p className="text-muted-foreground mb-4" data-testid="text-storyboards-error-description">
+                There was an error loading storyboards. Please try again.
+              </p>
+              <Button 
+                onClick={handleRetryStoryboards}
+                data-testid="button-retry-storyboards"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry
+              </Button>
+            </div>
+          </Card>
+        ) : !currentStoryboardId && !storyboardsLoading ? (
           <Card className="p-12">
             <div className="text-center">
               <FolderPlus className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -1001,6 +1022,25 @@ export default function Storyboard() {
               >
                 <FolderPlus className="w-4 h-4 mr-2" />
                 Create Storyboard
+              </Button>
+            </div>
+          </Card>
+        ) : scenesError && currentStoryboardId ? (
+          <Card className="p-12">
+            <div className="text-center">
+              <RefreshCw className="mx-auto h-12 w-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2" data-testid="text-error-title">
+                Failed to load scenes
+              </h3>
+              <p className="text-muted-foreground mb-4" data-testid="text-error-description">
+                There was an error loading scenes. Please try again.
+              </p>
+              <Button 
+                onClick={() => refetch()}
+                data-testid="button-retry-scenes"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry
               </Button>
             </div>
           </Card>
@@ -1059,14 +1099,29 @@ export default function Storyboard() {
                       <span className="text-sm font-medium">Generating...</span>
                     </div>
                   ) : scene.generatedImageUrl ? (
-                    <ImageWithFallback
-                      src={scene.generatedImageUrl}
-                      alt={scene.visualDescription || `Scene`}
-                      className="w-full h-full object-cover"
-                      data-testid={`img-scene-${scene.id}`}
-                      loading="lazy"
-                      fallbackText="Failed to load"
-                    />
+                    <div 
+                      className="w-full h-full cursor-zoom-in"
+                      onClick={() => {
+                        const style = styles?.find(s => s.id === scene.styleId);
+                        setPreviewImage({
+                          url: scene.generatedImageUrl!,
+                          prompt: scene.visualDescription || "Generated image",
+                          style: style?.label || scene.styleId || "Unknown",
+                          engine: scene.engine || "Unknown",
+                          date: "Current scene"
+                        });
+                      }}
+                      data-testid={`button-enlarge-scene-${scene.id}`}
+                    >
+                      <ImageWithFallback
+                        src={scene.generatedImageUrl}
+                        alt={scene.visualDescription || `Scene`}
+                        className="w-full h-full object-cover"
+                        data-testid={`img-scene-${scene.id}`}
+                        loading="lazy"
+                        fallbackText="Failed to load"
+                      />
+                    </div>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
                       <Upload className="w-8 h-8" />
@@ -1162,7 +1217,13 @@ export default function Storyboard() {
                     <PopoverContent className="w-64 p-3" align="start">
                       <div className="space-y-3">
                         <div className="font-medium text-sm">Select Characters</div>
-                        {!characters || characters.length === 0 ? (
+                        {charactersLoading ? (
+                          <div className="space-y-2">
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                          </div>
+                        ) : !characters || characters.length === 0 ? (
                           <p className="text-xs text-muted-foreground">No characters available. Create characters in the Character Editor.</p>
                         ) : (
                           <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -1506,6 +1567,18 @@ export default function Storyboard() {
                   </div>
                 ))}
               </div>
+            ) : versionsError ? (
+              <div className="text-center py-8">
+                <RefreshCw className="mx-auto h-12 w-12 text-destructive mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Failed to load versions</h3>
+                <p className="text-muted-foreground mb-4">
+                  There was an error loading versions. Please try again.
+                </p>
+                <Button onClick={() => refetchVersions()} data-testid="button-retry-versions">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
+              </div>
             ) : !versions || versions.length === 0 ? (
               <div className="text-center py-8">
                 <History className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -1736,15 +1809,26 @@ export default function Storyboard() {
             Preview of generated image with details
           </DialogDescription>
           <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 z-10 bg-background/80 backdrop-blur-sm"
-              onClick={() => setPreviewImage(null)}
-              data-testid="button-close-preview"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+            <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background/80 backdrop-blur-sm"
+                onClick={() => previewImage && handleDownloadImage(previewImage.url)}
+                data-testid="button-download-preview"
+              >
+                <Download className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background/80 backdrop-blur-sm"
+                onClick={() => setPreviewImage(null)}
+                data-testid="button-close-preview"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
             {previewImage && (
               <div className="flex flex-col">
                 <div className="bg-muted flex items-center justify-center max-h-[70vh] overflow-hidden">

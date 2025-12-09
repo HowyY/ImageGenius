@@ -34,7 +34,7 @@ const STYLE_PRESETS: Array<
     label: "Cyan Sketchline Vector",
     description:
       "Hand-drawn navy outlines on bright white space with subtle cyan-to-blue gradients, financial illustration vibe, clean modern linework",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "clean sketch-style vector line art, white negative space, minimalist details, modern financial illustration tone",
     defaultColors: {
@@ -52,7 +52,7 @@ const STYLE_PRESETS: Array<
     id: "warm_orange_flat",
     label: "Warm Orange Flat Illustration",
     description: "Warm orange/red flat illustration with strong contrast and almost white background",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "in the style of warm orange and red flat illustration, strong contrast on main subject, almost white background, bold colors, simplified shapes, modern flat design",
     referenceImageUrl: STYLE_REFERENCE_IMAGES.warm_orange_flat,
@@ -61,7 +61,7 @@ const STYLE_PRESETS: Array<
     id: "simple_cyan_test",
     label: "Simple Cyan (Test)",
     description: "Test style using simple concatenation template - same cyan vector look with minimal prompt structure",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "clean sketch-style vector line art, hand-drawn navy outlines on bright white space, subtle cyan-to-blue gradients, financial illustration vibe, minimalist details, flat color, high quality",
     defaultColors: {
@@ -79,7 +79,7 @@ const STYLE_PRESETS: Array<
     id: "cyan_sketchline_vector_v2",
     label: "Sketchline Vector V2 (Universal)",
     description: "Deep-blue outlines with cyan accents, flat 2D illustration, simple dot eyes, clean vector style",
-    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i"],
+    engines: ["nanobanana", "seedream", "nanopro", "nanobanana-t2i", "nanopro-t2i"],
     basePrompt:
       "clean deep-blue line art, flat 2D illustration, soft cyan-to-blue gradient fills, simple facial features, no textures, no shadows",
     defaultColors: {
@@ -757,6 +757,49 @@ async function pollNanoProResult(taskId: string) {
   throw new Error("NanoPro task timed out");
 }
 
+// Nano Pro Text-to-Image (no reference images needed) - Higher quality 2K/4K resolution
+async function callNanoProT2I(prompt: string, aspectRatio: string = "16:9", resolution: string = "2K") {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in the environment");
+  }
+
+  console.log(`[NanoPro T2I] Creating text-to-image task...`);
+  console.log(`[NanoPro T2I] Prompt: ${prompt.substring(0, 100)}...`);
+  console.log(`[NanoPro T2I] Aspect Ratio: ${aspectRatio}, Resolution: ${resolution}`);
+
+  const createResponse = await fetch(`${KIE_BASE_URL}/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "nano-banana-pro",
+      input: {
+        prompt,
+        image_input: [],
+        aspect_ratio: aspectRatio,
+        resolution: resolution,
+        output_format: "png",
+      },
+    }),
+  });
+
+  const createJson = await createResponse.json();
+
+  if (!createResponse.ok || createJson.code !== 200) {
+    throw new Error(`NanoPro T2I failed to create task: ${createResponse.status} ${createJson.msg ?? ""}`);
+  }
+
+  const taskId = createJson.data?.taskId;
+  if (!taskId) {
+    throw new Error("NanoPro T2I response missing taskId");
+  }
+
+  console.log(`[NanoPro T2I] Task created: ${taskId}`);
+  return await pollNanoProResult(taskId);
+}
+
 // DEPRECATED: This function is no longer used for image generation
 // Reference images are now exclusively managed through the Style Editor UI
 // and stored in templateData.referenceImages (database)
@@ -1329,6 +1372,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (engine === "nanobanana-t2i") {
         // Text-to-Image engine - no reference images needed
         imageUrl = await callNanoBananaT2I(finalPrompt, "16:9");
+      } else if (engine === "nanopro-t2i") {
+        // Nano Pro Text-to-Image engine - high quality 2K resolution, no reference images needed
+        imageUrl = await callNanoProT2I(finalPrompt, "16:9", "2K");
       } else {
         imageUrl = await callSeedreamEdit(finalPrompt, imageUrls);
       }
@@ -2605,6 +2651,284 @@ ${negativePrompt}`;
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to delete character",
+      });
+    }
+  });
+
+  // ===== Asset API Routes (backgrounds, props) =====
+
+  // Get all assets (optionally filter by type)
+  app.get("/api/assets", async (req, res) => {
+    try {
+      const type = req.query.type as "background" | "prop" | undefined;
+      const assetList = await storage.getAllAssets(type);
+      res.json(assetList);
+    } catch (error) {
+      console.error("Error fetching assets:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch assets",
+      });
+    }
+  });
+
+  // Get single asset by ID
+  app.get("/api/assets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const asset = await storage.getAsset(id);
+      
+      if (!asset) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Asset ${id} not found`,
+        });
+      }
+
+      res.json(asset);
+    } catch (error) {
+      console.error("Error fetching asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch asset",
+      });
+    }
+  });
+
+  // Create a new asset
+  app.post("/api/assets", async (req, res) => {
+    try {
+      const { id, type, name, visualPrompt, referenceImages, tags } = req.body;
+      
+      if (!id || !type || !name) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "id, type, and name are required",
+        });
+      }
+
+      if (type !== "background" && type !== "prop") {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "type must be 'background' or 'prop'",
+        });
+      }
+
+      const asset = await storage.createAsset({
+        id,
+        type,
+        name,
+        visualPrompt: visualPrompt || "",
+        referenceImages: referenceImages || [],
+        tags: tags || [],
+      });
+
+      res.status(201).json(asset);
+    } catch (error) {
+      console.error("Error creating asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Failed to create asset",
+      });
+    }
+  });
+
+  // Update an asset
+  app.patch("/api/assets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, visualPrompt, referenceImages, tags } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (visualPrompt !== undefined) updateData.visualPrompt = visualPrompt;
+      if (referenceImages !== undefined) updateData.referenceImages = referenceImages;
+      if (tags !== undefined) updateData.tags = tags;
+
+      const updated = await storage.updateAsset(id, updateData);
+      
+      if (!updated) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Asset ${id} not found`,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update asset",
+      });
+    }
+  });
+
+  // Delete an asset
+  app.delete("/api/assets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteAsset(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Asset ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting asset:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete asset",
+      });
+    }
+  });
+
+  // ===== Node Workflow API Routes =====
+
+  // Get all node workflows
+  app.get("/api/node-workflows", async (req, res) => {
+    try {
+      const workflows = await storage.getAllNodeWorkflows();
+      res.json(workflows);
+    } catch (error) {
+      console.error("Error fetching node workflows:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch node workflows",
+      });
+    }
+  });
+
+  // Get single node workflow by ID
+  app.get("/api/node-workflows/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid workflow ID",
+        });
+      }
+
+      const workflow = await storage.getNodeWorkflow(id);
+      
+      if (!workflow) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Node workflow ${id} not found`,
+        });
+      }
+
+      res.json(workflow);
+    } catch (error) {
+      console.error("Error fetching node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to fetch node workflow",
+      });
+    }
+  });
+
+  // Create a new node workflow
+  app.post("/api/node-workflows", async (req, res) => {
+    try {
+      const { name, description, nodes, edges } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "name is required",
+        });
+      }
+
+      const workflow = await storage.createNodeWorkflow({
+        name,
+        description: description || "",
+        nodes: nodes || [],
+        edges: edges || [],
+      });
+
+      res.status(201).json(workflow);
+    } catch (error) {
+      console.error("Error creating node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Failed to create node workflow",
+      });
+    }
+  });
+
+  // Update a node workflow
+  app.patch("/api/node-workflows/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid workflow ID",
+        });
+      }
+
+      const { name, description, nodes, edges } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (nodes !== undefined) updateData.nodes = nodes;
+      if (edges !== undefined) updateData.edges = edges;
+
+      const updated = await storage.updateNodeWorkflow(id, updateData);
+      
+      if (!updated) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Node workflow ${id} not found`,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to update node workflow",
+      });
+    }
+  });
+
+  // Delete a node workflow
+  app.delete("/api/node-workflows/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({
+          error: "Validation error",
+          message: "Invalid workflow ID",
+        });
+      }
+
+      const deleted = await storage.deleteNodeWorkflow(id);
+      
+      if (!deleted) {
+        return res.status(404).json({
+          error: "Not found",
+          message: `Node workflow ${id} not found`,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting node workflow:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to delete node workflow",
       });
     }
   });

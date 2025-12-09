@@ -48,6 +48,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ReferenceImagesManager } from "@/components/ReferenceImagesManager";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { PreviewImage } from "@/components/ImageLightbox";
 import { useGeneration } from "@/contexts/GenerationContext";
 
 export default function Home() {
@@ -77,7 +78,7 @@ export default function Home() {
     defaultValues: {
       prompt: savedPrompt,
       styleId: savedStyleId || "",
-      engine: savedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i",
+      engine: savedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
     },
   });
 
@@ -488,6 +489,19 @@ export default function Home() {
                               <Badge variant="secondary" className="text-xs px-1 py-0">No Ref</Badge>
                             </span>
                           </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === "nanopro-t2i" ? "default" : "outline"}
+                            onClick={() => field.onChange("nanopro-t2i")}
+                            disabled={isGenerating}
+                            className="flex-1 min-w-[100px]"
+                            data-testid="button-engine-nanopro-t2i"
+                          >
+                            <span className="flex items-center gap-1">
+                              Pro T2I
+                              <Badge variant="secondary" className="text-xs px-1 py-0">2K</Badge>
+                            </span>
+                          </Button>
                         </div>
                       </FormControl>
                       <FormMessage data-testid="error-engine" />
@@ -597,13 +611,11 @@ export default function Home() {
                 )}
 
                 {generatedImage && !isGenerating && (
-                  <ImageWithFallback
+                  <PreviewImage
                     src={generatedImage}
                     alt="Generated artwork"
-                    className="w-full h-full object-cover transition-opacity duration-300"
-                    loading="lazy"
+                    className="w-full h-full"
                     data-testid="img-result"
-                    fallbackText="Failed to load generated image"
                   />
                 )}
                 </div>
