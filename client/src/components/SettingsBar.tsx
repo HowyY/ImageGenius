@@ -1,5 +1,5 @@
-import { useState, MouseEvent } from "react";
-import { ChevronDown, ChevronUp, Settings, Palette, Pencil, RotateCcw, X } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Settings, Palette, Pencil, RotateCcw, X, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useLocation } from "wouter";
 
 export type EngineType = "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i";
@@ -58,6 +58,7 @@ export function SettingsBar({
 }: SettingsBarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [, setLocation] = useLocation();
 
   const currentStyle = styles?.find((s) => s.id === selectedStyle);
@@ -68,14 +69,14 @@ export function SettingsBar({
     setIsExpanded(open);
   };
 
-  const handleEditStyle = (e: MouseEvent) => {
-    e.stopPropagation();
+  const handleEditStyle = () => {
     setLocation("/styles");
   };
 
-  const handleOpenSetup = (e: MouseEvent) => {
-    e.stopPropagation();
-    onOpenSetupWizard?.();
+  const handleOpenProjectSettings = () => {
+    if (!disabled) {
+      setShowProjectSettings(true);
+    }
   };
 
   const handleImageClick = (imageUrl: string) => {
@@ -98,17 +99,27 @@ export function SettingsBar({
               disabled={disabled}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                {!isExpanded && onOpenSetupWizard && (
+                {!isExpanded && (
                   <span
                     role="button"
                     tabIndex={0}
-                    onClick={handleOpenSetup}
-                    onKeyDown={(e) => e.key === 'Enter' && handleOpenSetup(e as unknown as MouseEvent)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      handleOpenProjectSettings();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleOpenProjectSettings();
+                      }
+                    }}
                     className={`flex items-center justify-center w-8 h-8 rounded-md shrink-0 ${
                       disabled ? "opacity-40 cursor-not-allowed bg-muted" : "bg-primary/10 hover-elevate active-elevate-2 cursor-pointer"
                     }`}
                     data-testid="button-project-settings-quick"
-                    title="Reopen Setup Wizard"
+                    title="Project Settings"
                   >
                     <RotateCcw className="w-4 h-4 text-primary" />
                   </span>
@@ -248,27 +259,35 @@ export function SettingsBar({
 
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handleEditStyle}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleEditStyle();
+                  }}
                   disabled={disabled}
                   data-testid="button-edit-style"
                 >
                   <Pencil className="w-4 h-4 mr-2" />
                   Edit Style
                 </Button>
-                {onOpenSetupWizard && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleOpenSetup}
-                    disabled={disabled}
-                    data-testid="button-project-settings"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Project Settings
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleOpenProjectSettings();
+                  }}
+                  disabled={disabled}
+                  data-testid="button-project-settings"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Project Settings
+                </Button>
               </div>
             </div>
           </CollapsibleContent>
@@ -292,6 +311,65 @@ export function SettingsBar({
               data-testid="img-lightbox"
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showProjectSettings} onOpenChange={setShowProjectSettings}>
+        <DialogContent className="max-w-md" data-testid="dialog-project-settings">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Project Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure your storyboard project settings
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  setShowProjectSettings(false);
+                  setLocation("/styles");
+                }}
+                data-testid="button-settings-edit-style"
+              >
+                <Palette className="w-4 h-4 mr-3" />
+                Edit Style Preset
+              </Button>
+              
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  setShowProjectSettings(false);
+                  setLocation("/characters");
+                }}
+                data-testid="button-settings-edit-characters"
+              >
+                <Users className="w-4 h-4 mr-3" />
+                Edit Characters
+              </Button>
+              
+              {onOpenSetupWizard && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    setShowProjectSettings(false);
+                    onOpenSetupWizard();
+                  }}
+                  data-testid="button-settings-reopen-wizard"
+                >
+                  <RotateCcw className="w-4 h-4 mr-3" />
+                  Reopen Setup Wizard
+                </Button>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>
