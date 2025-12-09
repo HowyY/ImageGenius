@@ -26,6 +26,7 @@ export function StoryboardSetup({
 }: StoryboardSetupProps) {
   const { toast } = useToast();
   const [styleConfirmed, setStyleConfirmed] = useState(initialStep !== "style");
+  const [charactersConfirmed, setCharactersConfirmed] = useState(initialStep === "ready");
   const [currentStep, setCurrentStep] = useState<SetupStep>(initialStep);
 
   const { data: styles } = useQuery<SelectStyle[]>({
@@ -62,7 +63,8 @@ export function StoryboardSetup({
     setCurrentStep("characters");
   };
 
-  const handleSkipCharacters = () => {
+  const handleConfirmCharacters = () => {
+    setCharactersConfirmed(true);
     setCurrentStep("ready");
   };
 
@@ -198,7 +200,7 @@ export function StoryboardSetup({
               className={`p-4 rounded-md border transition-colors ${
                 currentStep === "characters" 
                   ? "border-primary bg-primary/5" 
-                  : currentStep === "ready"
+                  : charactersConfirmed
                     ? "border-border bg-muted/30"
                     : "border-border opacity-60"
               }`}
@@ -206,18 +208,32 @@ export function StoryboardSetup({
             >
               <div className="flex items-start gap-4">
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  currentStep === "ready"
+                  charactersConfirmed
                     ? "bg-primary text-primary-foreground"
                     : currentStep === "characters"
                       ? "bg-primary/20 text-primary"
                       : "bg-muted text-muted-foreground"
                 }`}>
-                  {currentStep === "ready" ? <Check className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                  {charactersConfirmed ? <Check className="w-4 h-4" /> : <Users className="w-4 h-4" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <h3 className="font-medium">Characters</h3>
-                    <span className="text-xs text-muted-foreground">Optional</span>
+                    {charactersConfirmed && currentStep === "ready" ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setCharactersConfirmed(false);
+                          setCurrentStep("characters");
+                        }}
+                        data-testid="button-edit-characters-step"
+                      >
+                        Edit
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Optional</span>
+                    )}
                   </div>
                   
                   {characters && characters.length > 0 ? (
@@ -238,7 +254,7 @@ export function StoryboardSetup({
                           </Button>
                           <Button
                             size="sm"
-                            onClick={handleSkipCharacters}
+                            onClick={handleConfirmCharacters}
                             data-testid="button-continue-characters"
                           >
                             Continue
@@ -266,7 +282,7 @@ export function StoryboardSetup({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={handleSkipCharacters}
+                            onClick={handleConfirmCharacters}
                             data-testid="button-skip-characters"
                           >
                             Skip for now
@@ -301,20 +317,25 @@ export function StoryboardSetup({
                     Begin adding scenes and generating images
                   </p>
                   {currentStep === "ready" && (
-                    <Button
-                      onClick={handleStartStoryboard}
-                      disabled={completeSetupMutation.isPending}
-                      data-testid="button-start-storyboard"
-                    >
-                      {completeSetupMutation.isPending ? (
-                        "Starting..."
-                      ) : (
-                        <>
-                          Start Creating Storyboard
-                          <ChevronRight className="w-4 h-4 ml-1" />
-                        </>
-                      )}
-                    </Button>
+                    <div className="space-y-3">
+                      <Button
+                        onClick={handleStartStoryboard}
+                        disabled={completeSetupMutation.isPending}
+                        data-testid="button-start-storyboard"
+                      >
+                        {completeSetupMutation.isPending ? (
+                          "Starting..."
+                        ) : (
+                          <>
+                            Start Creating Storyboard
+                            <ChevronRight className="w-4 h-4 ml-1" />
+                          </>
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground" data-testid="text-edit-hint">
+                        You can always edit style and characters later from the storyboard settings.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
