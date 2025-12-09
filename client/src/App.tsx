@@ -22,6 +22,7 @@ import CharacterEditor from "./pages/character-editor";
 import PromptEditor from "./pages/prompt-editor";
 import NodeEditor from "./pages/node-editor";
 import AssetEditor from "./pages/asset-editor";
+import Manage from "./pages/manage";
 import NotFound from "./pages/not-found";
 
 function Router() {
@@ -67,6 +68,11 @@ function Router() {
       <Route path="/assets">
         <ProtectedRoute requiredRole="designer">
           <AssetEditor />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/manage">
+        <ProtectedRoute requiredRole="designer">
+          <Manage />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

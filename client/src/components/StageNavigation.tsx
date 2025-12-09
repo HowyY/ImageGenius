@@ -10,7 +10,7 @@ interface Stage {
 }
 
 const stages: Stage[] = [
-  { id: "manage", label: "Manage", icon: Settings, path: "/projects" },
+  { id: "project", label: "Project", icon: Settings, path: "/projects" },
   { id: "outline", label: "Outline", icon: ListTree, path: "/outline" },
   { id: "script", label: "Script", icon: FileText, path: "/script" },
   { id: "storyboard", label: "Storyboard", icon: LayoutGrid, path: "/storyboard" },

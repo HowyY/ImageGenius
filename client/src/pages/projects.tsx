@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,19 +13,64 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Plus, Search, Video, LayoutGrid } from "lucide-react";
 import type { SelectStoryboard } from "@shared/schema";
 import { StageNavigation } from "@/components/StageNavigation";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 type StageStatus = "in_progress" | "completed" | "in_production" | "all";
 
 export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StageStatus>("all");
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const { data: storyboards = [], isLoading } = useQuery<SelectStoryboard[]>({
     queryKey: ["/api/storyboards"],
   });
+
+  const createStoryboardMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiRequest("POST", "/api/storyboards", { name });
+      return res.json();
+    },
+    onSuccess: (newStoryboard: SelectStoryboard) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/storyboards"] });
+      setShowNewProjectDialog(false);
+      setNewProjectName("");
+      toast({
+        title: "Project Created",
+        description: `"${newStoryboard.name}" has been created.`,
+      });
+      localStorage.setItem("currentStoryboardId", String(newStoryboard.id));
+      setLocation(`/storyboard?id=${newStoryboard.id}`);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create project",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateProject = () => {
+    if (newProjectName.trim()) {
+      createStoryboardMutation.mutate(newProjectName.trim());
+    }
+  };
 
   const filteredProjects = storyboards.filter((project) => {
     const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -87,11 +133,9 @@ export default function Projects() {
               </SelectContent>
             </Select>
           </div>
-          <Button asChild data-testid="button-new-project">
-            <Link href="/storyboard">
-              <Plus className="h-4 w-4 mr-2" />
-              New Project
-            </Link>
+          <Button onClick={() => setShowNewProjectDialog(true)} data-testid="button-new-project">
+            <Plus className="h-4 w-4 mr-2" />
+            New Project
           </Button>
         </div>
 
@@ -181,6 +225,53 @@ export default function Projects() {
       </div>
       
       <StageNavigation />
+
+      <Dialog open={showNewProjectDialog} onOpenChange={setShowNewProjectDialog}>
+        <DialogContent className="max-w-md" data-testid="dialog-new-project">
+          <DialogHeader>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>
+              Enter a name for your new storyboard project
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="project-name" className="mb-2 block">
+              Project Name
+            </Label>
+            <Input
+              id="project-name"
+              placeholder="Enter project name..."
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newProjectName.trim()) {
+                  handleCreateProject();
+                }
+              }}
+              data-testid="input-new-project-name"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowNewProjectDialog(false);
+                setNewProjectName("");
+              }}
+              data-testid="button-cancel-new-project"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateProject}
+              disabled={!newProjectName.trim() || createStoryboardMutation.isPending}
+              data-testid="button-confirm-new-project"
+            >
+              {createStoryboardMutation.isPending ? "Creating..." : "Create Project"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
