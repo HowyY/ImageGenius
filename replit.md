@@ -130,7 +130,7 @@ The application implements comprehensive error handling for all data queries:
 
 ### Reusable Components
 
-- **GenerationSettings** (`client/src/components/GenerationSettings.tsx`): Encapsulated style and engine selector card with proper TypeScript typing (EngineType, StylePreset)
+- **SettingsBar** (`client/src/components/SettingsBar.tsx`): Collapsible settings bar for style and engine configuration. Shows compact preview (style thumbnail, name, engine) when collapsed; expands to show full style selector, engine selector, and style reference image. Supports `disabled` prop for viewer role-based access control. Exports `EngineType` type for use across the application.
 
 ## External Dependencies
 
