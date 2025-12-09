@@ -108,6 +108,7 @@ export const storyboardScenes = pgTable("storyboard_scenes", {
   orderIndex: integer("order_index").notNull().default(0),
   voiceOver: text("voice_over").notNull().default(""),
   visualDescription: text("visual_description").notNull().default(""),
+  viewerDescription: text("viewer_description").notNull().default(""), // Client-facing description (shown to Viewers)
   generatedImageUrl: text("generated_image_url"),
   styleId: text("style_id"),
   engine: text("engine"),
@@ -285,6 +286,7 @@ export const insertStoryboardSceneSchema = z.object({
   orderIndex: z.number().int().min(0).optional(),
   voiceOver: z.string().default(""),
   visualDescription: z.string().default(""),
+  viewerDescription: z.string().default(""), // Client-facing description
   generatedImageUrl: z.string().url().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
@@ -302,6 +304,7 @@ export const updateStoryboardSceneSchema = z.object({
   orderIndex: z.number().int().min(0).optional(),
   voiceOver: z.string().optional(),
   visualDescription: z.string().optional(),
+  viewerDescription: z.string().optional(), // Client-facing description
   generatedImageUrl: z.string().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),

@@ -47,6 +47,7 @@ import { StageNavigation } from "@/components/StageNavigation";
 import { useRole } from "@/contexts/RoleContext";
 import { SceneInspector } from "@/components/SceneInspector";
 import { StoryboardSetup } from "@/components/StoryboardSetup";
+import { ViewerSceneCard } from "@/components/ViewerSceneCard";
 import { useLocation, useSearch } from "wouter";
 
 interface EditingState {
@@ -1189,7 +1190,23 @@ export default function Storyboard() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-            {scenes.map((scene) => (
+            {scenes.map((scene) => 
+              isViewer ? (
+                <ViewerSceneCard
+                  key={scene.id}
+                  scene={scene}
+                  onImageClick={(url) => {
+                    const style = styles?.find(s => s.id === scene.styleId);
+                    setPreviewImage({
+                      url,
+                      prompt: scene.viewerDescription || scene.visualDescription || "Generated image",
+                      style: style?.label || scene.styleId || "Unknown",
+                      engine: scene.engine || "Unknown",
+                      date: "Current scene"
+                    });
+                  }}
+                />
+              ) : (
               <Card 
                 key={scene.id} 
                 className={`overflow-visible flex flex-col border cursor-pointer transition-all ${
@@ -1493,7 +1510,8 @@ export default function Storyboard() {
                   )}
                 </div>
               </Card>
-            ))}
+              )
+            )}
           </div>
         )}
         
