@@ -1,0 +1,180 @@
+这是 orama 的两个核心样式文件：
+
+1. client/src/index.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(20, 14.3%, 4.1%);
+  --muted: hsl(60, 4.8%, 95.9%);
+  --muted-foreground: hsl(25, 5.3%, 44.7%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(20, 14.3%, 4.1%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(20, 14.3%, 4.1%);
+  --border: hsl(20, 5.9%, 90%);
+  --input: hsl(20, 5.9%, 90%);
+  --primary: hsl(30, 27%, 8%);
+  --primary-foreground: hsl(248, 24%, 95%);
+  --secondary: hsl(210, 25%, 20%);
+  --secondary-foreground: hsl(248, 24%, 95%);
+  --accent: hsl(217, 91%, 60%);
+  --accent-foreground: hsl(210, 40%, 98%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(60, 9.1%, 97.8%);
+  --ring: hsl(20, 14.3%, 4.1%);
+  --radius: 0.5rem;
+  
+  /* Custom colors for video editor theme */
+  --slate-900: hsl(222, 84%, 5%);
+  --slate-800: hsl(215, 28%, 17%);
+  --slate-700: hsl(215, 25%, 27%);
+  --slate-600: hsl(215, 20%, 35%);
+  --slate-500: hsl(215, 16%, 47%);
+  --slate-400: hsl(215, 20%, 65%);
+  --slate-300: hsl(215, 25%, 84%);
+  --slate-200: hsl(213, 27%, 92%);
+  --slate-100: hsl(210, 40%, 98%);
+  --slate-50: hsl(210, 40%, 98%);
+  
+  /* Success, warning colors */
+  --success: hsl(142, 76%, 36%);
+  --warning: hsl(38, 92%, 50%);
+}
+.dark {
+  --background: hsl(222, 84%, 5%);
+  --foreground: hsl(210, 40%, 98%);
+  --muted: hsl(215, 28%, 17%);
+  --muted-foreground: hsl(215, 20%, 65%);
+  --popover: hsl(222, 84%, 5%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --card: hsl(215, 28%, 17%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --border: hsl(215, 20%, 35%);
+  --input: hsl(215, 20%, 35%);
+  --primary: hsl(30, 27%, 8%);
+  --primary-foreground: hsl(248, 24%, 95%);
+  --secondary: hsl(210, 25%, 20%);
+  --secondary-foreground: hsl(248, 24%, 95%);
+  --accent: hsl(217, 91%, 60%);
+  --accent-foreground: hsl(210, 40%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --ring: hsl(215, 20%, 65%);
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased;
+    background-color: hsl(222, 84%, 5%);
+    color: hsl(210, 40%, 98%);
+  }
+}
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(215, 28%, 17%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(215, 20%, 35%);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(215, 16%, 47%);
+}
+
+2. tailwind.config.ts
+import type { Config } from "tailwindcss";
+export default {
+  darkMode: ["class"],
+  content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
+  theme: {
+    extend: {
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+      colors: {
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        card: {
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)",
+        },
+        popover: {
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)",
+        },
+        primary: {
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)",
+        },
+        secondary: {
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
+        accent: {
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)",
+        },
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)",
+        },
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        chart: {
+          "1": "var(--chart-1)",
+          "2": "var(--chart-2)",
+          "3": "var(--chart-3)",
+          "4": "var(--chart-4)",
+          "5": "var(--chart-5)",
+        },
+        sidebar: {
+          DEFAULT: "var(--sidebar-background)",
+          foreground: "var(--sidebar-foreground)",
+          primary: "var(--sidebar-primary)",
+          "primary-foreground": "var(--sidebar-primary-foreground)",
+          accent: "var(--sidebar-accent)",
+          "accent-foreground": "var(--sidebar-accent-foreground)",
+          border: "var(--sidebar-border)",
+          ring: "var(--sidebar-ring)",
+        },
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
+    },
+  },
+  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+} satisfies Config;
+
+主要特点：
+
+深色主题为主（--background: hsl(222, 84%, 5%) 是深蓝黑色）
+强调色是蓝色（--accent: hsl(217, 91%, 60%)）
+自定义 slate 色阶用于 video editor 界面
+自定义滚动条样式

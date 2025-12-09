@@ -1,8 +1,26 @@
-# AI Image Generator
+# AI Image Generator (ImageGenius)
 
 ## Overview
 
-This web application provides an AI-driven image generation platform, allowing users to create images from text prompts with various styles and AI engine options. It features a React frontend and an Express backend, managing presets and generation requests. Key functionalities include text-to-image generation, style selection, reference image integration (up to three), generation history, and a visual storyboard for iterative design. The project aims to be a user-friendly and powerful tool for creative AI image generation, with a focus on business vision, market potential, and ambitious project growth.
+This web application provides an AI-driven image generation platform integrated with Orama's storyboard workflow system. It demonstrates Orama's project hierarchy (projects → videos → versions → scenes → media) with role-based access control. Key functionalities include text-to-image generation, style selection, reference image integration (up to three), generation history, and a visual storyboard for iterative design. The UI follows Orama's design system with dual theme support (light/dark mode).
+
+### Orama UI Integration (December 2024)
+
+**New Features:**
+- **Dual Theme System**: Light/dark mode toggle with Orama color scheme (deep blue-black background, blue accents)
+- **Projects Page**: 4-column card grid layout showing all storyboards with status filtering
+- **Stage Navigation**: Bottom navigation bar showing workflow progress (Manage → Outline → Script → Storyboard → Audio → Video)
+- **Role-Based Access**: Viewer (read-only) and Designer (full access) roles with route protection
+
+**Role Permissions:**
+- **Viewer**: Can access Projects and Storyboard pages in read-only mode (no editing, generating, or deleting)
+- **Designer**: Full access to all pages including Generate, History, Style Editor, Character Editor, Asset Editor, and Node Editor
+
+**Key Files:**
+- `client/src/contexts/RoleContext.tsx` - Role state management with localStorage persistence
+- `client/src/components/ProtectedRoute.tsx` - Route guard for designer-only pages
+- `client/src/components/StageNavigation.tsx` - Bottom workflow progress bar
+- `client/src/pages/projects.tsx` - Orama-style project list with grid layout
 
 ## User Preferences
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Home, History, Sparkles, LayoutGrid, Menu, Users, GitBranch, Package } from "lucide-react";
+import { Home, History, Sparkles, LayoutGrid, Menu, Users, GitBranch, Package, FolderOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
@@ -10,20 +10,36 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { ThemeToggle } from "./ThemeToggle";
+import { RoleSwitcher } from "./RoleSwitcher";
+import { useRole } from "@/contexts/RoleContext";
 
-const navItems = [
-  { href: "/", label: "Generate", icon: Home, testId: "button-nav-home" },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  testId: string;
+  isBeta?: boolean;
+  designerOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { href: "/", label: "Generate", icon: Home, testId: "button-nav-home", designerOnly: true },
+  { href: "/projects", label: "Projects", icon: FolderOpen, testId: "button-nav-projects" },
   { href: "/storyboard", label: "Storyboard", icon: LayoutGrid, testId: "button-nav-storyboard" },
-  { href: "/history", label: "History", icon: History, testId: "button-nav-history" },
-  { href: "/style-editor", label: "Style Editor", icon: Sparkles, testId: "button-nav-style-editor" },
-  { href: "/characters", label: "Characters", icon: Users, testId: "button-nav-characters" },
-  { href: "/assets", label: "Assets", icon: Package, testId: "button-nav-assets", isBeta: true },
-  { href: "/node-editor", label: "Node Editor", icon: GitBranch, testId: "button-nav-node-editor", isBeta: true },
+  { href: "/history", label: "History", icon: History, testId: "button-nav-history", designerOnly: true },
+  { href: "/style-editor", label: "Style Editor", icon: Sparkles, testId: "button-nav-style-editor", designerOnly: true },
+  { href: "/characters", label: "Characters", icon: Users, testId: "button-nav-characters", designerOnly: true },
+  { href: "/assets", label: "Assets", icon: Package, testId: "button-nav-assets", isBeta: true, designerOnly: true },
+  { href: "/node-editor", label: "Node Editor", icon: GitBranch, testId: "button-nav-node-editor", isBeta: true, designerOnly: true },
 ];
 
 export function Navigation() {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isDesigner } = useRole();
+  
+  const visibleNavItems = navItems.filter(item => !item.designerOnly || isDesigner);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -36,7 +52,7 @@ export function Navigation() {
           
           {/* Desktop navigation - hidden on mobile */}
           <nav className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <Button
                 key={item.href}
                 variant={location === item.href ? "default" : "ghost"}
@@ -55,46 +71,52 @@ export function Navigation() {
                 </Link>
               </Button>
             ))}
+            <RoleSwitcher />
+            <ThemeToggle />
           </nav>
 
-          {/* Mobile hamburger menu - visible only on mobile */}
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
-                <Menu className="w-5 h-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-64">
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  Navigation
-                </SheetTitle>
-              </SheetHeader>
-              <nav className="flex flex-col gap-2 mt-6">
-                {navItems.map((item) => (
-                  <Button
-                    key={item.href}
-                    variant={location === item.href ? "default" : "ghost"}
-                    className="justify-start"
-                    asChild
-                    data-testid={`${item.testId}-mobile`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Link href={item.href}>
-                      <item.icon className="w-4 h-4 mr-2" />
-                      {item.label}
-                      {"isBeta" in item && item.isBeta && (
-                        <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
-                          Beta
-                        </Badge>
-                      )}
-                    </Link>
-                  </Button>
-                ))}
-              </nav>
-            </SheetContent>
-          </Sheet>
+          {/* Mobile menu controls - visible only on mobile */}
+          <div className="flex items-center gap-1 md:hidden">
+            <RoleSwitcher />
+            <ThemeToggle />
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-64">
+                <SheetHeader>
+                  <SheetTitle className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    Navigation
+                  </SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-col gap-2 mt-6">
+                  {visibleNavItems.map((item) => (
+                    <Button
+                      key={item.href}
+                      variant={location === item.href ? "default" : "ghost"}
+                      className="justify-start"
+                      asChild
+                      data-testid={`${item.testId}-mobile`}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Link href={item.href}>
+                        <item.icon className="w-4 h-4 mr-2" />
+                        {item.label}
+                        {"isBeta" in item && item.isBeta && (
+                          <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
+                            Beta
+                          </Badge>
+                        )}
+                      </Link>
+                    </Button>
+                  ))}
+                </nav>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </div>
     </header>

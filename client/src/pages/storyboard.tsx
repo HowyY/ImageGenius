@@ -42,6 +42,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { format } from "date-fns";
 import { useGeneration } from "@/contexts/GenerationContext";
 import { useCharacters, CHARACTERS_QUERY_KEY } from "@/hooks/use-characters";
+import { StageNavigation } from "@/components/StageNavigation";
+import { useRole } from "@/contexts/RoleContext";
 
 interface EditingState {
   sceneDescription: string;
@@ -71,6 +73,7 @@ function clearCurrentStoryboardId() {
 export default function Storyboard() {
   const { toast } = useToast();
   const { startGeneration, isGenerating } = useGeneration();
+  const { isDesigner, isViewer } = useRole();
   const [editingScenes, setEditingScenes] = useState<Record<number, EditingState>>({});
   const [selectedStyle, setSelectedStyle] = useState<string>(getSelectedStyleId() || "");
   const [selectedEngine, setSelectedEngineState] = useState<EngineType>((getEngine() || "nanobanana") as EngineType);
@@ -455,6 +458,8 @@ export default function Storyboard() {
   }, []);
 
   const handleDescriptionBlur = useCallback((scene: SelectStoryboardScene) => {
+    if (!isDesigner) return;
+    
     const editing = editingScenes[scene.id];
     if (!editing) return;
 
@@ -467,7 +472,7 @@ export default function Storyboard() {
         visualDescription: newValue 
       });
     }
-  }, [editingScenes, updateSceneMutation]);
+  }, [editingScenes, updateSceneMutation, isDesigner]);
 
   const getCharacterAvatar = useCallback((character: SelectCharacter): { imageUrl: string; crop?: AvatarCrop } | null => {
     const cards = (character.characterCards as CharacterCard[] | null) || [];
@@ -828,7 +833,7 @@ export default function Storyboard() {
   const isLoading = storyboardsLoading || scenesLoading;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
@@ -954,23 +959,25 @@ export default function Storyboard() {
               <TooltipContent>Refresh</TooltipContent>
             </Tooltip>
             
-            {currentStoryboardId ? (
-              <Button
-                onClick={() => createSceneMutation.mutate()}
-                disabled={createSceneMutation.isPending}
-                data-testid="button-add-scene"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Scene
-              </Button>
-            ) : (
-              <Button
-                onClick={() => setCreateStoryboardDialogOpen(true)}
-                data-testid="button-create-first-storyboard"
-              >
-                <FolderPlus className="w-4 h-4 mr-2" />
-                Create Storyboard
-              </Button>
+            {isDesigner && (
+              currentStoryboardId ? (
+                <Button
+                  onClick={() => createSceneMutation.mutate()}
+                  disabled={createSceneMutation.isPending}
+                  data-testid="button-add-scene"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Scene
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setCreateStoryboardDialogOpen(true)}
+                  data-testid="button-create-first-storyboard"
+                >
+                  <FolderPlus className="w-4 h-4 mr-2" />
+                  Create Storyboard
+                </Button>
+              )
             )}
           </div>
         </div>
@@ -1129,24 +1136,26 @@ export default function Storyboard() {
                     </div>
                   )}
                   
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSceneMutation.mutate(scene.id);
-                        }}
-                        disabled={deleteSceneMutation.isPending || isGenerating(scene.id)}
-                        data-testid={`button-delete-scene-${scene.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Delete Scene</TooltipContent>
-                  </Tooltip>
+                  {isDesigner && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSceneMutation.mutate(scene.id);
+                          }}
+                          disabled={deleteSceneMutation.isPending || isGenerating(scene.id)}
+                          data-testid={`button-delete-scene-${scene.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Delete Scene</TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
                 
                 <div className="flex items-center justify-between px-3 py-2 border-b text-sm text-muted-foreground">
@@ -1308,56 +1317,60 @@ export default function Storyboard() {
                       Scene Description
                     </label>
                     <Textarea
-                      placeholder="Enter scene description for image generation..."
+                      placeholder={isViewer ? "View-only mode" : "Enter scene description for image generation..."}
                       value={getSceneDescription(scene)}
                       onChange={(e) => {
+                        if (!isDesigner) return;
                         handleDescriptionChange(scene.id, e.target.value);
                         const el = e.target;
                         el.style.height = 'auto';
                         el.style.height = `${Math.max(120, el.scrollHeight)}px`;
                       }}
-                      onBlur={() => handleDescriptionBlur(scene)}
+                      onBlur={() => isDesigner && handleDescriptionBlur(scene)}
                       className="text-sm"
                       style={{ minHeight: '120px', resize: 'none' }}
+                      readOnly={isViewer}
                       data-testid={`textarea-scene-description-${scene.id}`}
                     />
                   </div>
                   
-                  <div className="flex gap-2 mt-3">
-                    <Button
-                      onClick={() => handleGenerateClick(scene)}
-                      disabled={isGenerating(scene.id) || !getSceneDescription(scene).trim()}
-                      className="flex-1"
-                      data-testid={`button-generate-scene-${scene.id}`}
-                    >
-                      {isGenerating(scene.id) ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Generate
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleEditClick(scene)}
-                          disabled={isGenerating(scene.id) || !scene.generatedImageUrl}
-                          data-testid={`button-edit-scene-${scene.id}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Edit with reference</TooltipContent>
-                    </Tooltip>
-                  </div>
+                  {isDesigner && (
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        onClick={() => handleGenerateClick(scene)}
+                        disabled={isGenerating(scene.id) || !getSceneDescription(scene).trim()}
+                        className="flex-1"
+                        data-testid={`button-generate-scene-${scene.id}`}
+                      >
+                        {isGenerating(scene.id) ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Generate
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleEditClick(scene)}
+                            disabled={isGenerating(scene.id) || !scene.generatedImageUrl}
+                            data-testid={`button-edit-scene-${scene.id}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit with reference</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  )}
                 </div>
               </Card>
             ))}
@@ -1958,6 +1971,13 @@ export default function Storyboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {currentStoryboardId && (
+        <StageNavigation 
+          currentStage={currentStoryboard?.currentStage || "storyboard"}
+          stageStatus={currentStoryboard?.stageStatus}
+        />
+      )}
     </div>
   );
 }
