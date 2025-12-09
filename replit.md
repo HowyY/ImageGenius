@@ -16,10 +16,20 @@ This web application provides an AI-driven image generation platform integrated 
 - **Viewer**: Can access Projects and Storyboard pages in read-only mode (no editing, generating, or deleting)
 - **Designer**: Full access to all pages including Generate, History, Style Editor, Character Editor, Asset Editor, and Node Editor
 
+**Navigation Architecture:**
+- **TopToolbar** (top, fixed): Logo, Tools menu (Designer only), Role switcher, Theme toggle
+- **StageNavigation** (bottom, fixed): Workflow stage page selector (Manage → Outline → Script → Storyboard → Audio → Video)
+
+**Page Structure:**
+- All pages have `pt-14` (top toolbar) and `pb-20` (bottom nav) padding
+- Root "/" redirects to Projects page
+- Designer tools (Generate, History, Style/Character/Asset/Node editors) accessible via top Tools menu
+
 **Key Files:**
 - `client/src/contexts/RoleContext.tsx` - Role state management with localStorage persistence
 - `client/src/components/ProtectedRoute.tsx` - Route guard for designer-only pages
-- `client/src/components/StageNavigation.tsx` - Bottom workflow progress bar
+- `client/src/components/TopToolbar.tsx` - Top navigation with tools menu and role/theme controls
+- `client/src/components/StageNavigation.tsx` - Bottom workflow page navigator
 - `client/src/pages/projects.tsx` - Orama-style project list with grid layout
 
 ## User Preferences
