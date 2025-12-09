@@ -40,11 +40,18 @@ This web application provides an AI-driven image generation platform integrated 
 - **Position**: Fixed right sidebar between TopToolbar (top-14) and StageNavigation (bottom-20)
 - **State management**: selectedSceneId tracks which scene is being edited, clears on storyboard change or scene deletion
 
+**ViewerSceneCard (December 2024):**
+- **Purpose**: Client-facing scene card for Viewer role, showing only approved content
+- **Content**: Main generated image (click to preview), collapsible "Generated Images" section with thumbnails, Voice Over text, Visual Description (uses viewerDescription field if set, falls back to visualDescription)
+- **Data separation**: `viewerDescription` field for client-facing text vs `visualDescription` for AI prompt (Designer only)
+- **Role gating**: Storyboard page conditionally renders ViewerSceneCard for Viewers, full editing card for Designers
+
 **Key Files:**
 - `client/src/contexts/RoleContext.tsx` - Role state management with localStorage persistence
 - `client/src/components/ProtectedRoute.tsx` - Route guard for designer-only pages
 - `client/src/components/TopToolbar.tsx` - Top navigation with tools menu and role/theme controls
 - `client/src/components/StageNavigation.tsx` - Bottom workflow page navigator
+- `client/src/components/ViewerSceneCard.tsx` - Client-facing scene card for Viewer role
 - `client/src/components/StoryboardSetup.tsx` - Designer onboarding wizard for new storyboards
 - `client/src/components/SceneInspector.tsx` - Contextual scene property inspector (replaced ResourcePanel)
 - `client/src/pages/projects.tsx` - Orama-style project list with grid layout
