@@ -1,4 +1,4 @@
-import { FileText, Film, Headphones, LayoutGrid, ListTree, Settings } from "lucide-react";
+import { FileText, Film, FolderOpen, Headphones, LayoutGrid, ListTree } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
 
@@ -10,7 +10,7 @@ interface Stage {
 }
 
 const stages: Stage[] = [
-  { id: "project", label: "Project", icon: Settings, path: "/projects" },
+  { id: "project", label: "Project", icon: FolderOpen, path: "/projects" },
   { id: "outline", label: "Outline", icon: ListTree, path: "/outline" },
   { id: "script", label: "Script", icon: FileText, path: "/script" },
   { id: "storyboard", label: "Storyboard", icon: LayoutGrid, path: "/storyboard" },
@@ -32,6 +32,7 @@ export function StageNavigation({ className }: StageNavigationProps) {
   };
   
   const currentIndex = getCurrentStageIndex();
+  const isOnProjectsPage = location === "/" || location === "/projects";
 
   return (
     <div className={cn("fixed bottom-0 left-0 right-0 bg-background border-t z-40", className)}>
@@ -39,37 +40,60 @@ export function StageNavigation({ className }: StageNavigationProps) {
         <div className="flex items-center justify-between py-3">
           {stages.map((stage, index) => {
             const isActive = index === currentIndex;
+            const isDisabled = isOnProjectsPage && index > 0;
+            
+            const content = (
+              <>
+                <div className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+                  isActive && "bg-primary",
+                  !isActive && !isDisabled && "bg-muted",
+                  isDisabled && "bg-muted/50"
+                )}>
+                  <stage.icon className={cn(
+                    "w-4 h-4",
+                    isActive ? "text-primary-foreground" : "text-muted-foreground",
+                    isDisabled && "opacity-40"
+                  )} />
+                </div>
+                <span className={cn(
+                  "text-xs font-medium",
+                  isActive && "text-primary",
+                  !isActive && !isDisabled && "text-muted-foreground",
+                  isDisabled && "text-muted-foreground/40"
+                )}>
+                  {stage.label}
+                </span>
+              </>
+            );
             
             return (
               <div key={stage.id} className="flex items-center">
-                <Link
-                  href={stage.path}
-                  className={cn(
-                    "flex flex-col items-center gap-1 px-3 py-1 rounded-md transition-colors cursor-pointer hover-elevate"
-                  )}
-                  data-testid={`stage-${stage.id}`}
-                >
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
-                    isActive && "bg-primary",
-                    !isActive && "bg-muted"
-                  )}>
-                    <stage.icon className={cn(
-                      "w-4 h-4",
-                      isActive ? "text-primary-foreground" : "text-muted-foreground"
-                    )} />
+                {isDisabled ? (
+                  <div
+                    className="flex flex-col items-center gap-1 px-3 py-1 rounded-md cursor-not-allowed"
+                    data-testid={`stage-${stage.id}`}
+                    title="Select a project first"
+                  >
+                    {content}
                   </div>
-                  <span className={cn(
-                    "text-xs font-medium",
-                    isActive && "text-primary",
-                    !isActive && "text-muted-foreground"
-                  )}>
-                    {stage.label}
-                  </span>
-                </Link>
+                ) : (
+                  <Link
+                    href={stage.path}
+                    className={cn(
+                      "flex flex-col items-center gap-1 px-3 py-1 rounded-md transition-colors cursor-pointer hover-elevate"
+                    )}
+                    data-testid={`stage-${stage.id}`}
+                  >
+                    {content}
+                  </Link>
+                )}
                 
                 {index < stages.length - 1 && (
-                  <div className="w-8 h-0.5 mx-1 bg-muted" />
+                  <div className={cn(
+                    "w-8 h-0.5 mx-1",
+                    isDisabled ? "bg-muted/30" : "bg-muted"
+                  )} />
                 )}
               </div>
             );
