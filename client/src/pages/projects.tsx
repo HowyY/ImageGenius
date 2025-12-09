@@ -21,11 +21,21 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Search, Video, LayoutGrid } from "lucide-react";
-import type { SelectStoryboard } from "@shared/schema";
+import { Plus, Search, Video, LayoutGrid, Trash2 } from "lucide-react";
+import type { SelectStoryboard, SelectStyle } from "@shared/schema";
 import { StageNavigation } from "@/components/StageNavigation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type StageStatus = "in_progress" | "completed" | "in_production" | "all";
 
@@ -34,6 +44,9 @@ export default function Projects() {
   const [statusFilter, setStatusFilter] = useState<StageStatus>("all");
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectStyleId, setNewProjectStyleId] = useState<string>("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<SelectStoryboard | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -41,15 +54,20 @@ export default function Projects() {
     queryKey: ["/api/storyboards"],
   });
 
+  const { data: styles = [] } = useQuery<SelectStyle[]>({
+    queryKey: ["/api/styles"],
+  });
+
   const createStoryboardMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const res = await apiRequest("POST", "/api/storyboards", { name });
+    mutationFn: async (data: { name: string; styleId?: string }) => {
+      const res = await apiRequest("POST", "/api/storyboards", data);
       return res.json();
     },
     onSuccess: (newStoryboard: SelectStoryboard) => {
       queryClient.invalidateQueries({ queryKey: ["/api/storyboards"] });
       setShowNewProjectDialog(false);
       setNewProjectName("");
+      setNewProjectStyleId("");
       toast({
         title: "Project Created",
         description: `"${newStoryboard.name}" has been created.`,
@@ -66,9 +84,49 @@ export default function Projects() {
     },
   });
 
+  const deleteStoryboardMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/storyboards/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/storyboards"] });
+      toast({
+        title: "Project Deleted",
+        description: `"${projectToDelete?.name}" has been deleted.`,
+      });
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete project",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateProject = () => {
     if (newProjectName.trim()) {
-      createStoryboardMutation.mutate(newProjectName.trim());
+      const styleId = newProjectStyleId && newProjectStyleId !== "none" ? newProjectStyleId : undefined;
+      createStoryboardMutation.mutate({
+        name: newProjectName.trim(),
+        styleId,
+      });
+    }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, project: SelectStoryboard) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (projectToDelete) {
+      deleteStoryboardMutation.mutate(projectToDelete.id);
     }
   };
 
@@ -199,7 +257,7 @@ export default function Projects() {
             {filteredProjects.map((project) => (
               <Link key={project.id} href={`/storyboard?id=${project.id}`}>
                 <Card
-                  className="overflow-hidden hover-elevate cursor-pointer transition-all"
+                  className="overflow-hidden hover-elevate cursor-pointer transition-all group"
                   data-testid={`card-project-${project.id}`}
                 >
                   <div className="aspect-video bg-muted flex items-center justify-center relative">
@@ -207,6 +265,15 @@ export default function Projects() {
                     <div className="absolute bottom-2 right-2">
                       {getStatusBadge(project.stageStatus)}
                     </div>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => handleDeleteClick(e, project)}
+                      data-testid={`button-delete-project-${project.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                   <CardContent className="p-3">
                     <h3 className="font-medium truncate" data-testid={`text-project-name-${project.id}`}>
@@ -234,22 +301,42 @@ export default function Projects() {
               Enter a name for your new storyboard project
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="project-name" className="mb-2 block">
-              Project Name
-            </Label>
-            <Input
-              id="project-name"
-              placeholder="Enter project name..."
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newProjectName.trim()) {
-                  handleCreateProject();
-                }
-              }}
-              data-testid="input-new-project-name"
-            />
+          <div className="py-4 space-y-4">
+            <div>
+              <Label htmlFor="project-name" className="mb-2 block">
+                Project Name
+              </Label>
+              <Input
+                id="project-name"
+                placeholder="Enter project name..."
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newProjectName.trim()) {
+                    handleCreateProject();
+                  }
+                }}
+                data-testid="input-new-project-name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="project-style" className="mb-2 block">
+                Style Preset (Optional)
+              </Label>
+              <Select value={newProjectStyleId} onValueChange={setNewProjectStyleId}>
+                <SelectTrigger id="project-style" data-testid="select-new-project-style">
+                  <SelectValue placeholder="Select a style..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Style</SelectItem>
+                  {styles.map((style) => (
+                    <SelectItem key={style.id} value={style.id} data-testid={`option-style-${style.id}`}>
+                      {style.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -257,6 +344,7 @@ export default function Projects() {
               onClick={() => {
                 setShowNewProjectDialog(false);
                 setNewProjectName("");
+                setNewProjectStyleId("");
               }}
               data-testid="button-cancel-new-project"
             >
@@ -272,6 +360,28 @@ export default function Projects() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent data-testid="dialog-delete-project">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{projectToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteStoryboardMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteStoryboardMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

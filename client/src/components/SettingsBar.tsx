@@ -70,7 +70,7 @@ export function SettingsBar({
   };
 
   const handleEditStyle = () => {
-    setLocation("/styles");
+    setLocation("/style-editor");
   };
 
   const handleOpenProjectSettings = () => {
@@ -333,7 +333,7 @@ export function SettingsBar({
                 className="w-full justify-start"
                 onClick={() => {
                   setShowProjectSettings(false);
-                  setLocation("/styles");
+                  setLocation("/style-editor");
                 }}
                 data-testid="button-settings-edit-style"
               >
