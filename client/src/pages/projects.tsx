@@ -21,7 +21,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Search, Video, LayoutGrid, Trash2 } from "lucide-react";
+import { Plus, Search, Video, LayoutGrid, Trash2, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { SelectStoryboard, SelectStyle } from "@shared/schema";
 import { StageNavigation } from "@/components/StageNavigation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -115,13 +121,6 @@ export default function Projects() {
         styleId,
       });
     }
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent, project: SelectStoryboard) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setProjectToDelete(project);
-    setDeleteDialogOpen(true);
   };
 
   const handleConfirmDelete = () => {
@@ -265,15 +264,33 @@ export default function Projects() {
                     <div className="absolute bottom-2 right-2">
                       {getStatusBadge(project.stageStatus)}
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => handleDeleteClick(e, project)}
-                      data-testid={`button-delete-project-${project.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm"
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`button-project-menu-${project.id}`}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={(e) => {
+                            e.stopPropagation();
+                            setProjectToDelete(project);
+                            setDeleteDialogOpen(true);
+                          }}
+                          data-testid={`button-delete-project-${project.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <CardContent className="p-3">
                     <h3 className="font-medium truncate" data-testid={`text-project-name-${project.id}`}>
