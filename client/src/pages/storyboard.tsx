@@ -44,7 +44,7 @@ import { useGeneration } from "@/contexts/GenerationContext";
 import { useCharacters, CHARACTERS_QUERY_KEY } from "@/hooks/use-characters";
 import { StageNavigation } from "@/components/StageNavigation";
 import { useRole } from "@/contexts/RoleContext";
-import { ResourcePanel } from "@/components/ResourcePanel";
+import { SceneInspector } from "@/components/SceneInspector";
 
 interface EditingState {
   sceneDescription: string;
@@ -98,7 +98,8 @@ export default function Storyboard() {
   const [copyCharsDialogOpen, setCopyCharsDialogOpen] = useState(false);
   const [copyCharsSourceScene, setCopyCharsSourceScene] = useState<{ id: number; characterIds: string[] } | null>(null);
   const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
-  const [resourcePanelOpen, setResourcePanelOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
   
 
   const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
@@ -213,6 +214,7 @@ export default function Storyboard() {
     setCurrentStoryboardIdState(id);
     setCurrentStoryboardId(id);
     setEditingScenes({});
+    setSelectedSceneId(null);
   };
 
   const openSceneHistory = (sceneId: number) => {
@@ -396,8 +398,8 @@ export default function Storyboard() {
   });
 
   const updateSceneMutation = useMutation({
-    mutationFn: async ({ id, visualDescription, generatedImageUrl }: { id: number; visualDescription?: string; generatedImageUrl?: string }) => {
-      return apiRequest("PATCH", `/api/scenes/${id}`, { visualDescription, generatedImageUrl });
+    mutationFn: async ({ id, visualDescription, generatedImageUrl, styleId }: { id: number; visualDescription?: string; generatedImageUrl?: string; styleId?: string }) => {
+      return apiRequest("PATCH", `/api/scenes/${id}`, { visualDescription, generatedImageUrl, styleId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
@@ -436,7 +438,10 @@ export default function Storyboard() {
     mutationFn: async (id: number) => {
       return apiRequest("DELETE", `/api/scenes/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
+      if (selectedSceneId === deletedId) {
+        setSelectedSceneId(null);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
       toast({
         title: "Scene deleted",
@@ -1092,7 +1097,12 @@ export default function Storyboard() {
             {scenes.map((scene) => (
               <Card 
                 key={scene.id} 
-                className="overflow-visible flex flex-col border"
+                className={`overflow-visible flex flex-col border cursor-pointer transition-all ${
+                  selectedSceneId === scene.id 
+                    ? "ring-2 ring-primary shadow-lg" 
+                    : "hover-elevate"
+                }`}
+                onClick={() => setSelectedSceneId(scene.id)}
                 data-testid={`scene-card-${scene.id}`}
               >
                 <div 
@@ -1976,11 +1986,44 @@ export default function Storyboard() {
       
       <StageNavigation />
       
-      <ResourcePanel
-        isOpen={resourcePanelOpen}
-        onToggle={() => setResourcePanelOpen(!resourcePanelOpen)}
-        selectedStyleId={selectedStyle}
-        onStyleSelect={setSelectedStyle}
+      <SceneInspector
+        isOpen={inspectorOpen}
+        onToggle={() => setInspectorOpen(!inspectorOpen)}
+        selectedScene={selectedSceneId ? scenes?.find(s => s.id === selectedSceneId) || null : null}
+        selectedStyleId={(() => {
+          const scene = selectedSceneId ? scenes?.find(s => s.id === selectedSceneId) : null;
+          return scene?.styleId || selectedStyle;
+        })()}
+        onStyleSelect={(styleId) => {
+          if (selectedSceneId) {
+            updateSceneMutation.mutate({ id: selectedSceneId, styleId });
+          }
+        }}
+        onDescriptionChange={(desc) => {
+          if (selectedSceneId) {
+            handleDescriptionChange(selectedSceneId, desc);
+          }
+        }}
+        onDescriptionBlur={() => {
+          if (selectedSceneId) {
+            const scene = scenes?.find(s => s.id === selectedSceneId);
+            if (scene) handleDescriptionBlur(scene);
+          }
+        }}
+        onCharacterToggle={(characterId) => {
+          if (selectedSceneId) {
+            const scene = scenes?.find(s => s.id === selectedSceneId);
+            if (scene) {
+              toggleSceneCharacter(selectedSceneId, characterId, scene.selectedCharacterIds || []);
+            }
+          }
+        }}
+        onGenerate={() => {
+          const scene = scenes?.find(s => s.id === selectedSceneId);
+          if (scene) handleGenerateClick(scene);
+        }}
+        isGenerating={selectedSceneId ? isGenerating(selectedSceneId) : false}
+        editingDescription={selectedSceneId ? editingScenes[selectedSceneId]?.sceneDescription : undefined}
       />
     </div>
   );

@@ -25,18 +25,19 @@ This web application provides an AI-driven image generation platform integrated 
 - Root "/" redirects to Projects page
 - Designer tools (Generate, History, Style/Character/Asset/Node editors) accessible via top Tools menu
 
-**ResourcePanel (December 2024):**
-- **Fixed-position sidebar**: Collapsible right-side panel on Storyboard page
-- **Three tabs**: Styles, Characters, Assets for quick resource access
-- **Role-aware**: Designers can select styles/characters; Viewers see read-only list
-- **Position**: Fixed between TopToolbar (top-14) and StageNavigation (bottom-20)
+**SceneInspector (December 2024):**
+- **Contextual workflow**: Click scene card to select, right panel shows that scene's properties
+- **Per-scene properties**: Description (editable), Style (persisted per scene), Characters (toggle selection)
+- **Role-aware**: Designers can edit, Viewers see read-only view
+- **Position**: Fixed right sidebar between TopToolbar (top-14) and StageNavigation (bottom-20)
+- **State management**: selectedSceneId tracks which scene is being edited, clears on storyboard change or scene deletion
 
 **Key Files:**
 - `client/src/contexts/RoleContext.tsx` - Role state management with localStorage persistence
 - `client/src/components/ProtectedRoute.tsx` - Route guard for designer-only pages
 - `client/src/components/TopToolbar.tsx` - Top navigation with tools menu and role/theme controls
 - `client/src/components/StageNavigation.tsx` - Bottom workflow page navigator
-- `client/src/components/ResourcePanel.tsx` - Collapsible sidebar with Styles/Characters/Assets tabs
+- `client/src/components/SceneInspector.tsx` - Contextual scene property inspector (replaced ResourcePanel)
 - `client/src/pages/projects.tsx` - Orama-style project list with grid layout
 
 ## User Preferences
