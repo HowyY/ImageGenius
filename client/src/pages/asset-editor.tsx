@@ -249,7 +249,7 @@ export default function AssetEditor() {
   });
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex" data-testid="asset-editor-page">
+    <div className="h-[calc(100vh-3.5rem)] mt-14 flex" data-testid="asset-editor-page">
       <div className="w-80 border-r bg-muted/30 flex flex-col">
         <div className="p-4 border-b">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "background" | "prop")}>

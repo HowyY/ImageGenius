@@ -1295,7 +1295,7 @@ ${negativePrompt}`;
 
   if (stylesLoading) {
     return (
-      <div className="min-h-screen bg-background p-4">
+      <div className="min-h-screen bg-background pt-14 p-4">
         <div className="max-w-7xl mx-auto">
           <Skeleton className="h-8 w-48 mb-4" />
           <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4">
@@ -1419,7 +1419,7 @@ ${negativePrompt}`;
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-14">
       <div className="max-w-7xl mx-auto p-4">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>

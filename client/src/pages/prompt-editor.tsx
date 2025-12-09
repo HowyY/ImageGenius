@@ -1130,7 +1130,7 @@ ${negativePrompt}`;
   // Show loading state while data is being fetched
   if (stylesLoading || (selectedStyleId && templateLoading)) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-14">
         <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6">
             <h1 className="text-3xl font-bold">Prompt Template Editor</h1>
@@ -1147,7 +1147,7 @@ ${negativePrompt}`;
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-14">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Prompt Template Editor</h1>

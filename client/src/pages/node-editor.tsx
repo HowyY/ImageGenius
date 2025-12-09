@@ -441,7 +441,7 @@ function NodeEditorContent() {
   return (
     <div
       ref={reactFlowWrapper}
-      className="h-[calc(100vh-3.5rem)] w-full"
+      className="h-[calc(100vh-3.5rem)] mt-14 w-full"
       data-testid="node-editor-page"
       onClick={closeContextMenu}
     >

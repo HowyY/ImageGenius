@@ -20,14 +20,15 @@ import {
   Moon,
   Sun,
   Eye,
-  PenTool
+  PenTool,
+  ArrowLeft
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function TopToolbar() {
   const { isDesigner, role, setRole } = useRole();
   const { theme, setTheme } = useTheme();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
   const designerTools = [
     { label: "Generate", icon: Sparkles, path: "/generate" },
@@ -38,13 +39,32 @@ export function TopToolbar() {
     { label: "Node Editor", icon: GitBranch, path: "/node-editor" },
   ];
 
+  const toolPaths = ["/generate", "/history", "/style-editor", "/characters", "/assets", "/node-editor", "/prompt-editor", "/manage"];
+  const locationPath = location.split("?")[0];
+  const isOnToolPage = toolPaths.some(path => locationPath === path);
+
   const isToolActive = (path: string) => location === path;
+
+  const handleBack = () => {
+    setLocation("/storyboard");
+  };
 
   return (
     <div className="fixed top-0 left-0 right-0 bg-background border-b z-50">
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-center justify-between h-12">
           <div className="flex items-center gap-2">
+            {isOnToolPage && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleBack}
+                data-testid="button-back"
+                title="Back to Storyboard"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            )}
             <Link href="/projects" className="font-semibold text-lg" data-testid="link-home">
               ImageGenius
             </Link>

@@ -861,7 +861,7 @@ export default function CharacterEditor() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-14">
       <div className="max-w-7xl mx-auto p-4">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
