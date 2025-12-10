@@ -972,10 +972,25 @@ export default function Storyboard() {
         return imageNumber !== undefined ? `[image${imageNumber}]` : `[Region ${num}]`;
       });
       
+      // Build the final prompt with the specific edit format when regions are used
+      let finalPrompt: string;
+      if (sortedIndices.length > 0) {
+        // Format: region references + user prompt wrapped in edit instructions
+        // Each sentence on its own line (important for AI parsing)
+        finalPrompt = `[image2] is a cropped region of [image1].
+The area highlighted in red (the painted/marked region) of [image2] is the region that requires editing.
+${editPrompt}
+Only modify the red-highlighted area.
+Do not change anything else in [image1].`;
+      } else {
+        // No regions - just use the user's prompt directly
+        finalPrompt = editPrompt;
+      }
+      
       setEditDialog(null);
 
       const generateData = await startGeneration({
-        prompt: editPrompt,
+        prompt: finalPrompt,
         styleId: selectedStyle,
         engine: editEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
         userReferenceImages,

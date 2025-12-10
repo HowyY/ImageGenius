@@ -1319,7 +1319,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use the template (from request, database, or default)
       // Note: we use processedPrompt (with character placeholders replaced) instead of raw prompt
       const hasReference = hasUserReference || hasCharacterReference;
-      const finalPrompt = buildPrompt(processedPrompt, selectedStyle, hasReference, templateToUse);
+      
+      // In edit mode, use the user's prompt directly without style template
+      // The edit prompt format is already structured by the frontend
+      const finalPrompt = isEditMode 
+        ? processedPrompt 
+        : buildPrompt(processedPrompt, selectedStyle, hasReference, templateToUse);
 
       // Build image URLs array with priority order:
       // 1. Character card reference images (from placeholder parsing, highest priority)
