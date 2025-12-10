@@ -46,6 +46,13 @@ This web application provides an AI-driven image generation platform integrated 
 - **Smart default**: If global engine is T2I, defaults to "nanobanana" for editing
 - **Use case**: Generate with fast nano, then edit with high-quality pro for precision
 
+**Region Selection for Precise Editing (December 2024):**
+- **Purpose**: Enables users to select a specific area of an image for targeted AI editing
+- **Workflow**: Click "Add Region" → Crop overlay appears with react-easy-crop → Adjust selection → Confirm → Cropped region uploaded to KIE → Insert [选中区域] tag in prompt
+- **Backend**: `/api/upload-region` endpoint uses Busboy for robust multipart parsing, uploads cropped blob to KIE via `uploadBufferToKIE`
+- **Prompt formatting**: On submit, [选中区域] is replaced with [image2], and prompt is wrapped with context: "[image2] is a cropped region of [image1]. {user instruction} Only modify the area shown in [image2]."
+- **API integration**: Both original image and cropped region are passed as `userReferenceImages` array to the generation API
+
 **ViewerSceneCard (December 2024):**
 - **Purpose**: Client-facing scene card for Viewer role, showing only approved content
 - **Content**: Main generated image (click to preview), collapsible "Generated Images" section with thumbnails, Voice Over text, Visual Description (uses viewerDescription field if set, falls back to visualDescription)
