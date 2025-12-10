@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -115,13 +116,21 @@ export function SceneInspector({
     : (selectedScene?.visualDescription || "");
 
   return (
-    <aside 
-      className={`h-full flex flex-col bg-card shadow-lg transition-all duration-300 ease-in-out overflow-hidden ${
-        isOpen ? "w-80 border-l opacity-100" : "w-0 opacity-0 pointer-events-none"
-      }`}
-      aria-hidden={!isOpen}
-    >
-      <div className="flex items-center justify-between p-3 border-b min-w-80">
+    <AnimatePresence mode="wait">
+      {isOpen && (
+        <motion.aside
+          initial={{ x: 320, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 320, opacity: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 300,
+            damping: 30,
+            mass: 0.8,
+          }}
+          className="h-full flex flex-col bg-card border-l w-80 shadow-lg"
+        >
+          <div className="flex items-center justify-between p-3 border-b">
         <span className="font-medium text-sm">
           {selectedScene ? `Scene Inspector` : "Select a Scene"}
         </span>
@@ -287,6 +296,8 @@ export function SceneInspector({
           </Button>
         </div>
       )}
-    </aside>
+        </motion.aside>
+      )}
+    </AnimatePresence>
   );
 }
