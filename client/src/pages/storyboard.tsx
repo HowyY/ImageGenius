@@ -1538,7 +1538,7 @@ export default function Storyboard() {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => handleEditClick(scene)}
+                            onClick={(e) => { e.stopPropagation(); handleEditClick(scene); }}
                             disabled={isGenerating(scene.id) || !scene.generatedImageUrl}
                             data-testid={`button-edit-scene-${scene.id}`}
                           >
