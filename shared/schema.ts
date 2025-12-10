@@ -263,6 +263,7 @@ export const updateStoryboardSchema = z.object({
   objective: z.string().optional(),
   currentStage: z.enum(workflowStageValues).optional(),
   stageStatus: z.enum(stageStatusValues).optional(),
+  setupCompleted: z.boolean().optional(),
 });
 
 export type InsertStoryboard = z.infer<typeof insertStoryboardSchema>;

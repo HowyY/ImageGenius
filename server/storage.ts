@@ -457,6 +457,7 @@ export class MemStorage implements IStorage {
     if (data.objective !== undefined) updateData.objective = data.objective;
     if (data.currentStage !== undefined) updateData.currentStage = data.currentStage;
     if (data.stageStatus !== undefined) updateData.stageStatus = data.stageStatus;
+    if (data.setupCompleted !== undefined) updateData.setupCompleted = data.setupCompleted;
 
     const [result] = await db
       .update(storyboards)

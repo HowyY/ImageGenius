@@ -1882,13 +1882,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { name, description, styleId, engine } = req.body;
+      const { name, description, styleId, engine, setupCompleted } = req.body;
       
       const storyboard = await storage.updateStoryboard(id, {
         name,
         description,
         styleId,
         engine,
+        setupCompleted,
       });
 
       if (!storyboard) {
