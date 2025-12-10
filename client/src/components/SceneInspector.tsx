@@ -115,31 +115,11 @@ export function SceneInspector({
     : (selectedScene?.visualDescription || "");
 
   if (!isOpen) {
-    return (
-      <div className="fixed right-0 top-14 bottom-20 z-40 flex flex-col items-center py-4 bg-card border-l w-12">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className="mb-4"
-          data-testid="button-expand-inspector"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        {selectedScene && (
-          <div className="flex flex-col gap-2 items-center">
-            <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center">
-              <FileText className="w-3 h-3 text-primary" />
-            </div>
-            <span className="text-xs text-muted-foreground writing-mode-vertical">Scene Selected</span>
-          </div>
-        )}
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="fixed right-0 top-14 bottom-20 z-40 flex flex-col bg-card border-l w-80 shadow-lg">
+    <aside className="h-full flex flex-col bg-card border-l w-80 shadow-lg">
       <div className="flex items-center justify-between p-3 border-b">
         <span className="font-medium text-sm">
           {selectedScene ? `Scene Inspector` : "Select a Scene"}
@@ -306,6 +286,6 @@ export function SceneInspector({
           </Button>
         </div>
       )}
-    </div>
+    </aside>
   );
 }
