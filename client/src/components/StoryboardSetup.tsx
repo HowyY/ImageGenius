@@ -47,9 +47,8 @@ export function StoryboardSetup({
         setupCompleted: true,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/storyboards"] });
-      onComplete();
+    onSuccess: async () => {
+      await onComplete();
     },
     onError: () => {
       toast({
