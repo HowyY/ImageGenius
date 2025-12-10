@@ -59,6 +59,7 @@ interface EditDialogState {
   sceneId: number;
   imageUrl: string;
   editPrompt: string;
+  engine: EngineType;
 }
 
 const CURRENT_STORYBOARD_KEY = "currentStoryboardId";
@@ -779,10 +780,13 @@ export default function Storyboard() {
       });
       return;
     }
+    const editCapableEngines: EngineType[] = ["nanobanana", "seedream", "nanopro"];
+    const editEngine = editCapableEngines.includes(selectedEngine) ? selectedEngine : "nanobanana";
     setEditDialog({
       sceneId: scene.id,
       imageUrl: scene.generatedImageUrl,
       editPrompt: "",
+      engine: editEngine,
     });
   };
 
@@ -810,6 +814,7 @@ export default function Storyboard() {
     const sceneIdToEdit = editDialog.sceneId;
     const editPrompt = editDialog.editPrompt;
     const imageUrl = editDialog.imageUrl;
+    const editEngine = editDialog.engine;
     
     setEditDialog(null);
 
@@ -817,7 +822,7 @@ export default function Storyboard() {
       const generateData = await startGeneration({
         prompt: editPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
+        engine: editEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
         userReferenceImages: [imageUrl],
         sceneId: sceneIdToEdit,
         sceneName: `Scene Edit`,
@@ -827,7 +832,7 @@ export default function Storyboard() {
       await apiRequest("PATCH", `/api/scenes/${sceneIdToEdit}`, {
         generatedImageUrl: generateData.imageUrl,
         styleId: selectedStyle,
-        engine: selectedEngine,
+        engine: editEngine,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
@@ -1970,6 +1975,24 @@ export default function Storyboard() {
                 />
               </div>
             )}
+            <div>
+              <Label htmlFor="edit-engine" className="mb-2 block">
+                Edit Engine
+              </Label>
+              <Select
+                value={editDialog?.engine || "nanobanana"}
+                onValueChange={(v) => setEditDialog(prev => prev ? { ...prev, engine: v as EngineType } : null)}
+              >
+                <SelectTrigger id="edit-engine" data-testid="select-edit-engine">
+                  <SelectValue placeholder="Select engine" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nanobanana" data-testid="option-edit-engine-nanobanana">NanoBanana Edit</SelectItem>
+                  <SelectItem value="seedream" data-testid="option-edit-engine-seedream">SeeDream V4</SelectItem>
+                  <SelectItem value="nanopro" data-testid="option-edit-engine-nanopro">Nano Pro (2K/4K)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label htmlFor="edit-prompt" className="mb-2 block">
                 Edit Instructions
