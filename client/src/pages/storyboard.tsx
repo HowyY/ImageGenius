@@ -117,6 +117,7 @@ export default function Storyboard() {
   const [copyCharsSourceScene, setCopyCharsSourceScene] = useState<{ id: number; characterIds: string[] } | null>(null);
   const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   
 
   const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
@@ -1099,6 +1100,8 @@ export default function Storyboard() {
               stylesLoading={stylesLoading}
               disabled={false}
               onOpenSetupWizard={handleOpenSetup}
+              expanded={settingsExpanded}
+              onExpandedChange={setSettingsExpanded}
             />
           </div>
         )}
@@ -1246,7 +1249,13 @@ export default function Storyboard() {
                     ? "ring-2 ring-primary shadow-lg" 
                     : "hover-elevate"
                 }`}
-                onClick={() => setSelectedSceneId(selectedSceneId === scene.id ? null : scene.id)}
+                onClick={() => {
+                  const newSelectedId = selectedSceneId === scene.id ? null : scene.id;
+                  setSelectedSceneId(newSelectedId);
+                  if (newSelectedId !== null) {
+                    setSettingsExpanded(false);
+                  }
+                }}
                 data-testid={`scene-card-${scene.id}`}
               >
                 <div 
