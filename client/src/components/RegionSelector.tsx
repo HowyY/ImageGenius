@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Paintbrush, Square, Undo2, Trash2, Check } from "lucide-react";
+import { Paintbrush, Square, Undo2, Trash2, Check, Loader2, RefreshCw } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 
 interface Point {
@@ -63,6 +63,8 @@ export function RegionSelector({
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [imageRetryCount, setImageRetryCount] = useState(0);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
 
   const brushColor = "rgba(255, 100, 100, 0.7)";
@@ -70,6 +72,8 @@ export function RegionSelector({
   useEffect(() => {
     if (open) {
       setImageLoaded(false);
+      setImageError(false);
+      setImageRetryCount(0);
       setCurrentBrushStrokes([]);
       setSelectedRegionId(null);
     }
@@ -555,10 +559,9 @@ export function RegionSelector({
             <div className="relative flex items-center justify-center w-full h-full">
               <img
                 ref={imageRef}
-                src={imageUrl}
+                src={imageRetryCount > 0 ? `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}retry=${imageRetryCount}` : imageUrl}
                 alt="Source"
                 className="max-w-full max-h-full object-contain pointer-events-none"
-                crossOrigin="anonymous"
                 style={{ display: imageLoaded ? 'block' : 'none' }}
                 onLoad={(e) => {
                   const img = e.currentTarget;
@@ -568,12 +571,35 @@ export function RegionSelector({
                     naturalWidth: img.naturalWidth,
                     naturalHeight: img.naturalHeight,
                   });
+                  setImageError(false);
                   setImageLoaded(true);
                 }}
+                onError={() => {
+                  setImageError(true);
+                  setImageLoaded(false);
+                }}
               />
-              {!imageLoaded && (
-                <div className="flex items-center justify-center text-muted-foreground">
-                  Loading image...
+              {!imageLoaded && !imageError && (
+                <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                  <span className="text-sm">Loading image...</span>
+                </div>
+              )}
+              {imageError && (
+                <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                  <span className="text-sm">Failed to load image</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setImageError(false);
+                      setImageRetryCount(prev => prev + 1);
+                    }}
+                    data-testid="button-retry-image"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry
+                  </Button>
                 </div>
               )}
               {imageLoaded && (
