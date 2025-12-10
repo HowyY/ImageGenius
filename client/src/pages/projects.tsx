@@ -254,29 +254,43 @@ export default function Projects() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {filteredProjects.map((project) => (
-              <Link key={project.id} href={`/storyboard?id=${project.id}`}>
-                <Card
-                  className="overflow-hidden hover-elevate cursor-pointer transition-all group"
-                  data-testid={`card-project-${project.id}`}
-                >
-                  <div className="aspect-video bg-muted flex items-center justify-center relative">
-                    <Video className="h-8 w-8 text-muted-foreground" />
-                    <div className="absolute bottom-2 right-2">
-                      {getStatusBadge(project.stageStatus)}
-                    </div>
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="bg-background/80 backdrop-blur-sm"
-                            onClick={(e) => e.stopPropagation()}
-                            data-testid={`button-project-menu-${project.id}`}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
+              <Card
+                key={project.id}
+                className="overflow-hidden hover-elevate cursor-pointer transition-all group"
+                data-testid={`card-project-${project.id}`}
+                tabIndex={0}
+                role="button"
+                aria-label={`Open project ${project.name}`}
+                onClick={() => {
+                  localStorage.setItem("currentStoryboardId", String(project.id));
+                  setLocation(`/storyboard?id=${project.id}`);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    localStorage.setItem("currentStoryboardId", String(project.id));
+                    setLocation(`/storyboard?id=${project.id}`);
+                  }
+                }}
+              >
+                <div className="aspect-video bg-muted flex items-center justify-center relative">
+                  <Video className="h-8 w-8 text-muted-foreground" />
+                  <div className="absolute bottom-2 right-2">
+                    {getStatusBadge(project.stageStatus)}
+                  </div>
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="bg-background/80 backdrop-blur-sm"
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`button-project-menu-${project.id}`}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
@@ -292,20 +306,19 @@ export default function Projects() {
                           Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    </DropdownMenu>
                   </div>
-                  <CardContent className="p-3">
-                    <h3 className="font-medium truncate" data-testid={`text-project-name-${project.id}`}>
-                      {project.name}
-                    </h3>
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <span className="text-xs text-muted-foreground">16:9</span>
-                      <span className="text-xs text-primary">{getStageLabel(project.currentStage)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                </div>
+                <CardContent className="p-3">
+                  <h3 className="font-medium truncate" data-testid={`text-project-name-${project.id}`}>
+                    {project.name}
+                  </h3>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <span className="text-xs text-muted-foreground">16:9</span>
+                    <span className="text-xs text-primary">{getStageLabel(project.currentStage)}</span>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}

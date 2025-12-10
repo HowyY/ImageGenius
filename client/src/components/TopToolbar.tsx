@@ -135,37 +135,19 @@ export function TopToolbar() {
               </DropdownMenu>
             )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" data-testid="button-role-switcher">
-                  {isDesigner ? (
-                    <PenTool className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={() => setRole("viewer")}
-                  className={role === "viewer" ? "bg-accent" : ""}
-                  data-testid="menu-role-viewer"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Viewer
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => setRole("designer")}
-                  className={role === "designer" ? "bg-accent" : ""}
-                  data-testid="menu-role-designer"
-                >
-                  <PenTool className="w-4 h-4 mr-2" />
-                  Designer
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setRole(isDesigner ? "viewer" : "designer")}
+              data-testid="button-role-switcher"
+              title={isDesigner ? "Switch to Viewer" : "Switch to Designer"}
+            >
+              {isDesigner ? (
+                <Eye className="w-4 h-4" />
+              ) : (
+                <PenTool className="w-4 h-4" />
+              )}
+            </Button>
 
             <Button
               variant="ghost"
