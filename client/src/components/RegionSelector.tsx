@@ -215,9 +215,7 @@ export function RegionSelector({
     e.preventDefault();
     e.stopPropagation();
     
-    console.log("=== MOUSE DOWN START ===", "mode:", mode, "button:", e.button, "target:", e.target);
     const coords = getCanvasCoords(e);
-    console.log("[RegionSelector] MouseDown - coords:", coords.x.toFixed(3), coords.y.toFixed(3), "mode:", mode);
 
     if (mode === "brush") {
       const canvas = canvasRef.current;
@@ -228,10 +226,8 @@ export function RegionSelector({
         size: brushSize,
         normalizedSize,
       });
-      console.log("[RegionSelector] Started brush stroke");
     } else if (mode === "rect") {
       const clickedRegion = findRegionAtPoint(coords);
-      console.log("[RegionSelector] Rect mode - clickedRegion:", clickedRegion?.id || "none", "regions count:", regions.length);
       if (clickedRegion) {
         setSelectedRegionId(clickedRegion.id);
         const handle = getResizeHandle(clickedRegion, coords);
@@ -249,13 +245,9 @@ export function RegionSelector({
           width: 0,
           height: 0,
         };
-        console.log("[RegionSelector] Starting NEW rect at:", coords.x.toFixed(3), coords.y.toFixed(3), "id:", newRect.id);
         setDrawingRect(newRect);
         drawingRectRef.current = newRect;
-        console.log("[RegionSelector] drawingRectRef.current SET to:", drawingRectRef.current?.id);
       }
-    } else {
-      console.log("[RegionSelector] Unknown mode:", mode);
     }
   };
 
@@ -291,10 +283,6 @@ export function RegionSelector({
     setCurrentStroke(null);
 
     const finalRect = drawingRectRef.current;
-    console.log("[RegionSelector] MouseUp - finalRect:", finalRect);
-    if (finalRect) {
-      console.log("[RegionSelector] MouseUp - width:", finalRect.width, "height:", finalRect.height, "threshold check:", Math.abs(finalRect.width) > 0.002 && Math.abs(finalRect.height) > 0.002);
-    }
     if (finalRect && Math.abs(finalRect.width) > 0.002 && Math.abs(finalRect.height) > 0.002) {
       const normalizedRect = normalizeRect(finalRect);
       const newRegion: SelectionRegion = {
@@ -302,11 +290,8 @@ export function RegionSelector({
         type: "rect",
         rect: normalizedRect,
       };
-      console.log("[RegionSelector] MouseUp - adding new region:", newRegion.id);
       setRegions(prev => [...prev, newRegion]);
       setSelectedRegionId(normalizedRect.id);
-    } else if (finalRect) {
-      console.log("[RegionSelector] MouseUp - rect TOO SMALL, not adding");
     }
     setDrawingRect(null);
     drawingRectRef.current = null;
@@ -737,7 +722,6 @@ export function RegionSelector({
                   crossOrigin="anonymous"
                   onLoad={(e) => {
                     const img = e.currentTarget;
-                    console.log("[RegionSelector] Image loaded - clientWidth:", img.clientWidth, "clientHeight:", img.clientHeight, "naturalWidth:", img.naturalWidth, "naturalHeight:", img.naturalHeight);
                     setImageDimensions({
                       width: img.clientWidth,
                       height: img.clientHeight,
@@ -747,13 +731,11 @@ export function RegionSelector({
                     setImageError(false);
                     setImageLoaded(true);
                     
-                    // Use requestAnimationFrame to ensure layout is complete before sizing canvas
                     requestAnimationFrame(() => {
                       const canvas = canvasRef.current;
                       if (canvas && img.clientWidth > 0 && img.clientHeight > 0) {
                         canvas.width = img.clientWidth;
                         canvas.height = img.clientHeight;
-                        console.log("[RegionSelector] Canvas sized to:", canvas.width, canvas.height);
                       }
                     });
                   }}
