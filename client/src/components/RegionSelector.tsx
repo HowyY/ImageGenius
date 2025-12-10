@@ -255,11 +255,11 @@ export function RegionSelector({
         points: [...prev.points, coords],
       } : null);
     } else if (mode === "rect") {
-      if (drawingRect) {
+      if (drawingRectRef.current) {
         const updatedRect = {
-          ...drawingRect,
-          width: coords.x - drawingRect.x,
-          height: coords.y - drawingRect.y,
+          ...drawingRectRef.current,
+          width: coords.x - drawingRectRef.current.x,
+          height: coords.y - drawingRectRef.current.y,
         };
         setDrawingRect(updatedRect);
         drawingRectRef.current = updatedRect;
