@@ -63,6 +63,7 @@ export function RegionSelector({
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const drawingRectRef = useRef<RectRegion | null>(null);
+  const prevOpenRef = useRef(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageRetryCount, setImageRetryCount] = useState(0);
@@ -85,7 +86,10 @@ export function RegionSelector({
   }, [open]);
 
   useEffect(() => {
-    if (open) {
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+    
+    if (open && !wasOpen) {
       setRegions(initialRegions);
     }
   }, [open, initialRegions]);
@@ -93,23 +97,17 @@ export function RegionSelector({
   const getCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): Point => {
     const img = imageRef.current;
     if (!img) {
-      console.log("[RegionSelector] getCanvasCoords - no image!");
       return { x: 0, y: 0 };
     }
     
-    // Use image dimensions directly for more reliable coordinate calculation
     const rect = img.getBoundingClientRect();
-    console.log("[RegionSelector] getCanvasCoords - image rect:", rect.width.toFixed(0), rect.height.toFixed(0), "clientX/Y:", e.clientX, e.clientY);
-    
     if (rect.width === 0 || rect.height === 0) {
-      console.log("[RegionSelector] getCanvasCoords - image has ZERO dimensions!");
       return { x: 0, y: 0 };
     }
     
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     
-    // Clamp to valid range
     return {
       x: Math.max(0, Math.min(1, x)),
       y: Math.max(0, Math.min(1, y)),
@@ -214,8 +212,12 @@ export function RegionSelector({
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log("=== MOUSE DOWN START ===", "mode:", mode, "button:", e.button, "target:", e.target);
     const coords = getCanvasCoords(e);
-    console.log("[RegionSelector] MouseDown - coords:", coords, "mode:", mode);
+    console.log("[RegionSelector] MouseDown - coords:", coords.x.toFixed(3), coords.y.toFixed(3), "mode:", mode);
 
     if (mode === "brush") {
       const canvas = canvasRef.current;
@@ -226,8 +228,10 @@ export function RegionSelector({
         size: brushSize,
         normalizedSize,
       });
+      console.log("[RegionSelector] Started brush stroke");
     } else if (mode === "rect") {
       const clickedRegion = findRegionAtPoint(coords);
+      console.log("[RegionSelector] Rect mode - clickedRegion:", clickedRegion?.id || "none", "regions count:", regions.length);
       if (clickedRegion) {
         setSelectedRegionId(clickedRegion.id);
         const handle = getResizeHandle(clickedRegion, coords);
@@ -245,10 +249,13 @@ export function RegionSelector({
           width: 0,
           height: 0,
         };
-        console.log("[RegionSelector] Starting new rect at:", coords.x, coords.y);
+        console.log("[RegionSelector] Starting NEW rect at:", coords.x.toFixed(3), coords.y.toFixed(3), "id:", newRect.id);
         setDrawingRect(newRect);
         drawingRectRef.current = newRect;
+        console.log("[RegionSelector] drawingRectRef.current SET to:", drawingRectRef.current?.id);
       }
+    } else {
+      console.log("[RegionSelector] Unknown mode:", mode);
     }
   };
 
@@ -267,7 +274,6 @@ export function RegionSelector({
           width: coords.x - drawingRectRef.current.x,
           height: coords.y - drawingRectRef.current.y,
         };
-        console.log("[RegionSelector] MouseMove - updating rect:", updatedRect.width.toFixed(4), updatedRect.height.toFixed(4));
         setDrawingRect(updatedRect);
         drawingRectRef.current = updatedRect;
       } else if (resizing && selectedRegionId) {
