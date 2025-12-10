@@ -65,6 +65,7 @@ export function RegionSelector({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageRetryCount, setImageRetryCount] = useState(0);
+  const [imageSessionId, setImageSessionId] = useState(0);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
@@ -75,6 +76,7 @@ export function RegionSelector({
       setImageLoaded(false);
       setImageError(false);
       setImageRetryCount(0);
+      setImageSessionId(Date.now());
       setCurrentBrushStrokes([]);
       setSelectedRegionId(null);
       setConfirmError(null);
@@ -270,7 +272,7 @@ export function RegionSelector({
     }
     setCurrentStroke(null);
 
-    if (drawingRect && Math.abs(drawingRect.width) > 0.01 && Math.abs(drawingRect.height) > 0.01) {
+    if (drawingRect && Math.abs(drawingRect.width) > 0.002 && Math.abs(drawingRect.height) > 0.002) {
       const normalizedRect = normalizeRect(drawingRect);
       const newRegion: SelectionRegion = {
         id: normalizedRect.id,
@@ -299,7 +301,7 @@ export function RegionSelector({
     if (y < 0) { height += y; y = 0; }
     if (x + width > 1) { width = 1 - x; }
     if (y + height > 1) { height = 1 - y; }
-    return { ...rect, x, y, width: Math.max(0.01, width), height: Math.max(0.01, height) };
+    return { ...rect, x, y, width: Math.max(0.002, width), height: Math.max(0.002, height) };
   };
 
   const findRegionAtPoint = (point: Point): SelectionRegion | null => {
@@ -675,7 +677,7 @@ export function RegionSelector({
             <div className="relative flex items-center justify-center w-full h-full">
               <img
                 ref={imageRef}
-                src={imageRetryCount > 0 ? `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}retry=${imageRetryCount}` : imageUrl}
+                src={`${imageUrl}${imageUrl.includes('?') ? '&' : '?'}cors=${imageSessionId}${imageRetryCount > 0 ? `&retry=${imageRetryCount}` : ''}`}
                 alt="Source"
                 className="max-w-full max-h-full object-contain pointer-events-none"
                 crossOrigin="anonymous"

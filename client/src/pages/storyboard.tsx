@@ -153,6 +153,7 @@ export default function Storyboard() {
   const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const editPromptRef = useRef<HTMLTextAreaElement>(null);
   
 
   const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
@@ -864,6 +865,28 @@ export default function Storyboard() {
     });
   };
 
+  const handleRegionClick = (regionId: string, regionIndex: number) => {
+    handleToggleRegion(regionId);
+    
+    const textarea = editPromptRef.current;
+    if (!textarea || !editDialog) return;
+    
+    const tag = `[Region ${regionIndex + 1}]`;
+    const start = textarea.selectionStart ?? editDialog.editPrompt.length;
+    const end = textarea.selectionEnd ?? editDialog.editPrompt.length;
+    const currentValue = editDialog.editPrompt;
+    
+    const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+    const newCursorPos = start + tag.length;
+    
+    setEditDialog(prev => prev ? { ...prev, editPrompt: newValue } : null);
+    
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
   const handleRemoveRegion = (regionId: string) => {
     setEditDialog(prev => {
       if (!prev) return null;
@@ -899,28 +922,55 @@ export default function Storyboard() {
     let editPrompt = editDialog.editPrompt;
     const imageUrl = editDialog.imageUrl;
     const editEngine = editDialog.engine;
-    const selectedRegions = editDialog.regions.filter(r => r.selected);
+    const allRegions = editDialog.regions;
+    const selectedRegions = allRegions.filter(r => r.selected);
     
     setEditDialog(prev => prev ? { ...prev, isUploadingRegions: true } : null);
     
     try {
       const userReferenceImages: string[] = [imageUrl];
       
-      if (selectedRegions.length > 0) {
-        const regionUrls: string[] = [];
-        for (const region of selectedRegions) {
-          const uploadedUrl = await uploadRegionAsBlob(region.thumbnailUrl);
-          regionUrls.push(uploadedUrl);
-          userReferenceImages.push(uploadedUrl);
+      const regionTagPattern = /\[Region\s*(\d+)\]/gi;
+      const referencedRegionNumbers = new Set<number>();
+      let match;
+      while ((match = regionTagPattern.exec(editPrompt)) !== null) {
+        referencedRegionNumbers.add(parseInt(match[1], 10));
+      }
+      
+      const regionsToUpload = new Set<number>();
+      
+      Array.from(referencedRegionNumbers).forEach(num => {
+        const index = num - 1;
+        if (index >= 0 && index < allRegions.length && allRegions[index].thumbnailUrl) {
+          regionsToUpload.add(index);
         }
-        
-        const imageLabels = regionUrls.map((_, i) => `[image${i + 2}]`).join(", ");
-        if (regionUrls.length === 1) {
-          editPrompt = `[image2] shows the region to modify in [image1].\n${editPrompt}\nFocus edits on the area shown in [image2].`;
-        } else {
-          editPrompt = `${imageLabels} show the regions to modify in [image1].\n${editPrompt}\nFocus edits on these marked areas.`;
+      });
+      
+      for (const region of selectedRegions) {
+        const existingIndex = allRegions.findIndex(r => r.id === region.id);
+        if (existingIndex >= 0 && region.thumbnailUrl) {
+          regionsToUpload.add(existingIndex);
         }
       }
+      
+      const sortedIndices = Array.from(regionsToUpload).sort((a, b) => a - b);
+      
+      const regionIndexToImageNum: Record<number, number> = {};
+      let imageNum = 2;
+      
+      for (const regionIndex of sortedIndices) {
+        const region = allRegions[regionIndex];
+        const uploadedUrl = await uploadRegionAsBlob(region.thumbnailUrl);
+        userReferenceImages.push(uploadedUrl);
+        regionIndexToImageNum[regionIndex] = imageNum;
+        imageNum++;
+      }
+      
+      editPrompt = editPrompt.replace(/\[Region\s*(\d+)\]/gi, (_, num) => {
+        const regionIndex = parseInt(num, 10) - 1;
+        const imageNumber = regionIndexToImageNum[regionIndex];
+        return imageNumber !== undefined ? `[image${imageNumber}]` : `[Region ${num}]`;
+      });
       
       setEditDialog(null);
 
@@ -2096,7 +2146,7 @@ export default function Storyboard() {
             {editDialog && editDialog.regions.length > 0 && (
               <div>
                 <Label className="mb-2 block text-sm text-muted-foreground">
-                  Click regions to include in edit (selected regions shown with border)
+                  Click region to insert [Region N] tag in prompt
                 </Label>
                 <div className="flex flex-wrap gap-2">
                   {editDialog.regions.map((region, index) => (
@@ -2107,7 +2157,7 @@ export default function Storyboard() {
                           ? "border-primary ring-2 ring-primary/30" 
                           : "border-transparent hover:border-muted-foreground/50"
                       }`}
-                      onClick={() => handleToggleRegion(region.id)}
+                      onClick={() => handleRegionClick(region.id, index)}
                       data-testid={`region-thumbnail-${index}`}
                     >
                       <img 
@@ -2164,6 +2214,7 @@ export default function Storyboard() {
                 Edit Instructions
               </Label>
               <Textarea
+                ref={editPromptRef}
                 id="edit-prompt"
                 placeholder="Describe what you want to change..."
                 value={editDialog?.editPrompt || ""}
