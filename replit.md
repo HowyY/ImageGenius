@@ -40,6 +40,12 @@ This web application provides an AI-driven image generation platform integrated 
 - **Position**: Fixed right sidebar between TopToolbar (top-14) and StageNavigation (bottom-20)
 - **State management**: selectedSceneId tracks which scene is being edited, clears on storyboard change or scene deletion
 
+**Edit Dialog Engine Selector (December 2024):**
+- **Independent engine selection**: Edit dialog has its own engine selector separate from global engine
+- **Edit-capable engines only**: Dropdown shows only nano/seedream/nanopro (T2I engines excluded as they don't accept reference images)
+- **Smart default**: If global engine is T2I, defaults to "nanobanana" for editing
+- **Use case**: Generate with fast nano, then edit with high-quality pro for precision
+
 **ViewerSceneCard (December 2024):**
 - **Purpose**: Client-facing scene card for Viewer role, showing only approved content
 - **Content**: Main generated image (click to preview), collapsible "Generated Images" section with thumbnails, Voice Over text, Visual Description (uses viewerDescription field if set, falls back to visualDescription)
