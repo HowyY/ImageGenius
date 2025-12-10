@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Paintbrush, Square, Undo2, Trash2, Check, ZoomIn, ZoomOut, Move } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Paintbrush, Square, Undo2, Trash2, Check } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 
 interface Point {
@@ -35,6 +36,7 @@ type SelectionMode = "brush" | "rect";
 
 interface RegionSelectorProps {
   imageUrl: string;
+  open: boolean;
   onClose: () => void;
   onConfirm: (regions: SelectionRegion[]) => void;
   initialRegions?: SelectionRegion[];
@@ -42,6 +44,7 @@ interface RegionSelectorProps {
 
 export function RegionSelector({
   imageUrl,
+  open,
   onClose,
   onConfirm,
   initialRegions = [],
@@ -65,6 +68,10 @@ export function RegionSelector({
   const brushColor = "rgba(255, 100, 100, 0.7)";
 
   useEffect(() => {
+    if (!open) {
+      setImageLoaded(false);
+      return;
+    }
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
@@ -77,7 +84,15 @@ export function RegionSelector({
       });
     };
     img.src = imageUrl;
-  }, [imageUrl]);
+  }, [imageUrl, open]);
+
+  useEffect(() => {
+    if (open) {
+      setRegions(initialRegions);
+      setCurrentBrushStrokes([]);
+      setSelectedRegionId(null);
+    }
+  }, [open, initialRegions]);
 
   const getCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): Point => {
     const canvas = canvasRef.current;
@@ -89,31 +104,40 @@ export function RegionSelector({
     };
   }, []);
 
-  useEffect(() => {
+  const updateCanvasSize = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !imageLoaded) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
     const container = containerRef.current;
-    if (!container) return;
+    const img = imageRef.current;
+    if (!canvas || !container || !img || !imageLoaded) return;
 
     const containerRect = container.getBoundingClientRect();
+    const maxWidth = containerRect.width;
+    const maxHeight = containerRect.height;
+    
     const aspectRatio = imageDimensions.naturalWidth / imageDimensions.naturalHeight;
     
-    let displayWidth = containerRect.width;
-    let displayHeight = containerRect.width / aspectRatio;
+    let displayWidth = maxWidth;
+    let displayHeight = maxWidth / aspectRatio;
     
-    if (displayHeight > containerRect.height) {
-      displayHeight = containerRect.height;
-      displayWidth = containerRect.height * aspectRatio;
+    if (displayHeight > maxHeight) {
+      displayHeight = maxHeight;
+      displayWidth = maxHeight * aspectRatio;
     }
 
     canvas.width = displayWidth;
     canvas.height = displayHeight;
     canvas.style.width = `${displayWidth}px`;
     canvas.style.height = `${displayHeight}px`;
+  }, [imageLoaded, imageDimensions]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !imageLoaded) return;
+
+    updateCanvasSize();
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -134,7 +158,7 @@ export function RegionSelector({
     if (drawingRect) {
       drawRectRegion(ctx, drawingRect, canvas.width, canvas.height, false);
     }
-  }, [regions, currentBrushStrokes, currentStroke, drawingRect, imageLoaded, imageDimensions, selectedRegionId]);
+  }, [regions, currentBrushStrokes, currentStroke, drawingRect, imageLoaded, imageDimensions, selectedRegionId, updateCanvasSize]);
 
   const drawBrushStrokes = (ctx: CanvasRenderingContext2D, strokes: BrushStroke[], canvasWidth: number, canvasHeight: number) => {
     ctx.lineCap = "round";
@@ -438,154 +462,173 @@ export function RegionSelector({
       });
     }
     onConfirm(finalRegions);
-  };
-
-  const clampRect = (rect: RectRegion): RectRegion => {
-    let { x, y, width, height } = rect;
-    if (x < 0) { width += x; x = 0; }
-    if (y < 0) { height += y; y = 0; }
-    if (x + width > 1) { width = 1 - x; }
-    if (y + height > 1) { height = 1 - y; }
-    return { ...rect, x, y, width: Math.max(0.01, width), height: Math.max(0.01, height) };
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col" data-testid="region-selector-fullscreen">
-      <div className="flex items-center justify-between p-3 border-b bg-card">
-        <div className="flex items-center gap-2">
-          <Button
-            variant={mode === "rect" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setMode("rect")}
-            data-testid="button-mode-rect"
-          >
-            <Square className="w-4 h-4 mr-1" />
-            Rectangle
-          </Button>
-          <Button
-            variant={mode === "brush" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setMode("brush")}
-            data-testid="button-mode-brush"
-          >
-            <Paintbrush className="w-4 h-4 mr-1" />
-            Brush
-          </Button>
-          
-          {mode === "brush" && (
-            <div className="flex items-center gap-2 ml-4">
-              <span className="text-sm text-muted-foreground">Size:</span>
-              <Slider
-                value={[brushSize]}
-                onValueChange={(v) => setBrushSize(v[0])}
-                min={5}
-                max={50}
-                step={1}
-                className="w-24"
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent 
+        className="max-w-[90vw] w-[90vw] max-h-[90vh] h-[90vh] p-0 flex flex-col gap-0"
+        data-testid="region-selector-dialog"
+      >
+        <DialogHeader className="flex-none px-4 py-3 border-b">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <DialogTitle className="text-base font-medium">Select Regions</DialogTitle>
+              <DialogDescription className="sr-only">
+                Draw rectangles or brush strokes to select regions of the image for editing
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant={mode === "rect" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMode("rect")}
+                data-testid="button-mode-rect"
+              >
+                <Square className="w-4 h-4 mr-1" />
+                Rectangle
+              </Button>
+              <Button
+                variant={mode === "brush" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMode("brush")}
+                data-testid="button-mode-brush"
+              >
+                <Paintbrush className="w-4 h-4 mr-1" />
+                Brush
+              </Button>
+              
+              {mode === "brush" && (
+                <div className="flex items-center gap-2 ml-2">
+                  <span className="text-sm text-muted-foreground">Size:</span>
+                  <Slider
+                    value={[brushSize]}
+                    onValueChange={(v) => setBrushSize(v[0])}
+                    min={5}
+                    max={50}
+                    step={1}
+                    className="w-24"
+                  />
+                  <span className="text-sm w-6">{brushSize}</span>
+                </div>
+              )}
+
+              <div className="w-px h-6 bg-border mx-1" />
+
+              {mode === "brush" && currentBrushStrokes.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveBrushAsRegion}
+                  data-testid="button-save-brush"
+                >
+                  <Check className="w-4 h-4 mr-1" />
+                  Save Brush
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUndo}
+                disabled={(mode === "brush" && currentBrushStrokes.length === 0) || (mode === "rect" && regions.length === 0)}
+                data-testid="button-undo"
+              >
+                <Undo2 className="w-4 h-4" />
+              </Button>
+              {selectedRegionId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                  data-testid="button-delete-region"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+
+              <div className="w-px h-6 bg-border mx-1" />
+
+              <Button variant="ghost" size="sm" onClick={onClose} data-testid="button-cancel-region">
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleConfirm} data-testid="button-confirm-regions">
+                Done ({regions.length + (currentBrushStrokes.length > 0 ? 1 : 0)})
+              </Button>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div 
+          ref={containerRef}
+          className="flex-1 flex items-center justify-center p-4 overflow-hidden bg-muted/30 min-h-0"
+        >
+          {imageUrl ? (
+            <div className="relative flex items-center justify-center w-full h-full">
+              <img
+                ref={imageRef}
+                src={imageUrl}
+                alt="Source"
+                className="max-w-full max-h-full object-contain pointer-events-none"
+                crossOrigin="anonymous"
+                style={{ display: imageLoaded ? 'block' : 'none' }}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  setImageDimensions({
+                    width: img.clientWidth,
+                    height: img.clientHeight,
+                    naturalWidth: img.naturalWidth,
+                    naturalHeight: img.naturalHeight,
+                  });
+                  setImageLoaded(true);
+                }}
               />
-              <span className="text-sm w-6">{brushSize}</span>
+              {!imageLoaded && (
+                <div className="flex items-center justify-center text-muted-foreground">
+                  Loading image...
+                </div>
+              )}
+              {imageLoaded && (
+                <canvas
+                  ref={canvasRef}
+                  className="absolute cursor-crosshair"
+                  style={{ touchAction: "none" }}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center text-muted-foreground">
+              No image available
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {mode === "brush" && currentBrushStrokes.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSaveBrushAsRegion}
-              data-testid="button-save-brush"
-            >
-              <Check className="w-4 h-4 mr-1" />
-              Save as Region
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleUndo}
-            disabled={(mode === "brush" && currentBrushStrokes.length === 0) || (mode === "rect" && regions.length === 0)}
-            data-testid="button-undo"
-          >
-            <Undo2 className="w-4 h-4" />
-          </Button>
-          {selectedRegionId && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDeleteSelected}
-              data-testid="button-delete-region"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
-          <div className="w-px h-6 bg-border mx-2" />
-          <Button variant="ghost" size="sm" onClick={onClose} data-testid="button-cancel-region">
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleConfirm} data-testid="button-confirm-regions">
-            Done ({regions.length + (currentBrushStrokes.length > 0 ? 1 : 0)})
-          </Button>
-        </div>
-      </div>
-
-      <div 
-        ref={containerRef}
-        className="flex-1 flex items-center justify-center p-4 overflow-hidden bg-muted/50"
-      >
-        <div className="relative max-w-full max-h-full">
-          <img
-            ref={imageRef}
-            src={imageUrl}
-            alt="Source"
-            className="max-w-full max-h-[calc(100vh-120px)] object-contain pointer-events-none"
-            crossOrigin="anonymous"
-            onLoad={(e) => {
-              const img = e.currentTarget;
-              setImageDimensions({
-                width: img.clientWidth,
-                height: img.clientHeight,
-                naturalWidth: img.naturalWidth,
-                naturalHeight: img.naturalHeight,
-              });
-              setImageLoaded(true);
-            }}
-          />
-          {imageLoaded && (
-            <canvas
-              ref={canvasRef}
-              className="absolute top-0 left-0 cursor-crosshair"
-              style={{ touchAction: "none" }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            />
-          )}
-        </div>
-      </div>
-
-      {regions.length > 0 && (
-        <div className="p-3 border-t bg-card">
-          <div className="flex items-center gap-2 overflow-x-auto">
-            <span className="text-sm text-muted-foreground shrink-0">Regions:</span>
-            {regions.map((region, index) => (
-              <div
-                key={region.id}
-                className={`shrink-0 px-3 py-1 rounded-md text-sm cursor-pointer ${
-                  selectedRegionId === region.id 
-                    ? "bg-primary text-primary-foreground" 
-                    : "bg-muted hover-elevate"
-                }`}
-                onClick={() => setSelectedRegionId(region.id === selectedRegionId ? null : region.id)}
-                data-testid={`region-chip-${index}`}
-              >
-                {region.type === "rect" ? "Rect" : "Brush"} {index + 1}
-              </div>
-            ))}
+        {regions.length > 0 && (
+          <div className="flex-none px-4 py-3 border-t bg-card">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <span className="text-sm text-muted-foreground shrink-0">Regions:</span>
+              {regions.map((region, index) => (
+                <div
+                  key={region.id}
+                  className={`shrink-0 px-3 py-1 rounded-md text-sm cursor-pointer ${
+                    selectedRegionId === region.id 
+                      ? "bg-primary text-primary-foreground" 
+                      : "bg-muted hover-elevate"
+                  }`}
+                  onClick={() => setSelectedRegionId(region.id === selectedRegionId ? null : region.id)}
+                  data-testid={`region-chip-${index}`}
+                >
+                  {region.type === "rect" ? "Rect" : "Brush"} {index + 1}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

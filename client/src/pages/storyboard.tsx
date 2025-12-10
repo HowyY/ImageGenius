@@ -2299,13 +2299,12 @@ export default function Storyboard() {
         </DialogContent>
       </Dialog>
 
-      {editDialog?.showRegionSelector && (
-        <RegionSelector
-          imageUrl={editDialog.imageUrl}
-          onClose={() => setEditDialog(prev => prev ? { ...prev, showRegionSelector: false } : null)}
-          onConfirm={handleRegionsConfirm}
-        />
-      )}
+      <RegionSelector
+        open={editDialog?.showRegionSelector || false}
+        imageUrl={editDialog?.imageUrl || ""}
+        onClose={() => setEditDialog(prev => prev ? { ...prev, showRegionSelector: false } : null)}
+        onConfirm={handleRegionsConfirm}
+      />
 
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
