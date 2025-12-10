@@ -68,11 +68,14 @@ interface RegionThumbnail {
 interface EditDialogState {
   sceneId: number;
   imageUrl: string;
+  originalImageUrl: string;
+  pendingResultUrl: string | null;
   editPrompt: string;
   engine: EngineType;
   showRegionSelector: boolean;
   regions: RegionThumbnail[];
   isUploadingRegions: boolean;
+  showComparison: boolean;
 }
 
 const CURRENT_STORYBOARD_KEY = "currentStoryboardId";
@@ -820,11 +823,14 @@ export default function Storyboard() {
     setEditDialog({
       sceneId: scene.id,
       imageUrl: scene.generatedImageUrl,
+      originalImageUrl: scene.generatedImageUrl,
+      pendingResultUrl: null,
       editPrompt: "",
       engine: editEngine,
       showRegionSelector: false,
       regions: [],
       isUploadingRegions: false,
+      showComparison: false,
     });
   };
 
@@ -866,25 +872,40 @@ export default function Storyboard() {
   };
 
   const handleRegionClick = (regionId: string, regionIndex: number) => {
-    handleToggleRegion(regionId);
+    if (!editDialog) return;
     
-    const textarea = editPromptRef.current;
-    if (!textarea || !editDialog) return;
-    
+    const region = editDialog.regions.find(r => r.id === regionId);
+    const isCurrentlySelected = region?.selected || false;
     const tag = `[Region ${regionIndex + 1}]`;
-    const start = textarea.selectionStart ?? editDialog.editPrompt.length;
-    const end = textarea.selectionEnd ?? editDialog.editPrompt.length;
     const currentValue = editDialog.editPrompt;
     
-    const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
-    const newCursorPos = start + tag.length;
+    let newValue: string;
     
+    if (isCurrentlySelected) {
+      const tagPattern = new RegExp(`\\[Region\\s*${regionIndex + 1}\\]\\s*`, 'gi');
+      newValue = currentValue.replace(tagPattern, '').trim();
+    } else {
+      const textarea = editPromptRef.current;
+      if (textarea) {
+        const start = textarea.selectionStart ?? currentValue.length;
+        const end = textarea.selectionEnd ?? currentValue.length;
+        newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+      } else {
+        newValue = currentValue + (currentValue.length > 0 ? ' ' : '') + tag;
+      }
+    }
+    
+    handleToggleRegion(regionId);
     setEditDialog(prev => prev ? { ...prev, editPrompt: newValue } : null);
     
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(newCursorPos, newCursorPos);
-    }, 0);
+    const textarea = editPromptRef.current;
+    if (textarea && !isCurrentlySelected) {
+      const newCursorPos = newValue.indexOf(tag) + tag.length;
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    }
   };
 
   const handleRemoveRegion = (regionId: string) => {
@@ -987,7 +1008,7 @@ Do not change anything else in [image1].`;
         finalPrompt = editPrompt;
       }
       
-      setEditDialog(null);
+      setEditDialog(prev => prev ? { ...prev, isUploadingRegions: true } : null);
 
       const generateData = await startGeneration({
         prompt: finalPrompt,
@@ -999,18 +1020,16 @@ Do not change anything else in [image1].`;
         isEditMode: true,
       });
 
-      await apiRequest("PATCH", `/api/scenes/${sceneIdToEdit}`, {
-        generatedImageUrl: generateData.imageUrl,
-        styleId: selectedStyle,
-        engine: editEngine,
-      });
-
-      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", sceneIdToEdit] });
+      setEditDialog(prev => prev ? { 
+        ...prev, 
+        pendingResultUrl: generateData.imageUrl,
+        isUploadingRegions: false,
+        showComparison: true,
+      } : null);
 
       toast({
-        title: "Image edited",
-        description: "Scene image has been updated",
+        title: "Edit generated",
+        description: "Review the result and accept or discard",
       });
     } catch (error) {
       console.error("Edit failed:", error);
@@ -1021,6 +1040,64 @@ Do not change anything else in [image1].`;
         variant: "destructive",
       });
     }
+  };
+
+  const handleAcceptEdit = async () => {
+    if (!editDialog || !editDialog.pendingResultUrl) return;
+    
+    try {
+      await apiRequest("PATCH", `/api/scenes/${editDialog.sceneId}`, {
+        generatedImageUrl: editDialog.pendingResultUrl,
+        styleId: selectedStyle,
+        engine: editDialog.engine,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", editDialog.sceneId] });
+
+      toast({
+        title: "Edit accepted",
+        description: "Scene image has been updated",
+      });
+      
+      setEditDialog(null);
+    } catch (error) {
+      console.error("Accept edit failed:", error);
+      toast({
+        title: "Failed to save",
+        description: error instanceof Error ? error.message : "Failed to save edit",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDiscardEdit = () => {
+    if (!editDialog) return;
+    
+    setEditDialog(prev => prev ? {
+      ...prev,
+      pendingResultUrl: null,
+      showComparison: false,
+    } : null);
+    
+    toast({
+      title: "Edit discarded",
+      description: "You can try again with different settings",
+    });
+  };
+
+  const handleRegenerate = () => {
+    if (!editDialog) return;
+    
+    setEditDialog(prev => prev ? {
+      ...prev,
+      pendingResultUrl: null,
+      showComparison: false,
+    } : null);
+    
+    setTimeout(() => {
+      handleEditSubmit();
+    }, 100);
   };
 
   const handleDownloadImage = async (url: string) => {
@@ -2128,15 +2205,49 @@ Do not change anything else in [image1].`;
       </Dialog>
 
       <Dialog open={!!editDialog && !editDialog.showRegionSelector} onOpenChange={(open) => !open && setEditDialog(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={editDialog?.showComparison ? "max-w-4xl" : "max-w-2xl"}>
           <DialogHeader>
-            <DialogTitle>Edit Image</DialogTitle>
+            <DialogTitle>{editDialog?.showComparison ? "Review Edit Result" : "Edit Image"}</DialogTitle>
             <DialogDescription>
-              Describe the changes you want to make. Optionally select regions to focus the edit.
+              {editDialog?.showComparison 
+                ? "Compare the original with the edited result. Accept, discard, or regenerate."
+                : "Describe the changes you want to make. Optionally select regions to focus the edit."
+              }
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            {editDialog && (
+            {editDialog && editDialog.showComparison && editDialog.pendingResultUrl ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Original</Label>
+                    <div className="relative aspect-video bg-muted rounded overflow-hidden">
+                      <ImageWithFallback
+                        src={editDialog.originalImageUrl}
+                        alt="Original image"
+                        className="w-full h-full object-cover"
+                        fallbackText="Failed to load"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Edited Result</Label>
+                    <div className="relative aspect-video bg-muted rounded overflow-hidden">
+                      <ImageWithFallback
+                        src={editDialog.pendingResultUrl}
+                        alt="Edited result"
+                        className="w-full h-full object-cover"
+                        fallbackText="Failed to load"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded p-3">
+                  <Label className="text-sm text-muted-foreground">Edit prompt:</Label>
+                  <p className="text-sm mt-1">{editDialog.editPrompt}</p>
+                </div>
+              </div>
+            ) : editDialog && (
               <div className="relative w-full aspect-video bg-muted rounded overflow-hidden">
                 <ImageWithFallback
                   src={editDialog.imageUrl}
@@ -2158,10 +2269,10 @@ Do not change anything else in [image1].`;
               </div>
             )}
             
-            {editDialog && editDialog.regions.length > 0 && (
+            {editDialog && !editDialog.showComparison && editDialog.regions.length > 0 && (
               <div>
                 <Label className="mb-2 block text-sm text-muted-foreground">
-                  Click region to insert [Region N] tag in prompt
+                  Click region to insert/remove [Region N] tag in prompt
                 </Label>
                 <div className="flex flex-wrap gap-2">
                   {editDialog.regions.map((region, index) => (
@@ -2206,60 +2317,87 @@ Do not change anything else in [image1].`;
               </div>
             )}
 
-            <div>
-              <Label htmlFor="edit-engine" className="mb-2 block">
-                Edit Engine
-              </Label>
-              <Select
-                value={editDialog?.engine || "nanobanana"}
-                onValueChange={(v) => setEditDialog(prev => prev ? { ...prev, engine: v as EngineType } : null)}
-              >
-                <SelectTrigger id="edit-engine" data-testid="select-edit-engine">
-                  <SelectValue placeholder="Select engine" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nanobanana" data-testid="option-edit-engine-nanobanana">NanoBanana Edit</SelectItem>
-                  <SelectItem value="seedream" data-testid="option-edit-engine-seedream">SeeDream V4</SelectItem>
-                  <SelectItem value="nanopro" data-testid="option-edit-engine-nanopro">Nano Pro (2K/4K)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="edit-prompt" className="mb-2 block">
-                Edit Instructions
-              </Label>
-              <Textarea
-                ref={editPromptRef}
-                id="edit-prompt"
-                placeholder="Describe what you want to change..."
-                value={editDialog?.editPrompt || ""}
-                onChange={(e) => setEditDialog(prev => prev ? { ...prev, editPrompt: e.target.value } : null)}
-                className="min-h-[80px] resize-none"
-                data-testid="textarea-edit-prompt"
-              />
-              {editDialog && editDialog.regions.filter(r => r.selected).length > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {editDialog.regions.filter(r => r.selected).length} region(s) selected - edits will focus on these areas
-                </p>
-              )}
-            </div>
+            {editDialog && !editDialog.showComparison && (
+              <>
+                <div>
+                  <Label htmlFor="edit-engine" className="mb-2 block">
+                    Edit Engine
+                  </Label>
+                  <Select
+                    value={editDialog?.engine || "nanobanana"}
+                    onValueChange={(v) => setEditDialog(prev => prev ? { ...prev, engine: v as EngineType } : null)}
+                  >
+                    <SelectTrigger id="edit-engine" data-testid="select-edit-engine">
+                      <SelectValue placeholder="Select engine" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nanobanana" data-testid="option-edit-engine-nanobanana">NanoBanana Edit</SelectItem>
+                      <SelectItem value="seedream" data-testid="option-edit-engine-seedream">SeeDream V4</SelectItem>
+                      <SelectItem value="nanopro" data-testid="option-edit-engine-nanopro">Nano Pro (2K/4K)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="edit-prompt" className="mb-2 block">
+                    Edit Instructions
+                  </Label>
+                  <Textarea
+                    ref={editPromptRef}
+                    id="edit-prompt"
+                    placeholder="Describe what you want to change..."
+                    value={editDialog?.editPrompt || ""}
+                    onChange={(e) => setEditDialog(prev => prev ? { ...prev, editPrompt: e.target.value } : null)}
+                    className="min-h-[80px] resize-none"
+                    data-testid="textarea-edit-prompt"
+                  />
+                  {editDialog && editDialog.regions.filter(r => r.selected).length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {editDialog.regions.filter(r => r.selected).length} region(s) selected - edits will focus on these areas
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialog(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleEditSubmit}
-              disabled={!editDialog?.editPrompt.trim() || editDialog?.isUploadingRegions}
-              data-testid="button-confirm-edit"
-            >
-              {editDialog?.isUploadingRegions ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
-              )}
-              Generate Edit
-            </Button>
+          <DialogFooter className="gap-2">
+            {editDialog?.showComparison ? (
+              <>
+                <Button variant="outline" onClick={handleDiscardEdit} data-testid="button-discard-edit">
+                  <X className="w-4 h-4 mr-2" />
+                  Discard
+                </Button>
+                <Button variant="outline" onClick={handleRegenerate} disabled={isGenerating(editDialog?.sceneId)} data-testid="button-regenerate-edit">
+                  {isGenerating(editDialog?.sceneId) ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Re-generate
+                </Button>
+                <Button onClick={handleAcceptEdit} data-testid="button-accept-edit">
+                  <Check className="w-4 h-4 mr-2" />
+                  Accept
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setEditDialog(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleEditSubmit}
+                  disabled={!editDialog?.editPrompt.trim() || editDialog?.isUploadingRegions || isGenerating(editDialog?.sceneId)}
+                  data-testid="button-confirm-edit"
+                >
+                  {editDialog?.isUploadingRegions || isGenerating(editDialog?.sceneId) ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 mr-2" />
+                  )}
+                  Generate Edit
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
