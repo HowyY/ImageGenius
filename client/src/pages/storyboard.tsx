@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1195,10 +1196,23 @@ export default function Storyboard() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-            {scenes.map((scene) => 
+            <AnimatePresence mode="popLayout">
+            {scenes.map((scene, index) => 
               isViewer ? (
-                <ViewerSceneCard
+                <motion.div
                   key={scene.id}
+                  layout={false}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 400,
+                    damping: 30,
+                    delay: index * 0.05,
+                  }}
+                >
+                <ViewerSceneCard
                   scene={scene}
                   onImageClick={(url) => {
                     const style = styles?.find(s => s.id === scene.styleId);
@@ -1211,10 +1225,23 @@ export default function Storyboard() {
                     });
                   }}
                 />
+                </motion.div>
               ) : (
+              <motion.div
+                key={scene.id}
+                layout={false}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 30,
+                  delay: index * 0.05,
+                }}
+              >
               <Card 
-                key={scene.id} 
-                className={`overflow-visible flex flex-col border cursor-pointer transition-all ${
+                className={`overflow-visible flex flex-col border cursor-pointer transition-shadow ${
                   selectedSceneId === scene.id 
                     ? "ring-2 ring-primary shadow-lg" 
                     : "hover-elevate"
@@ -1515,8 +1542,10 @@ export default function Storyboard() {
                   )}
                 </div>
               </Card>
+              </motion.div>
               )
             )}
+            </AnimatePresence>
           </div>
         )}
         
