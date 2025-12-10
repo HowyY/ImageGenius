@@ -62,6 +62,7 @@ export function RegionSelector({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const drawingRectRef = useRef<RectRegion | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageRetryCount, setImageRetryCount] = useState(0);
@@ -232,13 +233,15 @@ export function RegionSelector({
         }
       } else {
         setSelectedRegionId(null);
-        setDrawingRect({
+        const newRect = {
           id: `rect_${Date.now()}`,
           x: coords.x,
           y: coords.y,
           width: 0,
           height: 0,
-        });
+        };
+        setDrawingRect(newRect);
+        drawingRectRef.current = newRect;
       }
     }
   };
@@ -253,11 +256,13 @@ export function RegionSelector({
       } : null);
     } else if (mode === "rect") {
       if (drawingRect) {
-        setDrawingRect(prev => prev ? {
-          ...prev,
-          width: coords.x - prev.x,
-          height: coords.y - prev.y,
-        } : null);
+        const updatedRect = {
+          ...drawingRect,
+          width: coords.x - drawingRect.x,
+          height: coords.y - drawingRect.y,
+        };
+        setDrawingRect(updatedRect);
+        drawingRectRef.current = updatedRect;
       } else if (resizing && selectedRegionId) {
         updateRegionResize(selectedRegionId, resizing.handle, coords);
       } else if (dragging && selectedRegionId) {
@@ -272,8 +277,9 @@ export function RegionSelector({
     }
     setCurrentStroke(null);
 
-    if (drawingRect && Math.abs(drawingRect.width) > 0.002 && Math.abs(drawingRect.height) > 0.002) {
-      const normalizedRect = normalizeRect(drawingRect);
+    const finalRect = drawingRectRef.current;
+    if (finalRect && Math.abs(finalRect.width) > 0.002 && Math.abs(finalRect.height) > 0.002) {
+      const normalizedRect = normalizeRect(finalRect);
       const newRegion: SelectionRegion = {
         id: normalizedRect.id,
         type: "rect",
@@ -283,6 +289,7 @@ export function RegionSelector({
       setSelectedRegionId(normalizedRect.id);
     }
     setDrawingRect(null);
+    drawingRectRef.current = null;
     setResizing(null);
     setDragging(null);
   };
