@@ -28,7 +28,7 @@ export function ViewerSceneCard({ scene, onImageClick }: ViewerSceneCardProps) {
         {hasImages ? (
           <img
             src={generatedImages[0]}
-            alt={scene.viewerDescription || scene.visualDescription || "Scene image"}
+            alt="Scene image"
             className="w-full h-full object-cover"
             loading="lazy"
           />
@@ -91,7 +91,7 @@ export function ViewerSceneCard({ scene, onImageClick }: ViewerSceneCardProps) {
             className="text-sm bg-muted/30 rounded-md p-2 min-h-[4rem]"
             data-testid={`viewer-description-${scene.id}`}
           >
-            {scene.viewerDescription || scene.visualDescription || <span className="text-muted-foreground italic">No description</span>}
+            {scene.visualDescription || <span className="text-muted-foreground italic">No description</span>}
           </div>
         </div>
       </div>

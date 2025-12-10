@@ -107,8 +107,7 @@ export const storyboardScenes = pgTable("storyboard_scenes", {
   storyboardId: integer("storyboard_id"), // null for legacy scenes, will be migrated
   orderIndex: integer("order_index").notNull().default(0),
   voiceOver: text("voice_over").notNull().default(""),
-  visualDescription: text("visual_description").notNull().default(""),
-  viewerDescription: text("viewer_description").notNull().default(""), // Client-facing description (shown to Viewers)
+  visualDescription: text("visual_description").notNull().default(""), // Client-facing description (from Script)
   generatedImageUrl: text("generated_image_url"),
   styleId: text("style_id"),
   engine: text("engine"),
@@ -120,7 +119,7 @@ export const storyboardScenes = pgTable("storyboard_scenes", {
   selectedVideoId: text("selected_video_id").references(() => media.id, { onDelete: "set null" }),
   selectedMusicId: text("selected_music_id").references(() => media.id, { onDelete: "set null" }),
   taskId: text("task_id"), // Orama: async generation task tracking
-  imagePrompt: text("image_prompt"), // Orama: separate from visualDescription
+  imagePrompt: text("image_prompt"), // AI image generation prompt
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -285,8 +284,7 @@ export const insertStoryboardSceneSchema = z.object({
   storyboardId: z.number().int().optional().nullable(),
   orderIndex: z.number().int().min(0).optional(),
   voiceOver: z.string().default(""),
-  visualDescription: z.string().default(""),
-  viewerDescription: z.string().default(""), // Client-facing description
+  visualDescription: z.string().default(""), // Client-facing description (from Script)
   generatedImageUrl: z.string().url().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),
@@ -303,8 +301,7 @@ export const updateStoryboardSceneSchema = z.object({
   storyboardId: z.number().int().optional().nullable(),
   orderIndex: z.number().int().min(0).optional(),
   voiceOver: z.string().optional(),
-  visualDescription: z.string().optional(),
-  viewerDescription: z.string().optional(), // Client-facing description
+  visualDescription: z.string().optional(), // Client-facing description (from Script)
   generatedImageUrl: z.string().optional().nullable(),
   styleId: z.string().optional().nullable(),
   engine: z.string().optional().nullable(),

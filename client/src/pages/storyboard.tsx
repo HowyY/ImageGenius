@@ -975,7 +975,7 @@ export default function Storyboard() {
           </div>
           
           <div className="flex items-center gap-2">
-            {currentStoryboardId && (
+            {currentStoryboardId && isDesigner && (
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1012,15 +1012,13 @@ export default function Storyboard() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {isDesigner && (
-                      <DropdownMenuItem
-                        onClick={() => handleOpenSetup()}
-                        data-testid="button-project-settings"
-                      >
-                        <Settings className="w-4 h-4 mr-2" />
-                        Project Settings
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem
+                      onClick={() => handleOpenSetup()}
+                      data-testid="button-project-settings"
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Project Settings
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => {
                         setRenameStoryboardName(currentStoryboard?.name || "");
@@ -1082,7 +1080,7 @@ export default function Storyboard() {
           </div>
         </div>
 
-        {currentStoryboardId && (
+        {currentStoryboardId && isDesigner && (
           <div className="mb-6">
             <SettingsBar
               selectedStyle={selectedStyle}
@@ -1091,8 +1089,8 @@ export default function Storyboard() {
               onEngineChange={handleEngineChange}
               styles={styles}
               stylesLoading={stylesLoading}
-              disabled={isViewer}
-              onOpenSetupWizard={isDesigner ? handleOpenSetup : undefined}
+              disabled={false}
+              onOpenSetupWizard={handleOpenSetup}
             />
           </div>
         )}
@@ -1199,7 +1197,7 @@ export default function Storyboard() {
                     const style = styles?.find(s => s.id === scene.styleId);
                     setPreviewImage({
                       url,
-                      prompt: scene.viewerDescription || scene.visualDescription || "Generated image",
+                      prompt: scene.visualDescription || "Generated image",
                       style: style?.label || scene.styleId || "Unknown",
                       engine: scene.engine || "Unknown",
                       date: "Current scene"
