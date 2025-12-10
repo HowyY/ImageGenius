@@ -1249,7 +1249,11 @@ export default function Storyboard() {
                     ? "ring-2 ring-primary shadow-lg" 
                     : "hover-elevate"
                 }`}
-                onClick={() => {
+                onClick={(e) => {
+                  // Event delegation: ignore clicks on interactive elements marked with data-card-action
+                  const target = e.target;
+                  if (!(target instanceof Element)) return;
+                  if (target.closest('[data-card-action]')) return;
                   const newSelectedId = selectedSceneId === scene.id ? null : scene.id;
                   setSelectedSceneId(newSelectedId);
                   if (newSelectedId !== null) {
@@ -1273,8 +1277,8 @@ export default function Storyboard() {
                   ) : scene.generatedImageUrl ? (
                     <div 
                       className="w-full h-full cursor-zoom-in"
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      data-card-action
+                      onClick={() => {
                         const style = styles?.find(s => s.id === scene.styleId);
                         setPreviewImage({
                           url: scene.generatedImageUrl!,
@@ -1309,10 +1313,8 @@ export default function Storyboard() {
                           variant="ghost"
                           size="icon"
                           className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteSceneMutation.mutate(scene.id);
-                          }}
+                          data-card-action
+                          onClick={() => deleteSceneMutation.mutate(scene.id)}
                           disabled={deleteSceneMutation.isPending || isGenerating(scene.id)}
                           data-testid={`button-delete-scene-${scene.id}`}
                         >
@@ -1324,7 +1326,7 @@ export default function Storyboard() {
                   )}
                 </div>
                 
-                <div className="flex items-center justify-between px-3 py-2 border-b text-sm text-muted-foreground">
+                <div className="flex items-center justify-between px-3 py-2 border-b text-sm text-muted-foreground" data-card-action>
                   <span data-testid={`text-image-status-${scene.id}`}>
                     {scene.generatedImageUrl ? "Generated Images (1)" : "No images generated yet"}
                   </span>
@@ -1334,7 +1336,7 @@ export default function Storyboard() {
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        onClick={(e) => { e.stopPropagation(); openSceneHistory(scene.id); }}
+                        onClick={() => openSceneHistory(scene.id)}
                         data-testid={`button-scene-history-${scene.id}`}
                       >
                         <History className="w-4 h-4" />
@@ -1344,7 +1346,7 @@ export default function Storyboard() {
                   </Tooltip>
                 </div>
                 
-                <div className="flex items-center gap-2 px-3 py-2 border-b">
+                <div className="flex items-center gap-2 px-3 py-2 border-b" data-card-action>
                   <Popover 
                     open={characterPopoverOpen === scene.id} 
                     onOpenChange={(open) => setCharacterPopoverOpen(open ? scene.id : null)}
@@ -1354,7 +1356,6 @@ export default function Storyboard() {
                         variant="ghost"
                         size="sm"
                         className="h-auto py-1 px-2 gap-2"
-                        onClick={(e) => e.stopPropagation()}
                         data-testid={`button-scene-characters-${scene.id}`}
                       >
                         <Users className="w-4 h-4 text-muted-foreground" />
@@ -1499,7 +1500,7 @@ export default function Storyboard() {
                     <Textarea
                       placeholder={isViewer ? "View-only mode" : "Enter scene description for image generation..."}
                       value={getSceneDescription(scene)}
-                      onClick={(e) => e.stopPropagation()}
+                      data-card-action
                       onChange={(e) => {
                         if (!isDesigner) return;
                         handleDescriptionChange(scene.id, e.target.value);
@@ -1516,9 +1517,9 @@ export default function Storyboard() {
                   </div>
                   
                   {isDesigner && (
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex gap-2 mt-3" data-card-action>
                       <Button
-                        onClick={(e) => { e.stopPropagation(); handleGenerateClick(scene); }}
+                        onClick={() => handleGenerateClick(scene)}
                         disabled={isGenerating(scene.id) || !getSceneDescription(scene).trim()}
                         className="flex-1"
                         data-testid={`button-generate-scene-${scene.id}`}
@@ -1541,7 +1542,7 @@ export default function Storyboard() {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={(e) => { e.stopPropagation(); handleEditClick(scene); }}
+                            onClick={() => handleEditClick(scene)}
                             disabled={isGenerating(scene.id) || !scene.generatedImageUrl}
                             data-testid={`button-edit-scene-${scene.id}`}
                           >
