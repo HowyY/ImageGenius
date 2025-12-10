@@ -1575,6 +1575,40 @@ Do not change anything else in [image1].`;
                         loading="lazy"
                         fallbackText="Failed to load"
                       />
+                      {editSessions[scene.id]?.mode === 'generating' && activeEditSceneId !== scene.id && (
+                        <div 
+                          className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center cursor-pointer"
+                          data-card-action
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveEditSceneId(scene.id);
+                          }}
+                          data-testid={`overlay-edit-generating-${scene.id}`}
+                        >
+                          <div className="flex flex-col items-center gap-2 text-foreground">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                            <span className="text-sm font-medium">Editing...</span>
+                            <span className="text-xs text-muted-foreground">Click to view</span>
+                          </div>
+                        </div>
+                      )}
+                      {editSessions[scene.id]?.mode === 'comparison' && activeEditSceneId !== scene.id && (
+                        <div 
+                          className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center cursor-pointer"
+                          data-card-action
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveEditSceneId(scene.id);
+                          }}
+                          data-testid={`overlay-edit-ready-${scene.id}`}
+                        >
+                          <div className="flex flex-col items-center gap-2 text-foreground">
+                            <Check className="w-8 h-8 text-green-500" />
+                            <span className="text-sm font-medium">Edit Ready</span>
+                            <span className="text-xs text-muted-foreground">Click to review</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
