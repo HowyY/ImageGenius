@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import Cropper from "react-easy-crop";
-import type { Area, Point } from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
@@ -29,7 +28,8 @@ import {
   Copy,
   Download,
   Settings,
-  Crop,
+  Paintbrush,
+  Undo2,
   Target
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
@@ -59,15 +59,22 @@ interface EditingState {
   sceneDescription: string;
 }
 
+interface BrushStroke {
+  points: { x: number; y: number }[];
+  color: string;
+  size: number;
+}
+
 interface EditDialogState {
   sceneId: number;
   imageUrl: string;
   editPrompt: string;
   engine: EngineType;
-  cropMode: boolean;
-  crop: Point;
-  zoom: number;
-  croppedAreaPixels: Area | null;
+  paintMode: boolean;
+  brushStrokes: BrushStroke[];
+  currentStroke: BrushStroke | null;
+  brushSize: number;
+  brushColor: string;
   croppedRegionUrl: string | null;
   isUploadingRegion: boolean;
 }
@@ -100,9 +107,55 @@ function clearCurrentStoryboardId() {
 const REGION_PLACEHOLDER = "[选中区域]";
 const API_REGION_PLACEHOLDER = "[image2]";
 
-async function createCroppedImage(
+function calculateBoundingBox(
+  strokes: BrushStroke[],
+  imageWidth: number,
+  imageHeight: number,
+  displayWidth: number,
+  displayHeight: number,
+  padding: number = 20
+): Area | null {
+  if (strokes.length === 0) return null;
+  
+  const scaleX = imageWidth / displayWidth;
+  const scaleY = imageHeight / displayHeight;
+  
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  
+  for (const stroke of strokes) {
+    const scaledBrushSizeX = stroke.size * scaleX;
+    const scaledBrushSizeY = stroke.size * scaleY;
+    for (const point of stroke.points) {
+      const px = point.x * imageWidth;
+      const py = point.y * imageHeight;
+      minX = Math.min(minX, px - scaledBrushSizeX / 2);
+      minY = Math.min(minY, py - scaledBrushSizeY / 2);
+      maxX = Math.max(maxX, px + scaledBrushSizeX / 2);
+      maxY = Math.max(maxY, py + scaledBrushSizeY / 2);
+    }
+  }
+  
+  const paddingX = padding * scaleX;
+  const paddingY = padding * scaleY;
+  
+  minX = Math.max(0, minX - paddingX);
+  minY = Math.max(0, minY - paddingY);
+  maxX = Math.min(imageWidth, maxX + paddingX);
+  maxY = Math.min(imageHeight, maxY + paddingY);
+  
+  return {
+    x: Math.floor(minX),
+    y: Math.floor(minY),
+    width: Math.ceil(maxX - minX),
+    height: Math.ceil(maxY - minY),
+  };
+}
+
+async function createMarkedCroppedImage(
   imageSrc: string,
-  croppedAreaPixels: Area
+  strokes: BrushStroke[],
+  displayWidth: number,
+  displayHeight: number
 ): Promise<Blob> {
   const image = new Image();
   image.crossOrigin = "anonymous";
@@ -113,24 +166,63 @@ async function createCroppedImage(
     image.src = imageSrc;
   });
 
+  const scaleX = image.naturalWidth / displayWidth;
+  const scaleY = image.naturalHeight / displayHeight;
+  
+  const boundingBox = calculateBoundingBox(
+    strokes, 
+    image.naturalWidth, 
+    image.naturalHeight,
+    displayWidth,
+    displayHeight,
+    30
+  );
+  if (!boundingBox) throw new Error("No strokes to crop");
+
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not get canvas context");
 
-  canvas.width = croppedAreaPixels.width;
-  canvas.height = croppedAreaPixels.height;
+  canvas.width = boundingBox.width;
+  canvas.height = boundingBox.height;
 
   ctx.drawImage(
     image,
-    croppedAreaPixels.x,
-    croppedAreaPixels.y,
-    croppedAreaPixels.width,
-    croppedAreaPixels.height,
+    boundingBox.x,
+    boundingBox.y,
+    boundingBox.width,
+    boundingBox.height,
     0,
     0,
-    croppedAreaPixels.width,
-    croppedAreaPixels.height
+    boundingBox.width,
+    boundingBox.height
   );
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  
+  for (const stroke of strokes) {
+    if (stroke.points.length < 2) continue;
+    
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = stroke.size * scaleX;
+    ctx.beginPath();
+    
+    const firstPoint = stroke.points[0];
+    ctx.moveTo(
+      firstPoint.x * image.naturalWidth - boundingBox.x,
+      firstPoint.y * image.naturalHeight - boundingBox.y
+    );
+    
+    for (let i = 1; i < stroke.points.length; i++) {
+      const point = stroke.points[i];
+      ctx.lineTo(
+        point.x * image.naturalWidth - boundingBox.x,
+        point.y * image.naturalHeight - boundingBox.y
+      );
+    }
+    ctx.stroke();
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -840,25 +932,36 @@ export default function Storyboard() {
       imageUrl: scene.generatedImageUrl,
       editPrompt: "",
       engine: editEngine,
-      cropMode: false,
-      crop: { x: 0, y: 0 },
-      zoom: 1,
-      croppedAreaPixels: null,
+      paintMode: false,
+      brushStrokes: [],
+      currentStroke: null,
+      brushSize: 20,
+      brushColor: "rgba(255, 100, 100, 0.7)",
       croppedRegionUrl: null,
       isUploadingRegion: false,
     });
   };
 
-  const handleCropConfirm = async () => {
-    if (!editDialog || !editDialog.croppedAreaPixels) return;
+  const paintCanvasRef = useRef<HTMLCanvasElement>(null);
+  const paintContainerRef = useRef<HTMLDivElement>(null);
+  
+  const handlePaintConfirm = async () => {
+    if (!editDialog || editDialog.brushStrokes.length === 0) return;
+    if (!paintContainerRef.current) return;
 
     setEditDialog(prev => prev ? { ...prev, isUploadingRegion: true } : null);
 
     try {
-      const blob = await createCroppedImage(editDialog.imageUrl, editDialog.croppedAreaPixels);
+      const containerRect = paintContainerRef.current.getBoundingClientRect();
+      const blob = await createMarkedCroppedImage(
+        editDialog.imageUrl, 
+        editDialog.brushStrokes,
+        containerRect.width,
+        containerRect.height
+      );
       
       const formData = new FormData();
-      formData.append("file", blob, "cropped-region.png");
+      formData.append("file", blob, "marked-region.png");
 
       const response = await fetch("/api/upload-region", {
         method: "POST",
@@ -866,27 +969,27 @@ export default function Storyboard() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to upload cropped region");
+        throw new Error("Failed to upload marked region");
       }
 
       const data = await response.json();
       
       setEditDialog(prev => prev ? {
         ...prev,
-        cropMode: false,
+        paintMode: false,
         croppedRegionUrl: data.url,
         isUploadingRegion: false,
       } : null);
 
       toast({
-        title: "Region selected",
+        title: "Region marked",
         description: "Click the tag below to insert [选中区域] into your prompt",
       });
     } catch (error) {
-      console.error("Crop failed:", error);
+      console.error("Paint confirm failed:", error);
       setEditDialog(prev => prev ? { ...prev, isUploadingRegion: false } : null);
       toast({
-        title: "Failed to select region",
+        title: "Failed to mark region",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
@@ -903,11 +1006,60 @@ export default function Storyboard() {
     setEditDialog(prev => prev ? {
       ...prev,
       croppedRegionUrl: null,
-      croppedAreaPixels: null,
-      crop: { x: 0, y: 0 },
-      zoom: 1,
+      brushStrokes: [],
+      currentStroke: null,
     } : null);
   };
+  
+  const handleUndoStroke = () => {
+    setEditDialog(prev => {
+      if (!prev || prev.brushStrokes.length === 0) return prev;
+      return {
+        ...prev,
+        brushStrokes: prev.brushStrokes.slice(0, -1),
+      };
+    });
+  };
+  
+  useEffect(() => {
+    if (!editDialog?.paintMode || !paintCanvasRef.current || !paintContainerRef.current) return;
+    
+    const canvas = paintCanvasRef.current;
+    const container = paintContainerRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    
+    const allStrokes = [...editDialog.brushStrokes];
+    if (editDialog.currentStroke) {
+      allStrokes.push(editDialog.currentStroke);
+    }
+    
+    for (const stroke of allStrokes) {
+      if (stroke.points.length < 2) continue;
+      
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.size;
+      ctx.beginPath();
+      
+      const firstPoint = stroke.points[0];
+      ctx.moveTo(firstPoint.x * canvas.width, firstPoint.y * canvas.height);
+      
+      for (let i = 1; i < stroke.points.length; i++) {
+        const point = stroke.points[i];
+        ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
+      }
+      ctx.stroke();
+    }
+  }, [editDialog?.paintMode, editDialog?.brushStrokes, editDialog?.currentStroke]);
 
   const handleEditSubmit = async () => {
     if (!editDialog) return;
@@ -2094,69 +2246,138 @@ export default function Storyboard() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             {editDialog && (
-              <div className="relative w-full aspect-video bg-muted rounded overflow-hidden">
-                {editDialog.cropMode ? (
-                  <Cropper
-                    image={editDialog.imageUrl}
-                    crop={editDialog.crop}
-                    zoom={editDialog.zoom}
-                    aspect={16 / 9}
-                    onCropChange={(crop) => setEditDialog(prev => prev ? { ...prev, crop } : null)}
-                    onZoomChange={(zoom) => setEditDialog(prev => prev ? { ...prev, zoom } : null)}
-                    onCropComplete={(_, croppedAreaPixels) => 
-                      setEditDialog(prev => prev ? { ...prev, croppedAreaPixels } : null)
-                    }
-                  />
-                ) : (
-                  <ImageWithFallback
-                    src={editDialog.imageUrl}
-                    alt="Current scene image"
-                    className="w-full h-full object-cover"
-                    fallbackText="Failed to load"
+              <div 
+                ref={paintContainerRef}
+                className="relative w-full aspect-video bg-muted rounded overflow-hidden"
+              >
+                <ImageWithFallback
+                  src={editDialog.imageUrl}
+                  alt="Current scene image"
+                  className="w-full h-full object-cover pointer-events-none"
+                  fallbackText="Failed to load"
+                />
+                {editDialog.paintMode && (
+                  <canvas
+                    ref={paintCanvasRef}
+                    className="absolute inset-0 w-full h-full cursor-crosshair"
+                    style={{ touchAction: "none" }}
+                    onMouseDown={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = (e.clientX - rect.left) / rect.width;
+                      const y = (e.clientY - rect.top) / rect.height;
+                      setEditDialog(prev => prev ? {
+                        ...prev,
+                        currentStroke: {
+                          points: [{ x, y }],
+                          color: prev.brushColor,
+                          size: prev.brushSize,
+                        }
+                      } : null);
+                    }}
+                    onMouseMove={(e) => {
+                      if (!editDialog.currentStroke) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = (e.clientX - rect.left) / rect.width;
+                      const y = (e.clientY - rect.top) / rect.height;
+                      setEditDialog(prev => {
+                        if (!prev || !prev.currentStroke) return prev;
+                        return {
+                          ...prev,
+                          currentStroke: {
+                            ...prev.currentStroke,
+                            points: [...prev.currentStroke.points, { x, y }],
+                          }
+                        };
+                      });
+                    }}
+                    onMouseUp={() => {
+                      if (!editDialog.currentStroke) return;
+                      setEditDialog(prev => {
+                        if (!prev || !prev.currentStroke) return prev;
+                        return {
+                          ...prev,
+                          brushStrokes: [...prev.brushStrokes, prev.currentStroke],
+                          currentStroke: null,
+                        };
+                      });
+                    }}
+                    onMouseLeave={() => {
+                      if (!editDialog.currentStroke) return;
+                      setEditDialog(prev => {
+                        if (!prev || !prev.currentStroke) return prev;
+                        return {
+                          ...prev,
+                          brushStrokes: [...prev.brushStrokes, prev.currentStroke],
+                          currentStroke: null,
+                        };
+                      });
+                    }}
                   />
                 )}
-                {!editDialog.cropMode && (
+                {!editDialog.paintMode && (
                   <div className="absolute bottom-2 right-2">
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => setEditDialog(prev => prev ? { ...prev, cropMode: true } : null)}
+                      onClick={() => setEditDialog(prev => prev ? { ...prev, paintMode: true } : null)}
                       data-testid="button-select-region"
                     >
-                      <Crop className="w-4 h-4 mr-2" />
-                      Select Region
+                      <Paintbrush className="w-4 h-4 mr-2" />
+                      Mark Region
                     </Button>
                   </div>
                 )}
-                {editDialog.cropMode && (
-                  <div className="absolute bottom-2 right-2 flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditDialog(prev => prev ? { 
-                        ...prev, 
-                        cropMode: false,
-                        crop: { x: 0, y: 0 },
-                        zoom: 1,
-                        croppedAreaPixels: null,
-                      } : null)}
-                      data-testid="button-cancel-crop"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleCropConfirm}
-                      disabled={!editDialog.croppedAreaPixels || editDialog.isUploadingRegion}
-                      data-testid="button-confirm-crop"
-                    >
-                      {editDialog.isUploadingRegion ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Check className="w-4 h-4 mr-2" />
-                      )}
-                      Confirm
-                    </Button>
+                {editDialog.paintMode && (
+                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 bg-background/80 backdrop-blur-sm rounded px-2 py-1">
+                      <span className="text-xs text-muted-foreground">Size:</span>
+                      <input
+                        type="range"
+                        min="5"
+                        max="50"
+                        value={editDialog.brushSize}
+                        onChange={(e) => setEditDialog(prev => prev ? { ...prev, brushSize: parseInt(e.target.value) } : null)}
+                        className="w-20 h-1 accent-primary"
+                      />
+                      <span className="text-xs w-6">{editDialog.brushSize}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleUndoStroke}
+                        disabled={editDialog.brushStrokes.length === 0}
+                        data-testid="button-undo-stroke"
+                      >
+                        <Undo2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditDialog(prev => prev ? { 
+                          ...prev, 
+                          paintMode: false,
+                          brushStrokes: [],
+                          currentStroke: null,
+                        } : null)}
+                        data-testid="button-cancel-paint"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handlePaintConfirm}
+                        disabled={editDialog.brushStrokes.length === 0 || editDialog.isUploadingRegion}
+                        data-testid="button-confirm-paint"
+                      >
+                        {editDialog.isUploadingRegion ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Check className="w-4 h-4 mr-2" />
+                        )}
+                        Confirm
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
