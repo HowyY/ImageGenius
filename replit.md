@@ -46,12 +46,14 @@ This web application provides an AI-driven image generation platform integrated 
 - **Smart default**: If global engine is T2I, defaults to "nanobanana" for editing
 - **Use case**: Generate with fast nano, then edit with high-quality pro for precision
 
-**Region Selection for Precise Editing (December 2024):**
-- **Purpose**: Enables users to select a specific area of an image for targeted AI editing
-- **Workflow**: Click "Add Region" → Crop overlay appears with react-easy-crop → Adjust selection → Confirm → Cropped region uploaded to KIE → Insert [选中区域] tag in prompt
+**Brush-Based Region Selection for Precise Editing (December 2024):**
+- **Purpose**: Enables users to paint/mark specific areas of an image for targeted AI editing
+- **Workflow**: Click "Mark Region" → Canvas overlay enables brush painting → Paint strokes on area to edit → Adjust brush size with slider → Click Confirm → Bounding box auto-calculated → Cropped region with marks uploaded to KIE → Insert [选中区域] tag in prompt
+- **Implementation**: Canvas-based brush tool with normalized coordinates (0-1 range), independent X/Y scaling for non-square images, real-time stroke rendering via useEffect
+- **Coordinate system**: Mouse events capture positions relative to canvas → normalized to 0-1 → stored as BrushStroke[] with points, color, size → calculateBoundingBox computes crop area with proper scaleX/scaleY → createMarkedCroppedImage exports crop with visible paint marks
 - **Backend**: `/api/upload-region` endpoint uses Busboy for robust multipart parsing, uploads cropped blob to KIE via `uploadBufferToKIE`
 - **Prompt formatting**: On submit, [选中区域] is replaced with [image2], and prompt is wrapped with context: "[image2] is a cropped region of [image1]. {user instruction} Only modify the area shown in [image2]."
-- **API integration**: Both original image and cropped region are passed as `userReferenceImages` array to the generation API
+- **API integration**: Both original image and cropped region with paint marks are passed as `userReferenceImages` array to the generation API
 
 **ViewerSceneCard (December 2024):**
 - **Purpose**: Client-facing scene card for Viewer role, showing only approved content
