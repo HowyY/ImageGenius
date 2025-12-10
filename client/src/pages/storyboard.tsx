@@ -40,6 +40,7 @@ import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -163,10 +164,16 @@ export default function Storyboard() {
   const activeEditSession = activeEditSceneId !== null ? editSessions[activeEditSceneId] : null;
   
   const updateEditSession = useCallback((sceneId: number, updates: Partial<EditSession>) => {
-    setEditSessions(prev => ({
-      ...prev,
-      [sceneId]: { ...prev[sceneId], ...updates }
-    }));
+    setEditSessions(prev => {
+      if (!prev[sceneId]) {
+        console.warn('updateEditSession called for non-existent session:', sceneId);
+        return prev;
+      }
+      return {
+        ...prev,
+        [sceneId]: { ...prev[sceneId], ...updates }
+      };
+    });
   }, []);
   
   const openEditDialog = useCallback((sceneId: number, imageUrl: string) => {
@@ -567,6 +574,9 @@ export default function Storyboard() {
     onSuccess: (_data, deletedId) => {
       if (selectedSceneId === deletedId) {
         setSelectedSceneId(null);
+      }
+      if (editSessions[deletedId]) {
+        clearEditSession(deletedId);
       }
       queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
       toast({
@@ -1043,9 +1053,21 @@ Do not change anything else in [image1].`;
         mode: 'comparison',
       });
 
+      const isDialogOpen = activeEditSceneId === sceneIdToEdit;
+      
       toast({
         title: "Edit generated",
-        description: "Review the result and accept or discard",
+        description: isDialogOpen 
+          ? "Review the result and accept or discard" 
+          : "Your edit is ready for review",
+        action: !isDialogOpen ? (
+          <ToastAction 
+            altText="Review edit" 
+            onClick={() => setActiveEditSceneId(sceneIdToEdit)}
+          >
+            Review
+          </ToastAction>
+        ) : undefined,
       });
     } catch (error) {
       console.error("Edit failed:", error);
@@ -1100,6 +1122,17 @@ Do not change anything else in [image1].`;
     toast({
       title: "Edit discarded",
       description: "You can try again with different settings",
+    });
+  };
+  
+  const handleCancelEdit = () => {
+    if (!activeEditSession) return;
+    
+    clearEditSession(activeEditSession.sceneId);
+    
+    toast({
+      title: "Edit cancelled",
+      description: "All changes have been discarded",
     });
   };
 
@@ -2442,6 +2475,9 @@ Do not change anything else in [image1].`;
           <DialogFooter className="gap-2">
             {activeEditSession?.mode === 'comparison' ? (
               <>
+                <Button variant="ghost" onClick={closeEditDialog} data-testid="button-close-edit">
+                  Close
+                </Button>
                 <Button variant="outline" onClick={handleDiscardEdit} data-testid="button-discard-edit">
                   <X className="w-4 h-4 mr-2" />
                   Discard
