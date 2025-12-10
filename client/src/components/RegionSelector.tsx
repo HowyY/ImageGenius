@@ -562,6 +562,7 @@ export function RegionSelector({
                 src={imageRetryCount > 0 ? `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}retry=${imageRetryCount}` : imageUrl}
                 alt="Source"
                 className="max-w-full max-h-full object-contain pointer-events-none"
+                crossOrigin="anonymous"
                 style={{ display: imageLoaded ? 'block' : 'none' }}
                 onLoad={(e) => {
                   const img = e.currentTarget;
