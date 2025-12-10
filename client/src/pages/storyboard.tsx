@@ -100,105 +100,6 @@ function clearCurrentStoryboardId() {
   localStorage.removeItem(CURRENT_STORYBOARD_KEY);
 }
 
-async function generateRegionThumbnails(
-  imageSrc: string,
-  regions: SelectionRegion[]
-): Promise<RegionThumbnail[]> {
-  const image = new Image();
-  image.crossOrigin = "anonymous";
-  
-  await new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = reject;
-    image.src = imageSrc;
-  });
-
-  const results: RegionThumbnail[] = [];
-  
-  for (const region of regions) {
-    let bounds: { x: number; y: number; width: number; height: number } | null = null;
-    
-    if (region.type === "rect" && region.rect) {
-      bounds = {
-        x: Math.max(0, Math.floor(region.rect.x * image.naturalWidth)),
-        y: Math.max(0, Math.floor(region.rect.y * image.naturalHeight)),
-        width: Math.min(image.naturalWidth, Math.ceil(region.rect.width * image.naturalWidth)),
-        height: Math.min(image.naturalHeight, Math.ceil(region.rect.height * image.naturalHeight)),
-      };
-    } else if (region.type === "brush" && region.brushStrokes && region.brushStrokes.length > 0) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const stroke of region.brushStrokes) {
-        const normalizedRadius = (stroke.normalizedSize || stroke.size / 500) / 2;
-        for (const point of stroke.points) {
-          minX = Math.min(minX, point.x - normalizedRadius);
-          minY = Math.min(minY, point.y - normalizedRadius);
-          maxX = Math.max(maxX, point.x + normalizedRadius);
-          maxY = Math.max(maxY, point.y + normalizedRadius);
-        }
-      }
-      const padding = 0.02;
-      bounds = {
-        x: Math.max(0, Math.floor((minX - padding) * image.naturalWidth)),
-        y: Math.max(0, Math.floor((minY - padding) * image.naturalHeight)),
-        width: Math.min(image.naturalWidth, Math.ceil((maxX - minX + padding * 2) * image.naturalWidth)),
-        height: Math.min(image.naturalHeight, Math.ceil((maxY - minY + padding * 2) * image.naturalHeight)),
-      };
-    }
-    
-    if (!bounds || bounds.width <= 0 || bounds.height <= 0) continue;
-    
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) continue;
-    
-    canvas.width = bounds.width;
-    canvas.height = bounds.height;
-    
-    ctx.drawImage(
-      image,
-      bounds.x,
-      bounds.y,
-      bounds.width,
-      bounds.height,
-      0,
-      0,
-      bounds.width,
-      bounds.height
-    );
-    
-    if (region.type === "brush" && region.brushStrokes) {
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      for (const stroke of region.brushStrokes) {
-        if (stroke.points.length < 2) continue;
-        ctx.strokeStyle = stroke.color;
-        const scaledLineWidth = (stroke.normalizedSize || stroke.size / 500) * image.naturalWidth;
-        ctx.lineWidth = scaledLineWidth;
-        ctx.beginPath();
-        ctx.moveTo(
-          stroke.points[0].x * image.naturalWidth - bounds.x,
-          stroke.points[0].y * image.naturalHeight - bounds.y
-        );
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(
-            stroke.points[i].x * image.naturalWidth - bounds.x,
-            stroke.points[i].y * image.naturalHeight - bounds.y
-          );
-        }
-        ctx.stroke();
-      }
-    }
-    
-    const thumbnailUrl = canvas.toDataURL("image/png");
-    results.push({
-      id: region.id,
-      thumbnailUrl,
-      selected: false,
-    });
-  }
-  
-  return results;
-}
 
 async function uploadRegionAsBlob(thumbnailUrl: string): Promise<string> {
   const response = await fetch(thumbnailUrl);
@@ -926,29 +827,27 @@ export default function Storyboard() {
     });
   };
 
-  const handleRegionsConfirm = async (selectionRegions: SelectionRegion[]) => {
+  const handleRegionsConfirm = (selectionRegions: SelectionRegion[]) => {
     if (!editDialog) return;
     
-    try {
-      const thumbnails = await generateRegionThumbnails(editDialog.imageUrl, selectionRegions);
-      setEditDialog(prev => prev ? {
-        ...prev,
-        showRegionSelector: false,
-        regions: thumbnails,
-      } : null);
-      
-      if (thumbnails.length > 0) {
-        toast({
-          title: "Regions created",
-          description: `${thumbnails.length} region(s) ready. Click thumbnails to include in edit.`,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to generate region thumbnails:", error);
+    const thumbnails: RegionThumbnail[] = selectionRegions
+      .filter(r => r.thumbnailUrl)
+      .map(r => ({
+        id: r.id,
+        thumbnailUrl: r.thumbnailUrl!,
+        selected: false,
+      }));
+    
+    setEditDialog(prev => prev ? {
+      ...prev,
+      showRegionSelector: false,
+      regions: thumbnails,
+    } : null);
+    
+    if (thumbnails.length > 0) {
       toast({
-        title: "Failed to create regions",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
+        title: "Regions created",
+        description: `${thumbnails.length} region(s) ready. Click thumbnails to include in edit.`,
       });
     }
   };

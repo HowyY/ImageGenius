@@ -66,6 +66,7 @@ export function RegionSelector({
   const [imageError, setImageError] = useState(false);
   const [imageRetryCount, setImageRetryCount] = useState(0);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 });
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const brushColor = "rgba(255, 100, 100, 0.7)";
 
@@ -76,6 +77,7 @@ export function RegionSelector({
       setImageRetryCount(0);
       setCurrentBrushStrokes([]);
       setSelectedRegionId(null);
+      setConfirmError(null);
     }
   }, [open]);
 
@@ -443,7 +445,94 @@ export function RegionSelector({
     setCurrentBrushStrokes([]);
   };
 
+  const generateThumbnailForRegion = useCallback((region: SelectionRegion): string | undefined => {
+    const img = imageRef.current;
+    if (!img || !imageLoaded) return undefined;
+
+    let bounds: { x: number; y: number; width: number; height: number } | null = null;
+
+    if (region.type === "rect" && region.rect) {
+      bounds = {
+        x: Math.max(0, Math.floor(region.rect.x * img.naturalWidth)),
+        y: Math.max(0, Math.floor(region.rect.y * img.naturalHeight)),
+        width: Math.min(img.naturalWidth, Math.ceil(region.rect.width * img.naturalWidth)),
+        height: Math.min(img.naturalHeight, Math.ceil(region.rect.height * img.naturalHeight)),
+      };
+    } else if (region.type === "brush" && region.brushStrokes && region.brushStrokes.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const stroke of region.brushStrokes) {
+        const normalizedRadius = (stroke.normalizedSize || stroke.size / 500) / 2;
+        for (const point of stroke.points) {
+          minX = Math.min(minX, point.x - normalizedRadius);
+          minY = Math.min(minY, point.y - normalizedRadius);
+          maxX = Math.max(maxX, point.x + normalizedRadius);
+          maxY = Math.max(maxY, point.y + normalizedRadius);
+        }
+      }
+      const padding = 0.02;
+      bounds = {
+        x: Math.max(0, Math.floor((minX - padding) * img.naturalWidth)),
+        y: Math.max(0, Math.floor((minY - padding) * img.naturalHeight)),
+        width: Math.min(img.naturalWidth, Math.ceil((maxX - minX + padding * 2) * img.naturalWidth)),
+        height: Math.min(img.naturalHeight, Math.ceil((maxY - minY + padding * 2) * img.naturalHeight)),
+      };
+    }
+
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) return undefined;
+
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return undefined;
+
+      canvas.width = bounds.width;
+      canvas.height = bounds.height;
+
+      ctx.drawImage(
+        img,
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+        0,
+        0,
+        bounds.width,
+        bounds.height
+      );
+
+      if (region.type === "brush" && region.brushStrokes) {
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        for (const stroke of region.brushStrokes) {
+          if (stroke.points.length < 2) continue;
+          ctx.strokeStyle = stroke.color;
+          const scaledLineWidth = (stroke.normalizedSize || stroke.size / 500) * img.naturalWidth;
+          ctx.lineWidth = scaledLineWidth;
+          ctx.beginPath();
+          ctx.moveTo(
+            stroke.points[0].x * img.naturalWidth - bounds.x,
+            stroke.points[0].y * img.naturalHeight - bounds.y
+          );
+          for (let i = 1; i < stroke.points.length; i++) {
+            ctx.lineTo(
+              stroke.points[i].x * img.naturalWidth - bounds.x,
+              stroke.points[i].y * img.naturalHeight - bounds.y
+            );
+          }
+          ctx.stroke();
+        }
+      }
+
+      return canvas.toDataURL("image/png");
+    } catch (error) {
+      console.error("Failed to generate thumbnail:", error);
+      return undefined;
+    }
+  }, [imageLoaded]);
+
   const handleConfirm = () => {
+    setConfirmError(null);
+    
     let finalRegions = [...regions];
     if (currentBrushStrokes.length > 0) {
       finalRegions.push({
@@ -452,7 +541,25 @@ export function RegionSelector({
         brushStrokes: [...currentBrushStrokes],
       });
     }
-    onConfirm(finalRegions);
+
+    const regionsWithThumbnails = finalRegions.map(region => ({
+      ...region,
+      thumbnailUrl: generateThumbnailForRegion(region),
+    }));
+
+    const validRegions = regionsWithThumbnails.filter(r => r.thumbnailUrl);
+    const failedCount = finalRegions.length - validRegions.length;
+    
+    if (validRegions.length === 0 && finalRegions.length > 0) {
+      setConfirmError("Failed to generate region thumbnails. Please retry loading the image.");
+      return;
+    }
+    
+    if (failedCount > 0) {
+      console.warn(`${failedCount} region(s) failed to generate thumbnails`);
+    }
+
+    onConfirm(validRegions);
     onClose();
   };
 
@@ -541,10 +648,19 @@ export function RegionSelector({
 
               <div className="w-px h-6 bg-border mx-1" />
 
+              {confirmError && (
+                <span className="text-sm text-destructive">{confirmError}</span>
+              )}
+
               <Button variant="ghost" size="sm" onClick={onClose} data-testid="button-cancel-region">
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleConfirm} data-testid="button-confirm-regions">
+              <Button 
+                size="sm" 
+                onClick={handleConfirm} 
+                disabled={!imageLoaded}
+                data-testid="button-confirm-regions"
+              >
                 Done ({regions.length + (currentBrushStrokes.length > 0 ? 1 : 0)})
               </Button>
             </div>
