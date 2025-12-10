@@ -124,8 +124,8 @@ export function SceneInspector({
           exit={{ x: 320, opacity: 0 }}
           transition={{
             type: "spring",
-            stiffness: 300,
-            damping: 30,
+            stiffness: 400,
+            damping: 40,
             mass: 0.8,
           }}
           className="h-full flex flex-col bg-card border-l w-80 shadow-lg"

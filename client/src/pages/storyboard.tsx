@@ -930,7 +930,7 @@ export default function Storyboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-14 pb-20 grid grid-cols-[1fr_auto]">
+    <div className="min-h-screen bg-background pt-14 pb-20 grid grid-cols-[1fr_auto] overflow-x-hidden">
       <main className="overflow-auto">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
