@@ -65,17 +65,17 @@ interface RegionThumbnail {
   selected: boolean;
 }
 
-interface EditDialogState {
+type EditSessionMode = 'form' | 'generating' | 'comparison';
+
+interface EditSession {
   sceneId: number;
   imageUrl: string;
   originalImageUrl: string;
   pendingResultUrl: string | null;
   editPrompt: string;
   engine: EngineType;
-  showRegionSelector: boolean;
   regions: RegionThumbnail[];
-  isUploadingRegions: boolean;
-  showComparison: boolean;
+  mode: EditSessionMode;
 }
 
 const CURRENT_STORYBOARD_KEY = "currentStoryboardId";
@@ -136,7 +136,9 @@ export default function Storyboard() {
   const [selectedEngine, setSelectedEngineState] = useState<EngineType>((getEngine() || "nanobanana") as EngineType);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historySceneId, setHistorySceneId] = useState<number | null>(null);
-  const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
+  const [editSessions, setEditSessions] = useState<Record<number, EditSession>>({});
+  const [activeEditSceneId, setActiveEditSceneId] = useState<number | null>(null);
+  const [showRegionSelector, setShowRegionSelector] = useState(false);
   
   const [currentStoryboardId, setCurrentStoryboardIdState] = useState<number | null>(getCurrentStoryboardId());
   const [createStoryboardDialogOpen, setCreateStoryboardDialogOpen] = useState(false);
@@ -157,6 +159,50 @@ export default function Storyboard() {
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const editPromptRef = useRef<HTMLTextAreaElement>(null);
+  
+  const activeEditSession = activeEditSceneId !== null ? editSessions[activeEditSceneId] : null;
+  
+  const updateEditSession = useCallback((sceneId: number, updates: Partial<EditSession>) => {
+    setEditSessions(prev => ({
+      ...prev,
+      [sceneId]: { ...prev[sceneId], ...updates }
+    }));
+  }, []);
+  
+  const openEditDialog = useCallback((sceneId: number, imageUrl: string) => {
+    const existingSession = editSessions[sceneId];
+    if (existingSession) {
+      setActiveEditSceneId(sceneId);
+    } else {
+      const newSession: EditSession = {
+        sceneId,
+        imageUrl,
+        originalImageUrl: imageUrl,
+        pendingResultUrl: null,
+        editPrompt: "",
+        engine: selectedEngine,
+        regions: [],
+        mode: 'form',
+      };
+      setEditSessions(prev => ({ ...prev, [sceneId]: newSession }));
+      setActiveEditSceneId(sceneId);
+    }
+  }, [editSessions, selectedEngine]);
+  
+  const closeEditDialog = useCallback(() => {
+    setActiveEditSceneId(null);
+  }, []);
+  
+  const clearEditSession = useCallback((sceneId: number) => {
+    setEditSessions(prev => {
+      const newSessions = { ...prev };
+      delete newSessions[sceneId];
+      return newSessions;
+    });
+    if (activeEditSceneId === sceneId) {
+      setActiveEditSceneId(null);
+    }
+  }, [activeEditSceneId]);
   
 
   const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
@@ -818,24 +864,11 @@ export default function Storyboard() {
       });
       return;
     }
-    const editCapableEngines: EngineType[] = ["nanobanana", "seedream", "nanopro"];
-    const editEngine = editCapableEngines.includes(selectedEngine) ? selectedEngine : "nanobanana";
-    setEditDialog({
-      sceneId: scene.id,
-      imageUrl: scene.generatedImageUrl,
-      originalImageUrl: scene.generatedImageUrl,
-      pendingResultUrl: null,
-      editPrompt: "",
-      engine: editEngine,
-      showRegionSelector: false,
-      regions: [],
-      isUploadingRegions: false,
-      showComparison: false,
-    });
+    openEditDialog(scene.id, scene.generatedImageUrl);
   };
 
   const handleRegionsConfirm = (selectionRegions: SelectionRegion[]) => {
-    if (!editDialog) return;
+    if (!activeEditSession) return;
     
     const thumbnails: RegionThumbnail[] = selectionRegions
       .filter(r => r.thumbnailUrl)
@@ -845,11 +878,8 @@ export default function Storyboard() {
         selected: false,
       }));
     
-    setEditDialog(prev => prev ? {
-      ...prev,
-      showRegionSelector: false,
-      regions: thumbnails,
-    } : null);
+    updateEditSession(activeEditSession.sceneId, { regions: thumbnails });
+    setShowRegionSelector(false);
     
     if (thumbnails.length > 0) {
       toast({
@@ -860,24 +890,21 @@ export default function Storyboard() {
   };
 
   const handleToggleRegion = (regionId: string) => {
-    setEditDialog(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        regions: prev.regions.map(r => 
-          r.id === regionId ? { ...r, selected: !r.selected } : r
-        ),
-      };
+    if (!activeEditSession) return;
+    updateEditSession(activeEditSession.sceneId, {
+      regions: activeEditSession.regions.map(r => 
+        r.id === regionId ? { ...r, selected: !r.selected } : r
+      ),
     });
   };
 
   const handleRegionClick = (regionId: string, regionIndex: number) => {
-    if (!editDialog) return;
+    if (!activeEditSession) return;
     
-    const region = editDialog.regions.find(r => r.id === regionId);
+    const region = activeEditSession.regions.find(r => r.id === regionId);
     const isCurrentlySelected = region?.selected || false;
     const tag = `[Region ${regionIndex + 1}]`;
-    const currentValue = editDialog.editPrompt;
+    const currentValue = activeEditSession.editPrompt;
     
     let newValue: string;
     
@@ -896,7 +923,7 @@ export default function Storyboard() {
     }
     
     handleToggleRegion(regionId);
-    setEditDialog(prev => prev ? { ...prev, editPrompt: newValue } : null);
+    updateEditSession(activeEditSession.sceneId, { editPrompt: newValue });
     
     const textarea = editPromptRef.current;
     if (textarea && !isCurrentlySelected) {
@@ -909,19 +936,16 @@ export default function Storyboard() {
   };
 
   const handleRemoveRegion = (regionId: string) => {
-    setEditDialog(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        regions: prev.regions.filter(r => r.id !== regionId),
-      };
+    if (!activeEditSession) return;
+    updateEditSession(activeEditSession.sceneId, {
+      regions: activeEditSession.regions.filter(r => r.id !== regionId),
     });
   };
 
   const handleEditSubmit = async () => {
-    if (!editDialog) return;
+    if (!activeEditSession) return;
 
-    if (!editDialog.editPrompt.trim()) {
+    if (!activeEditSession.editPrompt.trim()) {
       toast({
         title: "Empty edit prompt",
         description: "Please describe what you want to change",
@@ -939,14 +963,14 @@ export default function Storyboard() {
       return;
     }
 
-    const sceneIdToEdit = editDialog.sceneId;
-    let editPrompt = editDialog.editPrompt;
-    const imageUrl = editDialog.imageUrl;
-    const editEngine = editDialog.engine;
-    const allRegions = editDialog.regions;
+    const sceneIdToEdit = activeEditSession.sceneId;
+    let editPrompt = activeEditSession.editPrompt;
+    const imageUrl = activeEditSession.imageUrl;
+    const editEngine = activeEditSession.engine;
+    const allRegions = activeEditSession.regions;
     const selectedRegions = allRegions.filter(r => r.selected);
     
-    setEditDialog(prev => prev ? { ...prev, isUploadingRegions: true } : null);
+    updateEditSession(sceneIdToEdit, { mode: 'generating' });
     
     try {
       const userReferenceImages: string[] = [imageUrl];
@@ -993,22 +1017,16 @@ export default function Storyboard() {
         return imageNumber !== undefined ? `[image${imageNumber}]` : `[Region ${num}]`;
       });
       
-      // Build the final prompt with the specific edit format when regions are used
       let finalPrompt: string;
       if (sortedIndices.length > 0) {
-        // Format: region references + user prompt wrapped in edit instructions
-        // Each sentence on its own line (important for AI parsing)
         finalPrompt = `[image2] is a cropped region of [image1].
 The area highlighted in red (the painted/marked region) of [image2] is the region that requires editing.
 ${editPrompt}
 Only modify the red-highlighted area.
 Do not change anything else in [image1].`;
       } else {
-        // No regions - just use the user's prompt directly
         finalPrompt = editPrompt;
       }
-      
-      setEditDialog(prev => prev ? { ...prev, isUploadingRegions: true } : null);
 
       const generateData = await startGeneration({
         prompt: finalPrompt,
@@ -1020,12 +1038,10 @@ Do not change anything else in [image1].`;
         isEditMode: true,
       });
 
-      setEditDialog(prev => prev ? { 
-        ...prev, 
+      updateEditSession(sceneIdToEdit, { 
         pendingResultUrl: generateData.imageUrl,
-        isUploadingRegions: false,
-        showComparison: true,
-      } : null);
+        mode: 'comparison',
+      });
 
       toast({
         title: "Edit generated",
@@ -1033,7 +1049,7 @@ Do not change anything else in [image1].`;
       });
     } catch (error) {
       console.error("Edit failed:", error);
-      setEditDialog(prev => prev ? { ...prev, isUploadingRegions: false } : null);
+      updateEditSession(sceneIdToEdit, { mode: 'form' });
       toast({
         title: "Edit failed",
         description: error instanceof Error ? error.message : "Failed to edit image",
@@ -1043,24 +1059,26 @@ Do not change anything else in [image1].`;
   };
 
   const handleAcceptEdit = async () => {
-    if (!editDialog || !editDialog.pendingResultUrl) return;
+    if (!activeEditSession || !activeEditSession.pendingResultUrl) return;
+    
+    const sceneId = activeEditSession.sceneId;
     
     try {
-      await apiRequest("PATCH", `/api/scenes/${editDialog.sceneId}`, {
-        generatedImageUrl: editDialog.pendingResultUrl,
+      await apiRequest("PATCH", `/api/scenes/${sceneId}`, {
+        generatedImageUrl: activeEditSession.pendingResultUrl,
         styleId: selectedStyle,
-        engine: editDialog.engine,
+        engine: activeEditSession.engine,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", editDialog.sceneId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", sceneId] });
 
       toast({
         title: "Edit accepted",
         description: "Scene image has been updated",
       });
       
-      setEditDialog(null);
+      clearEditSession(sceneId);
     } catch (error) {
       console.error("Accept edit failed:", error);
       toast({
@@ -1072,13 +1090,12 @@ Do not change anything else in [image1].`;
   };
 
   const handleDiscardEdit = () => {
-    if (!editDialog) return;
+    if (!activeEditSession) return;
     
-    setEditDialog(prev => prev ? {
-      ...prev,
+    updateEditSession(activeEditSession.sceneId, {
       pendingResultUrl: null,
-      showComparison: false,
-    } : null);
+      mode: 'form',
+    });
     
     toast({
       title: "Edit discarded",
@@ -1087,17 +1104,24 @@ Do not change anything else in [image1].`;
   };
 
   const handleRegenerate = () => {
-    if (!editDialog) return;
+    if (!activeEditSession) return;
     
-    setEditDialog(prev => prev ? {
-      ...prev,
+    updateEditSession(activeEditSession.sceneId, {
       pendingResultUrl: null,
-      showComparison: false,
-    } : null);
+      mode: 'form',
+    });
     
     setTimeout(() => {
       handleEditSubmit();
     }, 100);
+  };
+  
+  const handleBackgroundGeneration = () => {
+    closeEditDialog();
+    toast({
+      title: "Generating in background",
+      description: "You can continue working. We'll notify you when it's ready.",
+    });
   };
 
   const handleDownloadImage = async (url: string) => {
@@ -2204,26 +2228,48 @@ Do not change anything else in [image1].`;
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editDialog && !editDialog.showRegionSelector} onOpenChange={(open) => !open && setEditDialog(null)}>
-        <DialogContent className={editDialog?.showComparison ? "max-w-4xl" : "max-w-2xl"}>
+      <Dialog open={activeEditSceneId !== null && !showRegionSelector} onOpenChange={(open) => !open && closeEditDialog()}>
+        <DialogContent className={activeEditSession?.mode === 'comparison' ? "max-w-4xl" : "max-w-2xl"}>
           <DialogHeader>
-            <DialogTitle>{editDialog?.showComparison ? "Review Edit Result" : "Edit Image"}</DialogTitle>
+            <DialogTitle>
+              {activeEditSession?.mode === 'comparison' ? "Review Edit Result" : 
+               activeEditSession?.mode === 'generating' ? "Generating Edit..." : "Edit Image"}
+            </DialogTitle>
             <DialogDescription>
-              {editDialog?.showComparison 
+              {activeEditSession?.mode === 'comparison' 
                 ? "Compare the original with the edited result. Accept, discard, or regenerate."
+                : activeEditSession?.mode === 'generating'
+                ? "Please wait while the AI processes your edit request."
                 : "Describe the changes you want to make. Optionally select regions to focus the edit."
               }
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            {editDialog && editDialog.showComparison && editDialog.pendingResultUrl ? (
+            {activeEditSession?.mode === 'generating' && (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                <div className="text-center">
+                  <p className="text-lg font-medium">Processing your edit...</p>
+                  <p className="text-sm text-muted-foreground mt-1">This may take a moment</p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleBackgroundGeneration}
+                  data-testid="button-background-generate"
+                >
+                  Continue in Background
+                </Button>
+              </div>
+            )}
+            
+            {activeEditSession?.mode === 'comparison' && activeEditSession.pendingResultUrl ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Original</Label>
                     <div className="relative aspect-video bg-muted rounded overflow-hidden">
                       <ImageWithFallback
-                        src={editDialog.originalImageUrl}
+                        src={activeEditSession.originalImageUrl}
                         alt="Original image"
                         className="w-full h-full object-cover"
                         fallbackText="Failed to load"
@@ -2234,7 +2280,7 @@ Do not change anything else in [image1].`;
                     <Label className="text-sm font-medium">Edited Result</Label>
                     <div className="relative aspect-video bg-muted rounded overflow-hidden">
                       <ImageWithFallback
-                        src={editDialog.pendingResultUrl}
+                        src={activeEditSession.pendingResultUrl}
                         alt="Edited result"
                         className="w-full h-full object-cover"
                         fallbackText="Failed to load"
@@ -2244,13 +2290,13 @@ Do not change anything else in [image1].`;
                 </div>
                 <div className="bg-muted/50 rounded p-3">
                   <Label className="text-sm text-muted-foreground">Edit prompt:</Label>
-                  <p className="text-sm mt-1">{editDialog.editPrompt}</p>
+                  <p className="text-sm mt-1">{activeEditSession.editPrompt}</p>
                 </div>
               </div>
-            ) : editDialog && (
+            ) : activeEditSession?.mode === 'form' && (
               <div className="relative w-full aspect-video bg-muted rounded overflow-hidden">
                 <ImageWithFallback
-                  src={editDialog.imageUrl}
+                  src={activeEditSession.imageUrl}
                   alt="Current scene image"
                   className="w-full h-full object-cover pointer-events-none"
                   fallbackText="Failed to load"
@@ -2259,7 +2305,7 @@ Do not change anything else in [image1].`;
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => setEditDialog(prev => prev ? { ...prev, showRegionSelector: true } : null)}
+                    onClick={() => setShowRegionSelector(true)}
                     data-testid="button-select-region"
                   >
                     <Target className="w-4 h-4 mr-2" />
@@ -2269,13 +2315,13 @@ Do not change anything else in [image1].`;
               </div>
             )}
             
-            {editDialog && !editDialog.showComparison && editDialog.regions.length > 0 && (
+            {activeEditSession?.mode === 'form' && activeEditSession.regions.length > 0 && (
               <div>
                 <Label className="mb-2 block text-sm text-muted-foreground">
                   Click region to insert/remove [Region N] tag in prompt
                 </Label>
                 <div className="flex flex-wrap gap-2">
-                  {editDialog.regions.map((region, index) => (
+                  {activeEditSession.regions.map((region, index) => (
                     <div 
                       key={region.id} 
                       className={`relative group cursor-pointer rounded overflow-hidden border-2 transition-all ${
@@ -2317,15 +2363,15 @@ Do not change anything else in [image1].`;
               </div>
             )}
 
-            {editDialog && !editDialog.showComparison && (
+            {activeEditSession?.mode === 'form' && (
               <>
                 <div>
                   <Label htmlFor="edit-engine" className="mb-2 block">
                     Edit Engine
                   </Label>
                   <Select
-                    value={editDialog?.engine || "nanobanana"}
-                    onValueChange={(v) => setEditDialog(prev => prev ? { ...prev, engine: v as EngineType } : null)}
+                    value={activeEditSession?.engine || "nanobanana"}
+                    onValueChange={(v) => activeEditSession && updateEditSession(activeEditSession.sceneId, { engine: v as EngineType })}
                   >
                     <SelectTrigger id="edit-engine" data-testid="select-edit-engine">
                       <SelectValue placeholder="Select engine" />
@@ -2345,14 +2391,14 @@ Do not change anything else in [image1].`;
                     ref={editPromptRef}
                     id="edit-prompt"
                     placeholder="Describe what you want to change..."
-                    value={editDialog?.editPrompt || ""}
-                    onChange={(e) => setEditDialog(prev => prev ? { ...prev, editPrompt: e.target.value } : null)}
+                    value={activeEditSession?.editPrompt || ""}
+                    onChange={(e) => activeEditSession && updateEditSession(activeEditSession.sceneId, { editPrompt: e.target.value })}
                     className="min-h-[80px] resize-none"
                     data-testid="textarea-edit-prompt"
                   />
-                  {editDialog && editDialog.regions.filter(r => r.selected).length > 0 && (
+                  {activeEditSession && activeEditSession.regions.filter(r => r.selected).length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {editDialog.regions.filter(r => r.selected).length} region(s) selected - edits will focus on these areas
+                      {activeEditSession.regions.filter(r => r.selected).length} region(s) selected - edits will focus on these areas
                     </p>
                   )}
                 </div>
@@ -2360,14 +2406,14 @@ Do not change anything else in [image1].`;
             )}
           </div>
           <DialogFooter className="gap-2">
-            {editDialog?.showComparison ? (
+            {activeEditSession?.mode === 'comparison' ? (
               <>
                 <Button variant="outline" onClick={handleDiscardEdit} data-testid="button-discard-edit">
                   <X className="w-4 h-4 mr-2" />
                   Discard
                 </Button>
-                <Button variant="outline" onClick={handleRegenerate} disabled={isGenerating(editDialog?.sceneId)} data-testid="button-regenerate-edit">
-                  {isGenerating(editDialog?.sceneId) ? (
+                <Button variant="outline" onClick={handleRegenerate} disabled={isGenerating(activeEditSession?.sceneId)} data-testid="button-regenerate-edit">
+                  {isGenerating(activeEditSession?.sceneId) ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
                     <RefreshCw className="w-4 h-4 mr-2" />
@@ -2379,17 +2425,17 @@ Do not change anything else in [image1].`;
                   Accept
                 </Button>
               </>
-            ) : (
+            ) : activeEditSession?.mode === 'form' ? (
               <>
-                <Button variant="outline" onClick={() => setEditDialog(null)}>
+                <Button variant="outline" onClick={closeEditDialog}>
                   Cancel
                 </Button>
                 <Button
                   onClick={handleEditSubmit}
-                  disabled={!editDialog?.editPrompt.trim() || editDialog?.isUploadingRegions || isGenerating(editDialog?.sceneId)}
+                  disabled={!activeEditSession?.editPrompt.trim() || isGenerating(activeEditSession?.sceneId)}
                   data-testid="button-confirm-edit"
                 >
-                  {editDialog?.isUploadingRegions || isGenerating(editDialog?.sceneId) ? (
+                  {isGenerating(activeEditSession?.sceneId) ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
                     <Sparkles className="w-4 h-4 mr-2" />
@@ -2397,15 +2443,15 @@ Do not change anything else in [image1].`;
                   Generate Edit
                 </Button>
               </>
-            )}
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <RegionSelector
-        open={editDialog?.showRegionSelector || false}
-        imageUrl={editDialog?.imageUrl || ""}
-        onClose={() => setEditDialog(prev => prev ? { ...prev, showRegionSelector: false } : null)}
+        open={showRegionSelector}
+        imageUrl={activeEditSession?.imageUrl || ""}
+        onClose={() => setShowRegionSelector(false)}
         onConfirm={handleRegionsConfirm}
       />
 
