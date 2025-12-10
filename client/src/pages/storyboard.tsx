@@ -1,4 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import Cropper from "react-easy-crop";
+import type { Area, Point } from "react-easy-crop";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
@@ -26,7 +28,9 @@ import {
   Users,
   Copy,
   Download,
-  Settings
+  Settings,
+  Crop,
+  Target
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -60,6 +64,12 @@ interface EditDialogState {
   imageUrl: string;
   editPrompt: string;
   engine: EngineType;
+  cropMode: boolean;
+  crop: Point;
+  zoom: number;
+  croppedAreaPixels: Area | null;
+  croppedRegionUrl: string | null;
+  isUploadingRegion: boolean;
 }
 
 const CURRENT_STORYBOARD_KEY = "currentStoryboardId";
@@ -85,6 +95,49 @@ function setCurrentStoryboardId(id: number) {
 
 function clearCurrentStoryboardId() {
   localStorage.removeItem(CURRENT_STORYBOARD_KEY);
+}
+
+const REGION_PLACEHOLDER = "[选中区域]";
+const API_REGION_PLACEHOLDER = "[image2]";
+
+async function createCroppedImage(
+  imageSrc: string,
+  croppedAreaPixels: Area
+): Promise<Blob> {
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = reject;
+    image.src = imageSrc;
+  });
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not get canvas context");
+
+  canvas.width = croppedAreaPixels.width;
+  canvas.height = croppedAreaPixels.height;
+
+  ctx.drawImage(
+    image,
+    croppedAreaPixels.x,
+    croppedAreaPixels.y,
+    croppedAreaPixels.width,
+    croppedAreaPixels.height,
+    0,
+    0,
+    croppedAreaPixels.width,
+    croppedAreaPixels.height
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Could not create blob"));
+    }, "image/png");
+  });
 }
 
 export default function Storyboard() {
@@ -787,7 +840,73 @@ export default function Storyboard() {
       imageUrl: scene.generatedImageUrl,
       editPrompt: "",
       engine: editEngine,
+      cropMode: false,
+      crop: { x: 0, y: 0 },
+      zoom: 1,
+      croppedAreaPixels: null,
+      croppedRegionUrl: null,
+      isUploadingRegion: false,
     });
+  };
+
+  const handleCropConfirm = async () => {
+    if (!editDialog || !editDialog.croppedAreaPixels) return;
+
+    setEditDialog(prev => prev ? { ...prev, isUploadingRegion: true } : null);
+
+    try {
+      const blob = await createCroppedImage(editDialog.imageUrl, editDialog.croppedAreaPixels);
+      
+      const formData = new FormData();
+      formData.append("file", blob, "cropped-region.png");
+
+      const response = await fetch("/api/upload-region", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload cropped region");
+      }
+
+      const data = await response.json();
+      
+      setEditDialog(prev => prev ? {
+        ...prev,
+        cropMode: false,
+        croppedRegionUrl: data.url,
+        isUploadingRegion: false,
+      } : null);
+
+      toast({
+        title: "Region selected",
+        description: "Click the tag below to insert [选中区域] into your prompt",
+      });
+    } catch (error) {
+      console.error("Crop failed:", error);
+      setEditDialog(prev => prev ? { ...prev, isUploadingRegion: false } : null);
+      toast({
+        title: "Failed to select region",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleInsertRegionTag = () => {
+    if (!editDialog) return;
+    const newPrompt = editDialog.editPrompt + REGION_PLACEHOLDER;
+    setEditDialog(prev => prev ? { ...prev, editPrompt: newPrompt } : null);
+  };
+
+  const handleClearRegion = () => {
+    setEditDialog(prev => prev ? {
+      ...prev,
+      croppedRegionUrl: null,
+      croppedAreaPixels: null,
+      crop: { x: 0, y: 0 },
+      zoom: 1,
+    } : null);
   };
 
   const handleEditSubmit = async () => {
@@ -812,9 +931,18 @@ export default function Storyboard() {
     }
 
     const sceneIdToEdit = editDialog.sceneId;
-    const editPrompt = editDialog.editPrompt;
+    let editPrompt = editDialog.editPrompt;
     const imageUrl = editDialog.imageUrl;
     const editEngine = editDialog.engine;
+    const croppedRegionUrl = editDialog.croppedRegionUrl;
+    
+    const userReferenceImages: string[] = [imageUrl];
+    
+    if (croppedRegionUrl) {
+      userReferenceImages.push(croppedRegionUrl);
+      editPrompt = editPrompt.replace(new RegExp(REGION_PLACEHOLDER.replace(/[[\]]/g, '\\$&'), 'g'), API_REGION_PLACEHOLDER);
+      editPrompt = `${API_REGION_PLACEHOLDER} is a cropped region of [image1].\n${editPrompt}\nOnly modify the area shown in ${API_REGION_PLACEHOLDER}.`;
+    }
     
     setEditDialog(null);
 
@@ -823,7 +951,7 @@ export default function Storyboard() {
         prompt: editPrompt,
         styleId: selectedStyle,
         engine: editEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
-        userReferenceImages: [imageUrl],
+        userReferenceImages,
         sceneId: sceneIdToEdit,
         sceneName: `Scene Edit`,
         isEditMode: true,
@@ -1966,13 +2094,71 @@ export default function Storyboard() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             {editDialog && (
-              <div className="w-full aspect-video bg-muted rounded overflow-hidden">
-                <ImageWithFallback
-                  src={editDialog.imageUrl}
-                  alt="Current scene image"
-                  className="w-full h-full object-cover"
-                  fallbackText="Failed to load"
-                />
+              <div className="relative w-full aspect-video bg-muted rounded overflow-hidden">
+                {editDialog.cropMode ? (
+                  <Cropper
+                    image={editDialog.imageUrl}
+                    crop={editDialog.crop}
+                    zoom={editDialog.zoom}
+                    aspect={16 / 9}
+                    onCropChange={(crop) => setEditDialog(prev => prev ? { ...prev, crop } : null)}
+                    onZoomChange={(zoom) => setEditDialog(prev => prev ? { ...prev, zoom } : null)}
+                    onCropComplete={(_, croppedAreaPixels) => 
+                      setEditDialog(prev => prev ? { ...prev, croppedAreaPixels } : null)
+                    }
+                  />
+                ) : (
+                  <ImageWithFallback
+                    src={editDialog.imageUrl}
+                    alt="Current scene image"
+                    className="w-full h-full object-cover"
+                    fallbackText="Failed to load"
+                  />
+                )}
+                {!editDialog.cropMode && (
+                  <div className="absolute bottom-2 right-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setEditDialog(prev => prev ? { ...prev, cropMode: true } : null)}
+                      data-testid="button-select-region"
+                    >
+                      <Crop className="w-4 h-4 mr-2" />
+                      Select Region
+                    </Button>
+                  </div>
+                )}
+                {editDialog.cropMode && (
+                  <div className="absolute bottom-2 right-2 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditDialog(prev => prev ? { 
+                        ...prev, 
+                        cropMode: false,
+                        crop: { x: 0, y: 0 },
+                        zoom: 1,
+                        croppedAreaPixels: null,
+                      } : null)}
+                      data-testid="button-cancel-crop"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleCropConfirm}
+                      disabled={!editDialog.croppedAreaPixels || editDialog.isUploadingRegion}
+                      data-testid="button-confirm-crop"
+                    >
+                      {editDialog.isUploadingRegion ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4 mr-2" />
+                      )}
+                      Confirm
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
             <div>
@@ -2005,6 +2191,28 @@ export default function Storyboard() {
                 className="min-h-[80px] resize-none"
                 data-testid="textarea-edit-prompt"
               />
+              {editDialog?.croppedRegionUrl && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleInsertRegionTag}
+                    data-testid="button-insert-region-tag"
+                  >
+                    <Target className="w-4 h-4 mr-2" />
+                    {REGION_PLACEHOLDER}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearRegion}
+                    data-testid="button-clear-region"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Clear
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
