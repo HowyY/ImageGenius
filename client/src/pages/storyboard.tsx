@@ -1219,7 +1219,7 @@ export default function Storyboard() {
                     ? "ring-2 ring-primary shadow-lg" 
                     : "hover-elevate"
                 }`}
-                onClick={() => setSelectedSceneId(scene.id)}
+                onClick={() => setSelectedSceneId(selectedSceneId === scene.id ? null : scene.id)}
                 data-testid={`scene-card-${scene.id}`}
               >
                 <div 

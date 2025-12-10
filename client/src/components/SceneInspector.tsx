@@ -114,13 +114,14 @@ export function SceneInspector({
     ? editingDescription 
     : (selectedScene?.visualDescription || "");
 
-  if (!isOpen) {
-    return null;
-  }
-
   return (
-    <aside className="h-full flex flex-col bg-card border-l w-80 shadow-lg">
-      <div className="flex items-center justify-between p-3 border-b">
+    <aside 
+      className={`h-full flex flex-col bg-card shadow-lg transition-all duration-300 ease-in-out overflow-hidden ${
+        isOpen ? "w-80 border-l opacity-100" : "w-0 opacity-0 pointer-events-none"
+      }`}
+      aria-hidden={!isOpen}
+    >
+      <div className="flex items-center justify-between p-3 border-b min-w-80">
         <span className="font-medium text-sm">
           {selectedScene ? `Scene Inspector` : "Select a Scene"}
         </span>
