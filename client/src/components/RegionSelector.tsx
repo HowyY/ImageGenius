@@ -102,29 +102,17 @@ export function RegionSelector({
 
   const updateCanvasSize = useCallback(() => {
     const canvas = canvasRef.current;
-    const container = containerRef.current;
     const img = imageRef.current;
-    if (!canvas || !container || !img || !imageLoaded) return;
+    if (!canvas || !img || !imageLoaded) return;
 
-    const containerRect = container.getBoundingClientRect();
-    const maxWidth = containerRect.width;
-    const maxHeight = containerRect.height;
+    const displayWidth = img.clientWidth;
+    const displayHeight = img.clientHeight;
     
-    const aspectRatio = imageDimensions.naturalWidth / imageDimensions.naturalHeight;
-    
-    let displayWidth = maxWidth;
-    let displayHeight = maxWidth / aspectRatio;
-    
-    if (displayHeight > maxHeight) {
-      displayHeight = maxHeight;
-      displayWidth = maxHeight * aspectRatio;
+    if (displayWidth > 0 && displayHeight > 0) {
+      canvas.width = displayWidth;
+      canvas.height = displayHeight;
     }
-
-    canvas.width = displayWidth;
-    canvas.height = displayHeight;
-    canvas.style.width = `${displayWidth}px`;
-    canvas.style.height = `${displayHeight}px`;
-  }, [imageLoaded, imageDimensions]);
+  }, [imageLoaded]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -681,30 +669,7 @@ export function RegionSelector({
           className="flex-1 flex items-center justify-center p-4 overflow-hidden bg-muted/30 min-h-0"
         >
           {imageUrl ? (
-            <div className="relative flex items-center justify-center w-full h-full">
-              <img
-                ref={imageRef}
-                src={`${imageUrl}${imageUrl.includes('?') ? '&' : '?'}cors=${imageSessionId}${imageRetryCount > 0 ? `&retry=${imageRetryCount}` : ''}`}
-                alt="Source"
-                className="max-w-full max-h-full object-contain pointer-events-none"
-                crossOrigin="anonymous"
-                style={{ display: imageLoaded ? 'block' : 'none' }}
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  setImageDimensions({
-                    width: img.clientWidth,
-                    height: img.clientHeight,
-                    naturalWidth: img.naturalWidth,
-                    naturalHeight: img.naturalHeight,
-                  });
-                  setImageError(false);
-                  setImageLoaded(true);
-                }}
-                onError={() => {
-                  setImageError(true);
-                  setImageLoaded(false);
-                }}
-              />
+            <div className="flex items-center justify-center w-full h-full">
               {!imageLoaded && !imageError && (
                 <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
                   <Loader2 className="w-8 h-8 animate-spin" />
@@ -728,17 +693,42 @@ export function RegionSelector({
                   </Button>
                 </div>
               )}
-              {imageLoaded && (
+              <div 
+                className="relative inline-block"
+                style={{ display: imageLoaded ? 'block' : 'none' }}
+              >
+                <img
+                  ref={imageRef}
+                  src={`${imageUrl}${imageUrl.includes('?') ? '&' : '?'}cors=${imageSessionId}${imageRetryCount > 0 ? `&retry=${imageRetryCount}` : ''}`}
+                  alt="Source"
+                  className="max-w-full max-h-full object-contain pointer-events-none block"
+                  crossOrigin="anonymous"
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setImageDimensions({
+                      width: img.clientWidth,
+                      height: img.clientHeight,
+                      naturalWidth: img.naturalWidth,
+                      naturalHeight: img.naturalHeight,
+                    });
+                    setImageError(false);
+                    setImageLoaded(true);
+                  }}
+                  onError={() => {
+                    setImageError(true);
+                    setImageLoaded(false);
+                  }}
+                />
                 <canvas
                   ref={canvasRef}
-                  className="absolute cursor-crosshair"
-                  style={{ touchAction: "none" }}
+                  className="absolute top-0 left-0 cursor-crosshair"
+                  style={{ touchAction: "none", width: "100%", height: "100%" }}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                 />
-              )}
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-center text-muted-foreground">
