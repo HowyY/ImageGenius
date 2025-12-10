@@ -91,12 +91,28 @@ export function RegionSelector({
   }, [open, initialRegions]);
 
   const getCanvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): Point => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
+    const img = imageRef.current;
+    if (!img) {
+      console.log("[RegionSelector] getCanvasCoords - no image!");
+      return { x: 0, y: 0 };
+    }
+    
+    // Use image dimensions directly for more reliable coordinate calculation
+    const rect = img.getBoundingClientRect();
+    console.log("[RegionSelector] getCanvasCoords - image rect:", rect.width.toFixed(0), rect.height.toFixed(0), "clientX/Y:", e.clientX, e.clientY);
+    
+    if (rect.width === 0 || rect.height === 0) {
+      console.log("[RegionSelector] getCanvasCoords - image has ZERO dimensions!");
+      return { x: 0, y: 0 };
+    }
+    
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
+    // Clamp to valid range
     return {
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
+      x: Math.max(0, Math.min(1, x)),
+      y: Math.max(0, Math.min(1, y)),
     };
   }, []);
 
@@ -199,6 +215,7 @@ export function RegionSelector({
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const coords = getCanvasCoords(e);
+    console.log("[RegionSelector] MouseDown - coords:", coords, "mode:", mode);
 
     if (mode === "brush") {
       const canvas = canvasRef.current;
@@ -228,6 +245,7 @@ export function RegionSelector({
           width: 0,
           height: 0,
         };
+        console.log("[RegionSelector] Starting new rect at:", coords.x, coords.y);
         setDrawingRect(newRect);
         drawingRectRef.current = newRect;
       }
@@ -249,6 +267,7 @@ export function RegionSelector({
           width: coords.x - drawingRectRef.current.x,
           height: coords.y - drawingRectRef.current.y,
         };
+        console.log("[RegionSelector] MouseMove - updating rect:", updatedRect.width.toFixed(4), updatedRect.height.toFixed(4));
         setDrawingRect(updatedRect);
         drawingRectRef.current = updatedRect;
       } else if (resizing && selectedRegionId) {
@@ -266,6 +285,10 @@ export function RegionSelector({
     setCurrentStroke(null);
 
     const finalRect = drawingRectRef.current;
+    console.log("[RegionSelector] MouseUp - finalRect:", finalRect);
+    if (finalRect) {
+      console.log("[RegionSelector] MouseUp - width:", finalRect.width, "height:", finalRect.height, "threshold check:", Math.abs(finalRect.width) > 0.002 && Math.abs(finalRect.height) > 0.002);
+    }
     if (finalRect && Math.abs(finalRect.width) > 0.002 && Math.abs(finalRect.height) > 0.002) {
       const normalizedRect = normalizeRect(finalRect);
       const newRegion: SelectionRegion = {
@@ -273,8 +296,11 @@ export function RegionSelector({
         type: "rect",
         rect: normalizedRect,
       };
+      console.log("[RegionSelector] MouseUp - adding new region:", newRegion.id);
       setRegions(prev => [...prev, newRegion]);
       setSelectedRegionId(normalizedRect.id);
+    } else if (finalRect) {
+      console.log("[RegionSelector] MouseUp - rect TOO SMALL, not adding");
     }
     setDrawingRect(null);
     drawingRectRef.current = null;
@@ -694,8 +720,8 @@ export function RegionSelector({
                 </div>
               )}
               <div 
-                className="relative inline-block"
-                style={{ display: imageLoaded ? 'block' : 'none' }}
+                className="relative"
+                style={{ display: imageLoaded ? 'inline-block' : 'none' }}
               >
                 <img
                   ref={imageRef}
@@ -705,6 +731,7 @@ export function RegionSelector({
                   crossOrigin="anonymous"
                   onLoad={(e) => {
                     const img = e.currentTarget;
+                    console.log("[RegionSelector] Image loaded - clientWidth:", img.clientWidth, "clientHeight:", img.clientHeight, "naturalWidth:", img.naturalWidth, "naturalHeight:", img.naturalHeight);
                     setImageDimensions({
                       width: img.clientWidth,
                       height: img.clientHeight,
@@ -713,6 +740,16 @@ export function RegionSelector({
                     });
                     setImageError(false);
                     setImageLoaded(true);
+                    
+                    // Use requestAnimationFrame to ensure layout is complete before sizing canvas
+                    requestAnimationFrame(() => {
+                      const canvas = canvasRef.current;
+                      if (canvas && img.clientWidth > 0 && img.clientHeight > 0) {
+                        canvas.width = img.clientWidth;
+                        canvas.height = img.clientHeight;
+                        console.log("[RegionSelector] Canvas sized to:", canvas.width, canvas.height);
+                      }
+                    });
                   }}
                   onError={() => {
                     setImageError(true);
