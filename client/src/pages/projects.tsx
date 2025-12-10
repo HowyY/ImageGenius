@@ -281,6 +281,7 @@ export default function Projects() {
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
                           onSelect={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
                             setProjectToDelete(project);
                             setDeleteDialogOpen(true);
