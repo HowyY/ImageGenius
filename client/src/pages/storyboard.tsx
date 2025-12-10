@@ -880,8 +880,8 @@ export default function Storyboard() {
   const isLoading = storyboardsLoading || scenesLoading;
   const [, navigate] = useLocation();
 
-  const handleSetupComplete = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/storyboards"] });
+  const handleSetupComplete = async () => {
+    await refetchStoryboards();
   };
 
   const handleOpenStyleEditor = () => {
@@ -908,6 +908,12 @@ export default function Storyboard() {
     reopenSetupMutation.mutate();
   };
 
+  const handleBackToProjects = () => {
+    clearCurrentStoryboardId();
+    setCurrentStoryboardIdState(null);
+    navigate("/");
+  };
+
   if (currentStoryboard && !currentStoryboard.setupCompleted && isDesigner) {
     return (
       <div className="min-h-screen bg-background pt-14 pb-20">
@@ -916,6 +922,7 @@ export default function Storyboard() {
           onComplete={handleSetupComplete}
           onOpenStyleEditor={handleOpenStyleEditor}
           onOpenCharacterEditor={handleOpenCharacterEditor}
+          onBack={handleBackToProjects}
           initialStep={setupStep || "style"}
         />
         <StageNavigation />

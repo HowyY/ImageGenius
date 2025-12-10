@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Palette, Users, Play, Settings, ChevronRight } from "lucide-react";
+import { Check, Palette, Users, Play, Settings, ChevronRight, ArrowLeft } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { SelectStyle, SelectStoryboard, SelectCharacter } from "@shared/schema";
@@ -14,6 +14,7 @@ interface StoryboardSetupProps {
   onComplete: () => void;
   onOpenStyleEditor: () => void;
   onOpenCharacterEditor: () => void;
+  onBack?: () => void;
   initialStep?: SetupStep;
 }
 
@@ -22,6 +23,7 @@ export function StoryboardSetup({
   onComplete,
   onOpenStyleEditor,
   onOpenCharacterEditor,
+  onBack,
   initialStep = "style",
 }: StoryboardSetupProps) {
   const { toast } = useToast();
@@ -76,6 +78,18 @@ export function StoryboardSetup({
     <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] p-6">
       <Card className="w-full max-w-2xl p-8">
         <div className="space-y-6">
+          {onBack && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+              className="mb-2"
+              data-testid="button-back-to-projects"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Projects
+            </Button>
+          )}
           <div className="text-center mb-8">
             <h1 className="text-2xl font-semibold mb-2" data-testid="text-setup-title">
               Set Up Your Storyboard
