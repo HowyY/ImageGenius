@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { Area } from "react-easy-crop";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
@@ -54,15 +53,16 @@ import { SceneInspector } from "@/components/SceneInspector";
 import { StoryboardSetup } from "@/components/StoryboardSetup";
 import { ViewerSceneCard } from "@/components/ViewerSceneCard";
 import { useLocation, useSearch } from "wouter";
+import { RegionSelector, SelectionRegion } from "@/components/RegionSelector";
 
 interface EditingState {
   sceneDescription: string;
 }
 
-interface BrushStroke {
-  points: { x: number; y: number }[];
-  color: string;
-  size: number;
+interface RegionThumbnail {
+  id: string;
+  thumbnailUrl: string;
+  selected: boolean;
 }
 
 interface EditDialogState {
@@ -70,13 +70,9 @@ interface EditDialogState {
   imageUrl: string;
   editPrompt: string;
   engine: EngineType;
-  paintMode: boolean;
-  brushStrokes: BrushStroke[];
-  currentStroke: BrushStroke | null;
-  brushSize: number;
-  brushColor: string;
-  croppedRegionUrl: string | null;
-  isUploadingRegion: boolean;
+  showRegionSelector: boolean;
+  regions: RegionThumbnail[];
+  isUploadingRegions: boolean;
 }
 
 const CURRENT_STORYBOARD_KEY = "currentStoryboardId";
@@ -104,59 +100,10 @@ function clearCurrentStoryboardId() {
   localStorage.removeItem(CURRENT_STORYBOARD_KEY);
 }
 
-const REGION_PLACEHOLDER = "[选中区域]";
-const API_REGION_PLACEHOLDER = "[image2]";
-
-function calculateBoundingBox(
-  strokes: BrushStroke[],
-  imageWidth: number,
-  imageHeight: number,
-  displayWidth: number,
-  displayHeight: number,
-  padding: number = 20
-): Area | null {
-  if (strokes.length === 0) return null;
-  
-  const scaleX = imageWidth / displayWidth;
-  const scaleY = imageHeight / displayHeight;
-  
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  
-  for (const stroke of strokes) {
-    const scaledBrushSizeX = stroke.size * scaleX;
-    const scaledBrushSizeY = stroke.size * scaleY;
-    for (const point of stroke.points) {
-      const px = point.x * imageWidth;
-      const py = point.y * imageHeight;
-      minX = Math.min(minX, px - scaledBrushSizeX / 2);
-      minY = Math.min(minY, py - scaledBrushSizeY / 2);
-      maxX = Math.max(maxX, px + scaledBrushSizeX / 2);
-      maxY = Math.max(maxY, py + scaledBrushSizeY / 2);
-    }
-  }
-  
-  const paddingX = padding * scaleX;
-  const paddingY = padding * scaleY;
-  
-  minX = Math.max(0, minX - paddingX);
-  minY = Math.max(0, minY - paddingY);
-  maxX = Math.min(imageWidth, maxX + paddingX);
-  maxY = Math.min(imageHeight, maxY + paddingY);
-  
-  return {
-    x: Math.floor(minX),
-    y: Math.floor(minY),
-    width: Math.ceil(maxX - minX),
-    height: Math.ceil(maxY - minY),
-  };
-}
-
-async function createMarkedCroppedImage(
+async function generateRegionThumbnails(
   imageSrc: string,
-  strokes: BrushStroke[],
-  displayWidth: number,
-  displayHeight: number
-): Promise<Blob> {
+  regions: SelectionRegion[]
+): Promise<RegionThumbnail[]> {
   const image = new Image();
   image.crossOrigin = "anonymous";
   
@@ -166,70 +113,111 @@ async function createMarkedCroppedImage(
     image.src = imageSrc;
   });
 
-  const scaleX = image.naturalWidth / displayWidth;
-  const scaleY = image.naturalHeight / displayHeight;
+  const results: RegionThumbnail[] = [];
   
-  const boundingBox = calculateBoundingBox(
-    strokes, 
-    image.naturalWidth, 
-    image.naturalHeight,
-    displayWidth,
-    displayHeight,
-    30
-  );
-  if (!boundingBox) throw new Error("No strokes to crop");
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not get canvas context");
-
-  canvas.width = boundingBox.width;
-  canvas.height = boundingBox.height;
-
-  ctx.drawImage(
-    image,
-    boundingBox.x,
-    boundingBox.y,
-    boundingBox.width,
-    boundingBox.height,
-    0,
-    0,
-    boundingBox.width,
-    boundingBox.height
-  );
-
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  
-  for (const stroke of strokes) {
-    if (stroke.points.length < 2) continue;
+  for (const region of regions) {
+    let bounds: { x: number; y: number; width: number; height: number } | null = null;
     
-    ctx.strokeStyle = stroke.color;
-    ctx.lineWidth = stroke.size * scaleX;
-    ctx.beginPath();
+    if (region.type === "rect" && region.rect) {
+      bounds = {
+        x: Math.max(0, Math.floor(region.rect.x * image.naturalWidth)),
+        y: Math.max(0, Math.floor(region.rect.y * image.naturalHeight)),
+        width: Math.min(image.naturalWidth, Math.ceil(region.rect.width * image.naturalWidth)),
+        height: Math.min(image.naturalHeight, Math.ceil(region.rect.height * image.naturalHeight)),
+      };
+    } else if (region.type === "brush" && region.brushStrokes && region.brushStrokes.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const stroke of region.brushStrokes) {
+        const normalizedRadius = (stroke.normalizedSize || stroke.size / 500) / 2;
+        for (const point of stroke.points) {
+          minX = Math.min(minX, point.x - normalizedRadius);
+          minY = Math.min(minY, point.y - normalizedRadius);
+          maxX = Math.max(maxX, point.x + normalizedRadius);
+          maxY = Math.max(maxY, point.y + normalizedRadius);
+        }
+      }
+      const padding = 0.02;
+      bounds = {
+        x: Math.max(0, Math.floor((minX - padding) * image.naturalWidth)),
+        y: Math.max(0, Math.floor((minY - padding) * image.naturalHeight)),
+        width: Math.min(image.naturalWidth, Math.ceil((maxX - minX + padding * 2) * image.naturalWidth)),
+        height: Math.min(image.naturalHeight, Math.ceil((maxY - minY + padding * 2) * image.naturalHeight)),
+      };
+    }
     
-    const firstPoint = stroke.points[0];
-    ctx.moveTo(
-      firstPoint.x * image.naturalWidth - boundingBox.x,
-      firstPoint.y * image.naturalHeight - boundingBox.y
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) continue;
+    
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+    
+    canvas.width = bounds.width;
+    canvas.height = bounds.height;
+    
+    ctx.drawImage(
+      image,
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      0,
+      0,
+      bounds.width,
+      bounds.height
     );
     
-    for (let i = 1; i < stroke.points.length; i++) {
-      const point = stroke.points[i];
-      ctx.lineTo(
-        point.x * image.naturalWidth - boundingBox.x,
-        point.y * image.naturalHeight - boundingBox.y
-      );
+    if (region.type === "brush" && region.brushStrokes) {
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      for (const stroke of region.brushStrokes) {
+        if (stroke.points.length < 2) continue;
+        ctx.strokeStyle = stroke.color;
+        const scaledLineWidth = (stroke.normalizedSize || stroke.size / 500) * image.naturalWidth;
+        ctx.lineWidth = scaledLineWidth;
+        ctx.beginPath();
+        ctx.moveTo(
+          stroke.points[0].x * image.naturalWidth - bounds.x,
+          stroke.points[0].y * image.naturalHeight - bounds.y
+        );
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(
+            stroke.points[i].x * image.naturalWidth - bounds.x,
+            stroke.points[i].y * image.naturalHeight - bounds.y
+          );
+        }
+        ctx.stroke();
+      }
     }
-    ctx.stroke();
+    
+    const thumbnailUrl = canvas.toDataURL("image/png");
+    results.push({
+      id: region.id,
+      thumbnailUrl,
+      selected: false,
+    });
   }
+  
+  return results;
+}
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error("Could not create blob"));
-    }, "image/png");
+async function uploadRegionAsBlob(thumbnailUrl: string): Promise<string> {
+  const response = await fetch(thumbnailUrl);
+  const blob = await response.blob();
+  
+  const formData = new FormData();
+  formData.append("file", blob, `region_${Date.now()}.png`);
+  
+  const uploadResponse = await fetch("/api/upload-region", {
+    method: "POST",
+    body: formData,
   });
+  
+  if (!uploadResponse.ok) {
+    throw new Error("Failed to upload region");
+  }
+  
+  const data = await uploadResponse.json();
+  return data.url;
 }
 
 export default function Storyboard() {
@@ -932,134 +920,60 @@ export default function Storyboard() {
       imageUrl: scene.generatedImageUrl,
       editPrompt: "",
       engine: editEngine,
-      paintMode: false,
-      brushStrokes: [],
-      currentStroke: null,
-      brushSize: 20,
-      brushColor: "rgba(255, 100, 100, 0.7)",
-      croppedRegionUrl: null,
-      isUploadingRegion: false,
+      showRegionSelector: false,
+      regions: [],
+      isUploadingRegions: false,
     });
   };
 
-  const paintCanvasRef = useRef<HTMLCanvasElement>(null);
-  const paintContainerRef = useRef<HTMLDivElement>(null);
-  
-  const handlePaintConfirm = async () => {
-    if (!editDialog || editDialog.brushStrokes.length === 0) return;
-    if (!paintContainerRef.current) return;
-
-    setEditDialog(prev => prev ? { ...prev, isUploadingRegion: true } : null);
-
+  const handleRegionsConfirm = async (selectionRegions: SelectionRegion[]) => {
+    if (!editDialog) return;
+    
     try {
-      const containerRect = paintContainerRef.current.getBoundingClientRect();
-      const blob = await createMarkedCroppedImage(
-        editDialog.imageUrl, 
-        editDialog.brushStrokes,
-        containerRect.width,
-        containerRect.height
-      );
-      
-      const formData = new FormData();
-      formData.append("file", blob, "marked-region.png");
-
-      const response = await fetch("/api/upload-region", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to upload marked region");
-      }
-
-      const data = await response.json();
-      
+      const thumbnails = await generateRegionThumbnails(editDialog.imageUrl, selectionRegions);
       setEditDialog(prev => prev ? {
         ...prev,
-        paintMode: false,
-        croppedRegionUrl: data.url,
-        isUploadingRegion: false,
+        showRegionSelector: false,
+        regions: thumbnails,
       } : null);
-
-      toast({
-        title: "Region marked",
-        description: "Click the tag below to insert [选中区域] into your prompt",
-      });
+      
+      if (thumbnails.length > 0) {
+        toast({
+          title: "Regions created",
+          description: `${thumbnails.length} region(s) ready. Click thumbnails to include in edit.`,
+        });
+      }
     } catch (error) {
-      console.error("Paint confirm failed:", error);
-      setEditDialog(prev => prev ? { ...prev, isUploadingRegion: false } : null);
+      console.error("Failed to generate region thumbnails:", error);
       toast({
-        title: "Failed to mark region",
+        title: "Failed to create regions",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
     }
   };
 
-  const handleInsertRegionTag = () => {
-    if (!editDialog) return;
-    const newPrompt = editDialog.editPrompt + REGION_PLACEHOLDER;
-    setEditDialog(prev => prev ? { ...prev, editPrompt: newPrompt } : null);
-  };
-
-  const handleClearRegion = () => {
-    setEditDialog(prev => prev ? {
-      ...prev,
-      croppedRegionUrl: null,
-      brushStrokes: [],
-      currentStroke: null,
-    } : null);
-  };
-  
-  const handleUndoStroke = () => {
+  const handleToggleRegion = (regionId: string) => {
     setEditDialog(prev => {
-      if (!prev || prev.brushStrokes.length === 0) return prev;
+      if (!prev) return null;
       return {
         ...prev,
-        brushStrokes: prev.brushStrokes.slice(0, -1),
+        regions: prev.regions.map(r => 
+          r.id === regionId ? { ...r, selected: !r.selected } : r
+        ),
       };
     });
   };
-  
-  useEffect(() => {
-    if (!editDialog?.paintMode || !paintCanvasRef.current || !paintContainerRef.current) return;
-    
-    const canvas = paintCanvasRef.current;
-    const container = paintContainerRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    
-    const allStrokes = [...editDialog.brushStrokes];
-    if (editDialog.currentStroke) {
-      allStrokes.push(editDialog.currentStroke);
-    }
-    
-    for (const stroke of allStrokes) {
-      if (stroke.points.length < 2) continue;
-      
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.size;
-      ctx.beginPath();
-      
-      const firstPoint = stroke.points[0];
-      ctx.moveTo(firstPoint.x * canvas.width, firstPoint.y * canvas.height);
-      
-      for (let i = 1; i < stroke.points.length; i++) {
-        const point = stroke.points[i];
-        ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
-      }
-      ctx.stroke();
-    }
-  }, [editDialog?.paintMode, editDialog?.brushStrokes, editDialog?.currentStroke]);
+
+  const handleRemoveRegion = (regionId: string) => {
+    setEditDialog(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        regions: prev.regions.filter(r => r.id !== regionId),
+      };
+    });
+  };
 
   const handleEditSubmit = async () => {
     if (!editDialog) return;
@@ -1086,19 +1000,31 @@ export default function Storyboard() {
     let editPrompt = editDialog.editPrompt;
     const imageUrl = editDialog.imageUrl;
     const editEngine = editDialog.engine;
-    const croppedRegionUrl = editDialog.croppedRegionUrl;
+    const selectedRegions = editDialog.regions.filter(r => r.selected);
     
-    const userReferenceImages: string[] = [imageUrl];
+    setEditDialog(prev => prev ? { ...prev, isUploadingRegions: true } : null);
     
-    if (croppedRegionUrl) {
-      userReferenceImages.push(croppedRegionUrl);
-      editPrompt = editPrompt.replace(new RegExp(REGION_PLACEHOLDER.replace(/[[\]]/g, '\\$&'), 'g'), API_REGION_PLACEHOLDER);
-      editPrompt = `${API_REGION_PLACEHOLDER} is a cropped region of [image1].\n${editPrompt}\nOnly modify the area shown in ${API_REGION_PLACEHOLDER}.`;
-    }
-    
-    setEditDialog(null);
-
     try {
+      const userReferenceImages: string[] = [imageUrl];
+      
+      if (selectedRegions.length > 0) {
+        const regionUrls: string[] = [];
+        for (const region of selectedRegions) {
+          const uploadedUrl = await uploadRegionAsBlob(region.thumbnailUrl);
+          regionUrls.push(uploadedUrl);
+          userReferenceImages.push(uploadedUrl);
+        }
+        
+        const imageLabels = regionUrls.map((_, i) => `[image${i + 2}]`).join(", ");
+        if (regionUrls.length === 1) {
+          editPrompt = `[image2] shows the region to modify in [image1].\n${editPrompt}\nFocus edits on the area shown in [image2].`;
+        } else {
+          editPrompt = `${imageLabels} show the regions to modify in [image1].\n${editPrompt}\nFocus edits on these marked areas.`;
+        }
+      }
+      
+      setEditDialog(null);
+
       const generateData = await startGeneration({
         prompt: editPrompt,
         styleId: selectedStyle,
@@ -1124,6 +1050,7 @@ export default function Storyboard() {
       });
     } catch (error) {
       console.error("Edit failed:", error);
+      setEditDialog(prev => prev ? { ...prev, isUploadingRegions: false } : null);
       toast({
         title: "Edit failed",
         description: error instanceof Error ? error.message : "Failed to edit image",
@@ -2236,152 +2163,85 @@ export default function Storyboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editDialog} onOpenChange={(open) => !open && setEditDialog(null)}>
-        <DialogContent>
+      <Dialog open={!!editDialog && !editDialog.showRegionSelector} onOpenChange={(open) => !open && setEditDialog(null)}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Image</DialogTitle>
             <DialogDescription>
-              Describe the changes you want to make. The current image will be used as a reference.
+              Describe the changes you want to make. Optionally select regions to focus the edit.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             {editDialog && (
-              <div 
-                ref={paintContainerRef}
-                className="relative w-full aspect-video bg-muted rounded overflow-hidden"
-              >
+              <div className="relative w-full aspect-video bg-muted rounded overflow-hidden">
                 <ImageWithFallback
                   src={editDialog.imageUrl}
                   alt="Current scene image"
                   className="w-full h-full object-cover pointer-events-none"
                   fallbackText="Failed to load"
                 />
-                {editDialog.paintMode && (
-                  <canvas
-                    ref={paintCanvasRef}
-                    className="absolute inset-0 w-full h-full cursor-crosshair"
-                    style={{ touchAction: "none" }}
-                    onMouseDown={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const x = (e.clientX - rect.left) / rect.width;
-                      const y = (e.clientY - rect.top) / rect.height;
-                      setEditDialog(prev => prev ? {
-                        ...prev,
-                        currentStroke: {
-                          points: [{ x, y }],
-                          color: prev.brushColor,
-                          size: prev.brushSize,
-                        }
-                      } : null);
-                    }}
-                    onMouseMove={(e) => {
-                      if (!editDialog.currentStroke) return;
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const x = (e.clientX - rect.left) / rect.width;
-                      const y = (e.clientY - rect.top) / rect.height;
-                      setEditDialog(prev => {
-                        if (!prev || !prev.currentStroke) return prev;
-                        return {
-                          ...prev,
-                          currentStroke: {
-                            ...prev.currentStroke,
-                            points: [...prev.currentStroke.points, { x, y }],
-                          }
-                        };
-                      });
-                    }}
-                    onMouseUp={() => {
-                      if (!editDialog.currentStroke) return;
-                      setEditDialog(prev => {
-                        if (!prev || !prev.currentStroke) return prev;
-                        return {
-                          ...prev,
-                          brushStrokes: [...prev.brushStrokes, prev.currentStroke],
-                          currentStroke: null,
-                        };
-                      });
-                    }}
-                    onMouseLeave={() => {
-                      if (!editDialog.currentStroke) return;
-                      setEditDialog(prev => {
-                        if (!prev || !prev.currentStroke) return prev;
-                        return {
-                          ...prev,
-                          brushStrokes: [...prev.brushStrokes, prev.currentStroke],
-                          currentStroke: null,
-                        };
-                      });
-                    }}
-                  />
-                )}
-                {!editDialog.paintMode && (
-                  <div className="absolute bottom-2 right-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setEditDialog(prev => prev ? { ...prev, paintMode: true } : null)}
-                      data-testid="button-select-region"
-                    >
-                      <Paintbrush className="w-4 h-4 mr-2" />
-                      Mark Region
-                    </Button>
-                  </div>
-                )}
-                {editDialog.paintMode && (
-                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 bg-background/80 backdrop-blur-sm rounded px-2 py-1">
-                      <span className="text-xs text-muted-foreground">Size:</span>
-                      <input
-                        type="range"
-                        min="5"
-                        max="50"
-                        value={editDialog.brushSize}
-                        onChange={(e) => setEditDialog(prev => prev ? { ...prev, brushSize: parseInt(e.target.value) } : null)}
-                        className="w-20 h-1 accent-primary"
-                      />
-                      <span className="text-xs w-6">{editDialog.brushSize}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleUndoStroke}
-                        disabled={editDialog.brushStrokes.length === 0}
-                        data-testid="button-undo-stroke"
-                      >
-                        <Undo2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditDialog(prev => prev ? { 
-                          ...prev, 
-                          paintMode: false,
-                          brushStrokes: [],
-                          currentStroke: null,
-                        } : null)}
-                        data-testid="button-cancel-paint"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handlePaintConfirm}
-                        disabled={editDialog.brushStrokes.length === 0 || editDialog.isUploadingRegion}
-                        data-testid="button-confirm-paint"
-                      >
-                        {editDialog.isUploadingRegion ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Check className="w-4 h-4 mr-2" />
-                        )}
-                        Confirm
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <div className="absolute bottom-2 right-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditDialog(prev => prev ? { ...prev, showRegionSelector: true } : null)}
+                    data-testid="button-select-region"
+                  >
+                    <Target className="w-4 h-4 mr-2" />
+                    Select Regions
+                  </Button>
+                </div>
               </div>
             )}
+            
+            {editDialog && editDialog.regions.length > 0 && (
+              <div>
+                <Label className="mb-2 block text-sm text-muted-foreground">
+                  Click regions to include in edit (selected regions shown with border)
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {editDialog.regions.map((region, index) => (
+                    <div 
+                      key={region.id} 
+                      className={`relative group cursor-pointer rounded overflow-hidden border-2 transition-all ${
+                        region.selected 
+                          ? "border-primary ring-2 ring-primary/30" 
+                          : "border-transparent hover:border-muted-foreground/50"
+                      }`}
+                      onClick={() => handleToggleRegion(region.id)}
+                      data-testid={`region-thumbnail-${index}`}
+                    >
+                      <img 
+                        src={region.thumbnailUrl} 
+                        alt={`Region ${index + 1}`}
+                        className="w-16 h-16 object-cover"
+                      />
+                      {region.selected && (
+                        <div className="absolute top-0.5 right-0.5 bg-primary text-primary-foreground rounded-full p-0.5">
+                          <Check className="w-3 h-3" />
+                        </div>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-0.5 left-0.5 w-5 h-5 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveRegion(region.id);
+                        }}
+                        data-testid={`button-remove-region-${index}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-background/80 text-xs text-center py-0.5">
+                        {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="edit-engine" className="mb-2 block">
                 Edit Engine
@@ -2412,27 +2272,10 @@ export default function Storyboard() {
                 className="min-h-[80px] resize-none"
                 data-testid="textarea-edit-prompt"
               />
-              {editDialog?.croppedRegionUrl && (
-                <div className="flex items-center gap-2 mt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleInsertRegionTag}
-                    data-testid="button-insert-region-tag"
-                  >
-                    <Target className="w-4 h-4 mr-2" />
-                    {REGION_PLACEHOLDER}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearRegion}
-                    data-testid="button-clear-region"
-                  >
-                    <X className="w-4 h-4 mr-1" />
-                    Clear
-                  </Button>
-                </div>
+              {editDialog && editDialog.regions.filter(r => r.selected).length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editDialog.regions.filter(r => r.selected).length} region(s) selected - edits will focus on these areas
+                </p>
               )}
             </div>
           </div>
@@ -2442,15 +2285,27 @@ export default function Storyboard() {
             </Button>
             <Button
               onClick={handleEditSubmit}
-              disabled={!editDialog?.editPrompt.trim()}
+              disabled={!editDialog?.editPrompt.trim() || editDialog?.isUploadingRegions}
               data-testid="button-confirm-edit"
             >
-              <Sparkles className="w-4 h-4 mr-2" />
+              {editDialog?.isUploadingRegions ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4 mr-2" />
+              )}
               Generate Edit
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {editDialog?.showRegionSelector && (
+        <RegionSelector
+          imageUrl={editDialog.imageUrl}
+          onClose={() => setEditDialog(prev => prev ? { ...prev, showRegionSelector: false } : null)}
+          onConfirm={handleRegionsConfirm}
+        />
+      )}
 
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
