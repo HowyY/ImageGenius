@@ -68,29 +68,16 @@ export function RegionSelector({
   const brushColor = "rgba(255, 100, 100, 0.7)";
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setImageLoaded(false);
-      return;
+      setCurrentBrushStrokes([]);
+      setSelectedRegionId(null);
     }
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      setImageLoaded(true);
-      setImageDimensions({
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-        naturalWidth: img.naturalWidth,
-        naturalHeight: img.naturalHeight,
-      });
-    };
-    img.src = imageUrl;
-  }, [imageUrl, open]);
+  }, [open]);
 
   useEffect(() => {
     if (open) {
       setRegions(initialRegions);
-      setCurrentBrushStrokes([]);
-      setSelectedRegionId(null);
     }
   }, [open, initialRegions]);
 
@@ -470,6 +457,7 @@ export function RegionSelector({
       <DialogContent 
         className="max-w-[90vw] w-[90vw] max-h-[90vh] h-[90vh] p-0 flex flex-col gap-0"
         data-testid="region-selector-dialog"
+        hideCloseButton
       >
         <DialogHeader className="flex-none px-4 py-3 border-b">
           <div className="flex items-center justify-between gap-4">
