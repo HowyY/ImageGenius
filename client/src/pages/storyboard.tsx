@@ -60,10 +60,13 @@ interface EditingState {
   sceneDescription: string;
 }
 
+type RegionType = "brush" | "rect";
+
 interface RegionThumbnail {
   id: string;
   thumbnailUrl: string;
   selected: boolean;
+  type: RegionType;
 }
 
 type EditSessionMode = 'form' | 'generating' | 'comparison';
@@ -886,6 +889,7 @@ export default function Storyboard() {
         id: r.id,
         thumbnailUrl: r.thumbnailUrl!,
         selected: false,
+        type: r.type,
       }));
     
     updateEditSession(activeEditSession.sceneId, { regions: thumbnails });
@@ -980,12 +984,24 @@ export default function Storyboard() {
     const allRegions = activeEditSession.regions;
     const selectedRegions = allRegions.filter(r => r.selected);
     
+    const regionTagPattern = /\[Region\s*(\d+)\]/gi;
+    const hasRegionTags = regionTagPattern.test(editPrompt);
+    regionTagPattern.lastIndex = 0;
+    
+    if (allRegions.length > 0 && selectedRegions.length === 0 && !hasRegionTags) {
+      toast({
+        title: "No regions selected",
+        description: "Please click on region thumbnails to include them in your edit, or remove all regions to edit without selection",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     updateEditSession(sceneIdToEdit, { mode: 'generating' });
     
     try {
       const userReferenceImages: string[] = [imageUrl];
       
-      const regionTagPattern = /\[Region\s*(\d+)\]/gi;
       const referencedRegionNumbers = new Set<number>();
       let match;
       while ((match = regionTagPattern.exec(editPrompt)) !== null) {
@@ -1028,14 +1044,39 @@ export default function Storyboard() {
       });
       
       let finalPrompt: string;
-      if (sortedIndices.length > 0) {
-        finalPrompt = `[image2] is a cropped region of [image1].
+      
+      if (sortedIndices.length === 0) {
+        finalPrompt = editPrompt;
+      } else if (sortedIndices.length === 1) {
+        const regionType = allRegions[sortedIndices[0]].type;
+        
+        if (regionType === 'brush') {
+          finalPrompt = `[image2] is a cropped region of [image1].
 The area highlighted in red (the painted/marked region) of [image2] is the region that requires editing.
 ${editPrompt}
 Only modify the red-highlighted area.
 Do not change anything else in [image1].`;
+        } else {
+          finalPrompt = `[image2] is a cropped region of [image1].
+${editPrompt}
+Only modify the area shown in [image2].`;
+        }
       } else {
-        finalPrompt = editPrompt;
+        const regionDescriptions = sortedIndices.map((idx, i) => {
+          const imgNum = regionIndexToImageNum[idx];
+          const regionType = allRegions[idx].type;
+          if (regionType === 'brush') {
+            return `[image${imgNum}] is a cropped region with red-highlighted area to edit`;
+          } else {
+            return `[image${imgNum}] is a cropped region to modify`;
+          }
+        }).join('\n');
+        
+        finalPrompt = `These are cropped regions of [image1]:
+${regionDescriptions}
+${editPrompt}
+Only modify the areas shown in the cropped regions.
+Do not change anything else in [image1].`;
       }
 
       const generateData = await startGeneration({
