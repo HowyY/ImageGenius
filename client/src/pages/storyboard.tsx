@@ -29,7 +29,10 @@ import {
   Settings,
   Paintbrush,
   Undo2,
-  Target
+  Target,
+  ZoomIn,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -143,6 +146,7 @@ export default function Storyboard() {
   const [editSessions, setEditSessions] = useState<Record<number, EditSession>>({});
   const [activeEditSceneId, setActiveEditSceneId] = useState<number | null>(null);
   const [showRegionSelector, setShowRegionSelector] = useState(false);
+  const [zoomedComparisonImage, setZoomedComparisonImage] = useState<'original' | 'edited' | null>(null);
   
   const [currentStoryboardId, setCurrentStoryboardIdState] = useState<number | null>(getCurrentStoryboardId());
   const [createStoryboardDialogOpen, setCreateStoryboardDialogOpen] = useState(false);
@@ -2375,24 +2379,38 @@ Do not change anything else in [image1].`;
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Original</Label>
-                    <div className="relative aspect-video bg-muted rounded overflow-hidden">
+                    <div 
+                      className="relative aspect-video bg-muted rounded overflow-hidden cursor-pointer group"
+                      onClick={() => setZoomedComparisonImage('original')}
+                      data-testid="button-zoom-original"
+                    >
                       <ImageWithFallback
                         src={activeEditSession.originalImageUrl}
                         alt="Original image"
                         className="w-full h-full object-cover"
                         fallbackText="Failed to load"
                       />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Edited Result</Label>
-                    <div className="relative aspect-video bg-muted rounded overflow-hidden">
+                    <div 
+                      className="relative aspect-video bg-muted rounded overflow-hidden cursor-pointer group"
+                      onClick={() => setZoomedComparisonImage('edited')}
+                      data-testid="button-zoom-edited"
+                    >
                       <ImageWithFallback
                         src={activeEditSession.pendingResultUrl}
                         alt="Edited result"
                         className="w-full h-full object-cover"
                         fallbackText="Failed to load"
                       />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2732,6 +2750,70 @@ Do not change anything else in [image1].`;
       </Dialog>
       
       <StageNavigation />
+
+      {/* Image Comparison Lightbox */}
+      <Dialog open={zoomedComparisonImage !== null} onOpenChange={(open) => !open && setZoomedComparisonImage(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-black/95 border-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>
+              {zoomedComparisonImage === 'original' ? 'Original Image' : 'Edited Result'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative w-full h-full flex items-center justify-center min-h-[60vh]">
+            {activeEditSession && (
+              <>
+                <img
+                  src={zoomedComparisonImage === 'original' 
+                    ? activeEditSession.originalImageUrl 
+                    : activeEditSession.pendingResultUrl || activeEditSession.imageUrl}
+                  alt={zoomedComparisonImage === 'original' ? 'Original image' : 'Edited result'}
+                  className="max-w-full max-h-[80vh] object-contain"
+                />
+                
+                {/* Navigation buttons */}
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4">
+                  <Button
+                    variant={zoomedComparisonImage === 'original' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setZoomedComparisonImage('original')}
+                    className="bg-background/80 backdrop-blur-sm"
+                    data-testid="button-lightbox-original"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Original
+                  </Button>
+                  <Button
+                    variant={zoomedComparisonImage === 'edited' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setZoomedComparisonImage('edited')}
+                    className="bg-background/80 backdrop-blur-sm"
+                    data-testid="button-lightbox-edited"
+                  >
+                    Edited
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+                
+                {/* Close button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-4 right-4 text-white hover:bg-white/20"
+                  onClick={() => setZoomedComparisonImage(null)}
+                  data-testid="button-lightbox-close"
+                >
+                  <X className="w-6 h-6" />
+                </Button>
+                
+                {/* Image label */}
+                <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded text-sm font-medium">
+                  {zoomedComparisonImage === 'original' ? 'Original' : 'Edited Result'}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       </main>
       
       {selectedSceneId && (
