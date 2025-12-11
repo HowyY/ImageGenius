@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +26,13 @@ import {
   Users,
   Copy,
   Download,
-  Settings
+  Settings,
+  Paintbrush,
+  Undo2,
+  Target,
+  ZoomIn,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import type { SelectStoryboardScene, StylePreset, SelectGenerationHistory, SelectStoryboard, SelectStoryboardVersion, SelectCharacter, CharacterCard, AvatarProfile, AvatarCrop } from "@shared/schema";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,6 +43,7 @@ import { getSelectedStyleId, setSelectedStyleId, getEngine, setEngine } from "@/
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -49,15 +57,32 @@ import { SceneInspector } from "@/components/SceneInspector";
 import { StoryboardSetup } from "@/components/StoryboardSetup";
 import { ViewerSceneCard } from "@/components/ViewerSceneCard";
 import { useLocation, useSearch } from "wouter";
+import { RegionSelector, SelectionRegion } from "@/components/RegionSelector";
 
 interface EditingState {
   sceneDescription: string;
 }
 
-interface EditDialogState {
+type RegionType = "brush" | "rect";
+
+interface RegionThumbnail {
+  id: string;
+  thumbnailUrl: string;
+  selected: boolean;
+  type: RegionType;
+}
+
+type EditSessionMode = 'form' | 'generating' | 'comparison';
+
+interface EditSession {
   sceneId: number;
   imageUrl: string;
+  originalImageUrl: string;
+  pendingResultUrl: string | null;
   editPrompt: string;
+  engine: EngineType;
+  regions: RegionThumbnail[];
+  mode: EditSessionMode;
 }
 
 const CURRENT_STORYBOARD_KEY = "currentStoryboardId";
@@ -85,6 +110,27 @@ function clearCurrentStoryboardId() {
   localStorage.removeItem(CURRENT_STORYBOARD_KEY);
 }
 
+
+async function uploadRegionAsBlob(thumbnailUrl: string): Promise<string> {
+  const response = await fetch(thumbnailUrl);
+  const blob = await response.blob();
+  
+  const formData = new FormData();
+  formData.append("file", blob, `region_${Date.now()}.png`);
+  
+  const uploadResponse = await fetch("/api/upload-region", {
+    method: "POST",
+    body: formData,
+  });
+  
+  if (!uploadResponse.ok) {
+    throw new Error("Failed to upload region");
+  }
+  
+  const data = await uploadResponse.json();
+  return data.url;
+}
+
 export default function Storyboard() {
   const { toast } = useToast();
   const { startGeneration, isGenerating } = useGeneration();
@@ -97,7 +143,10 @@ export default function Storyboard() {
   const [selectedEngine, setSelectedEngineState] = useState<EngineType>((getEngine() || "nanobanana") as EngineType);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historySceneId, setHistorySceneId] = useState<number | null>(null);
-  const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
+  const [editSessions, setEditSessions] = useState<Record<number, EditSession>>({});
+  const [activeEditSceneId, setActiveEditSceneId] = useState<number | null>(null);
+  const [showRegionSelector, setShowRegionSelector] = useState(false);
+  const [zoomedComparisonImage, setZoomedComparisonImage] = useState<'original' | 'edited' | null>(null);
   
   const [currentStoryboardId, setCurrentStoryboardIdState] = useState<number | null>(getCurrentStoryboardId());
   const [createStoryboardDialogOpen, setCreateStoryboardDialogOpen] = useState(false);
@@ -115,8 +164,59 @@ export default function Storyboard() {
   const [copyCharsDialogOpen, setCopyCharsDialogOpen] = useState(false);
   const [copyCharsSourceScene, setCopyCharsSourceScene] = useState<{ id: number; characterIds: string[] } | null>(null);
   const [copyCharsTargetScenes, setCopyCharsTargetScenes] = useState<number[]>([]);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const editPromptRef = useRef<HTMLTextAreaElement>(null);
+  
+  const activeEditSession = activeEditSceneId !== null ? editSessions[activeEditSceneId] : null;
+  
+  const updateEditSession = useCallback((sceneId: number, updates: Partial<EditSession>) => {
+    setEditSessions(prev => {
+      if (!prev[sceneId]) {
+        console.warn('updateEditSession called for non-existent session:', sceneId);
+        return prev;
+      }
+      return {
+        ...prev,
+        [sceneId]: { ...prev[sceneId], ...updates }
+      };
+    });
+  }, []);
+  
+  const openEditDialog = useCallback((sceneId: number, imageUrl: string) => {
+    const existingSession = editSessions[sceneId];
+    if (existingSession) {
+      setActiveEditSceneId(sceneId);
+    } else {
+      const newSession: EditSession = {
+        sceneId,
+        imageUrl,
+        originalImageUrl: imageUrl,
+        pendingResultUrl: null,
+        editPrompt: "",
+        engine: selectedEngine,
+        regions: [],
+        mode: 'form',
+      };
+      setEditSessions(prev => ({ ...prev, [sceneId]: newSession }));
+      setActiveEditSceneId(sceneId);
+    }
+  }, [editSessions, selectedEngine]);
+  
+  const closeEditDialog = useCallback(() => {
+    setActiveEditSceneId(null);
+  }, []);
+  
+  const clearEditSession = useCallback((sceneId: number) => {
+    setEditSessions(prev => {
+      const newSessions = { ...prev };
+      delete newSessions[sceneId];
+      return newSessions;
+    });
+    if (activeEditSceneId === sceneId) {
+      setActiveEditSceneId(null);
+    }
+  }, [activeEditSceneId]);
   
 
   const { data: storyboards, isLoading: storyboardsLoading, isError: storyboardsError, error: storyboardsErrorDetails, refetch: refetchStoryboards } = useQuery<SelectStoryboard[]>({
@@ -482,6 +582,9 @@ export default function Storyboard() {
       if (selectedSceneId === deletedId) {
         setSelectedSceneId(null);
       }
+      if (editSessions[deletedId]) {
+        clearEditSession(deletedId);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
       toast({
         title: "Scene deleted",
@@ -778,17 +881,89 @@ export default function Storyboard() {
       });
       return;
     }
-    setEditDialog({
-      sceneId: scene.id,
-      imageUrl: scene.generatedImageUrl,
-      editPrompt: "",
+    openEditDialog(scene.id, scene.generatedImageUrl);
+  };
+
+  const handleRegionsConfirm = (selectionRegions: SelectionRegion[]) => {
+    if (!activeEditSession) return;
+    
+    const thumbnails: RegionThumbnail[] = selectionRegions
+      .filter(r => r.thumbnailUrl)
+      .map(r => ({
+        id: r.id,
+        thumbnailUrl: r.thumbnailUrl!,
+        selected: false,
+        type: r.type,
+      }));
+    
+    updateEditSession(activeEditSession.sceneId, { regions: thumbnails });
+    setShowRegionSelector(false);
+    
+    if (thumbnails.length > 0) {
+      toast({
+        title: "Regions created",
+        description: `${thumbnails.length} region(s) ready. Click thumbnails to include in edit.`,
+      });
+    }
+  };
+
+  const handleToggleRegion = (regionId: string) => {
+    if (!activeEditSession) return;
+    updateEditSession(activeEditSession.sceneId, {
+      regions: activeEditSession.regions.map(r => 
+        r.id === regionId ? { ...r, selected: !r.selected } : r
+      ),
+    });
+  };
+
+  const handleRegionClick = (regionId: string, regionIndex: number) => {
+    if (!activeEditSession) return;
+    
+    const region = activeEditSession.regions.find(r => r.id === regionId);
+    const isCurrentlySelected = region?.selected || false;
+    const tag = `[Region ${regionIndex + 1}]`;
+    const currentValue = activeEditSession.editPrompt;
+    
+    let newValue: string;
+    
+    if (isCurrentlySelected) {
+      const tagPattern = new RegExp(`\\[Region\\s*${regionIndex + 1}\\]\\s*`, 'gi');
+      newValue = currentValue.replace(tagPattern, '').trim();
+    } else {
+      const textarea = editPromptRef.current;
+      if (textarea) {
+        const start = textarea.selectionStart ?? currentValue.length;
+        const end = textarea.selectionEnd ?? currentValue.length;
+        newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+      } else {
+        newValue = currentValue + (currentValue.length > 0 ? ' ' : '') + tag;
+      }
+    }
+    
+    handleToggleRegion(regionId);
+    updateEditSession(activeEditSession.sceneId, { editPrompt: newValue });
+    
+    const textarea = editPromptRef.current;
+    if (textarea && !isCurrentlySelected) {
+      const newCursorPos = newValue.indexOf(tag) + tag.length;
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    }
+  };
+
+  const handleRemoveRegion = (regionId: string) => {
+    if (!activeEditSession) return;
+    updateEditSession(activeEditSession.sceneId, {
+      regions: activeEditSession.regions.filter(r => r.id !== regionId),
     });
   };
 
   const handleEditSubmit = async () => {
-    if (!editDialog) return;
+    if (!activeEditSession) return;
 
-    if (!editDialog.editPrompt.trim()) {
+    if (!activeEditSession.editPrompt.trim()) {
       toast({
         title: "Empty edit prompt",
         description: "Please describe what you want to change",
@@ -806,44 +981,225 @@ export default function Storyboard() {
       return;
     }
 
-    const sceneIdToEdit = editDialog.sceneId;
-    const editPrompt = editDialog.editPrompt;
-    const imageUrl = editDialog.imageUrl;
+    const sceneIdToEdit = activeEditSession.sceneId;
+    let editPrompt = activeEditSession.editPrompt;
+    const imageUrl = activeEditSession.imageUrl;
+    const editEngine = activeEditSession.engine;
+    const allRegions = activeEditSession.regions;
+    const selectedRegions = allRegions.filter(r => r.selected);
     
-    setEditDialog(null);
-
+    const regionTagPattern = /\[Region\s*(\d+)\]/gi;
+    const hasRegionTags = regionTagPattern.test(editPrompt);
+    regionTagPattern.lastIndex = 0;
+    
+    if (allRegions.length > 0 && selectedRegions.length === 0 && !hasRegionTags) {
+      toast({
+        title: "No regions selected",
+        description: "Please click on region thumbnails to include them in your edit, or remove all regions to edit without selection",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    updateEditSession(sceneIdToEdit, { mode: 'generating' });
+    
     try {
+      const userReferenceImages: string[] = [imageUrl];
+      
+      const referencedRegionNumbers = new Set<number>();
+      let match;
+      while ((match = regionTagPattern.exec(editPrompt)) !== null) {
+        referencedRegionNumbers.add(parseInt(match[1], 10));
+      }
+      
+      const regionsToUpload = new Set<number>();
+      
+      Array.from(referencedRegionNumbers).forEach(num => {
+        const index = num - 1;
+        if (index >= 0 && index < allRegions.length && allRegions[index].thumbnailUrl) {
+          regionsToUpload.add(index);
+        }
+      });
+      
+      for (const region of selectedRegions) {
+        const existingIndex = allRegions.findIndex(r => r.id === region.id);
+        if (existingIndex >= 0 && region.thumbnailUrl) {
+          regionsToUpload.add(existingIndex);
+        }
+      }
+      
+      const sortedIndices = Array.from(regionsToUpload).sort((a, b) => a - b);
+      
+      const regionIndexToImageNum: Record<number, number> = {};
+      let imageNum = 2;
+      
+      for (const regionIndex of sortedIndices) {
+        const region = allRegions[regionIndex];
+        const uploadedUrl = await uploadRegionAsBlob(region.thumbnailUrl);
+        userReferenceImages.push(uploadedUrl);
+        regionIndexToImageNum[regionIndex] = imageNum;
+        imageNum++;
+      }
+      
+      editPrompt = editPrompt.replace(/\[Region\s*(\d+)\]/gi, (_, num) => {
+        const regionIndex = parseInt(num, 10) - 1;
+        const imageNumber = regionIndexToImageNum[regionIndex];
+        return imageNumber !== undefined ? `[image${imageNumber}]` : `[Region ${num}]`;
+      });
+      
+      let finalPrompt: string;
+      
+      if (sortedIndices.length === 0) {
+        finalPrompt = editPrompt;
+      } else if (sortedIndices.length === 1) {
+        const regionType = allRegions[sortedIndices[0]].type;
+        
+        if (regionType === 'brush') {
+          finalPrompt = `[image2] is a cropped region of [image1].
+The area highlighted in red (the painted/marked region) of [image2] is the region that requires editing.
+${editPrompt}
+Only modify the red-highlighted area.
+Do not change anything else in [image1].`;
+        } else {
+          finalPrompt = `[image2] is a cropped region of [image1].
+${editPrompt}
+Only modify the area shown in [image2].`;
+        }
+      } else {
+        const regionDescriptions = sortedIndices.map((idx, i) => {
+          const imgNum = regionIndexToImageNum[idx];
+          const regionType = allRegions[idx].type;
+          if (regionType === 'brush') {
+            return `[image${imgNum}] is a cropped region with red-highlighted area to edit`;
+          } else {
+            return `[image${imgNum}] is a cropped region to modify`;
+          }
+        }).join('\n');
+        
+        finalPrompt = `These are cropped regions of [image1]:
+${regionDescriptions}
+${editPrompt}
+Only modify the areas shown in the cropped regions.
+Do not change anything else in [image1].`;
+      }
+
       const generateData = await startGeneration({
-        prompt: editPrompt,
+        prompt: finalPrompt,
         styleId: selectedStyle,
-        engine: selectedEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
-        userReferenceImages: [imageUrl],
+        engine: editEngine as "nanobanana" | "seedream" | "nanopro" | "nanobanana-t2i" | "nanopro-t2i",
+        userReferenceImages,
         sceneId: sceneIdToEdit,
         sceneName: `Scene Edit`,
         isEditMode: true,
       });
 
-      await apiRequest("PATCH", `/api/scenes/${sceneIdToEdit}`, {
-        generatedImageUrl: generateData.imageUrl,
-        styleId: selectedStyle,
-        engine: selectedEngine,
+      updateEditSession(sceneIdToEdit, { 
+        pendingResultUrl: generateData.imageUrl,
+        mode: 'comparison',
       });
 
-      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", sceneIdToEdit] });
-
+      const isDialogOpen = activeEditSceneId === sceneIdToEdit;
+      
       toast({
-        title: "Image edited",
-        description: "Scene image has been updated",
+        title: "Edit generated",
+        description: isDialogOpen 
+          ? "Review the result and accept or discard" 
+          : "Your edit is ready for review",
+        action: !isDialogOpen ? (
+          <ToastAction 
+            altText="Review edit" 
+            onClick={() => setActiveEditSceneId(sceneIdToEdit)}
+          >
+            Review
+          </ToastAction>
+        ) : undefined,
       });
     } catch (error) {
       console.error("Edit failed:", error);
+      updateEditSession(sceneIdToEdit, { mode: 'form' });
       toast({
         title: "Edit failed",
         description: error instanceof Error ? error.message : "Failed to edit image",
         variant: "destructive",
       });
     }
+  };
+
+  const handleAcceptEdit = async () => {
+    if (!activeEditSession || !activeEditSession.pendingResultUrl) return;
+    
+    const sceneId = activeEditSession.sceneId;
+    
+    try {
+      await apiRequest("PATCH", `/api/scenes/${sceneId}`, {
+        generatedImageUrl: activeEditSession.pendingResultUrl,
+        styleId: selectedStyle,
+        engine: activeEditSession.engine,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/scenes", currentStoryboardId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/history/scene", sceneId] });
+
+      toast({
+        title: "Edit accepted",
+        description: "Scene image has been updated",
+      });
+      
+      clearEditSession(sceneId);
+    } catch (error) {
+      console.error("Accept edit failed:", error);
+      toast({
+        title: "Failed to save",
+        description: error instanceof Error ? error.message : "Failed to save edit",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDiscardEdit = () => {
+    if (!activeEditSession) return;
+    
+    updateEditSession(activeEditSession.sceneId, {
+      pendingResultUrl: null,
+      mode: 'form',
+    });
+    
+    toast({
+      title: "Edit discarded",
+      description: "You can try again with different settings",
+    });
+  };
+  
+  const handleCancelEdit = () => {
+    if (!activeEditSession) return;
+    
+    clearEditSession(activeEditSession.sceneId);
+    
+    toast({
+      title: "Edit cancelled",
+      description: "All changes have been discarded",
+    });
+  };
+
+  const handleRegenerate = () => {
+    if (!activeEditSession) return;
+    
+    updateEditSession(activeEditSession.sceneId, {
+      pendingResultUrl: null,
+      mode: 'form',
+    });
+    
+    setTimeout(() => {
+      handleEditSubmit();
+    }, 100);
+  };
+  
+  const handleBackgroundGeneration = () => {
+    closeEditDialog();
+    toast({
+      title: "Generating in background",
+      description: "You can continue working. We'll notify you when it's ready.",
+    });
   };
 
   const handleDownloadImage = async (url: string) => {
@@ -931,7 +1287,8 @@ export default function Storyboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-14 pb-20">
+    <div className="min-h-screen bg-background pt-14 pb-20 grid grid-cols-[1fr_auto] overflow-x-hidden">
+      <main className="overflow-auto">
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
@@ -1098,6 +1455,8 @@ export default function Storyboard() {
               stylesLoading={stylesLoading}
               disabled={false}
               onOpenSetupWizard={handleOpenSetup}
+              expanded={settingsExpanded}
+              onExpandedChange={setSettingsExpanded}
             />
           </div>
         )}
@@ -1195,10 +1554,23 @@ export default function Storyboard() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-            {scenes.map((scene) => 
+            <AnimatePresence mode="popLayout">
+            {scenes.map((scene, index) => 
               isViewer ? (
-                <ViewerSceneCard
+                <motion.div
                   key={scene.id}
+                  layout={false}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 400,
+                    damping: 30,
+                    delay: index * 0.05,
+                  }}
+                >
+                <ViewerSceneCard
                   scene={scene}
                   onImageClick={(url) => {
                     const style = styles?.find(s => s.id === scene.styleId);
@@ -1211,15 +1583,38 @@ export default function Storyboard() {
                     });
                   }}
                 />
+                </motion.div>
               ) : (
+              <motion.div
+                key={scene.id}
+                layout={false}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 30,
+                  delay: index * 0.05,
+                }}
+              >
               <Card 
-                key={scene.id} 
-                className={`overflow-visible flex flex-col border cursor-pointer transition-all ${
+                className={`overflow-visible flex flex-col border cursor-pointer transition-shadow ${
                   selectedSceneId === scene.id 
                     ? "ring-2 ring-primary shadow-lg" 
                     : "hover-elevate"
                 }`}
-                onClick={() => setSelectedSceneId(scene.id)}
+                onClick={(e) => {
+                  // Event delegation: ignore clicks on interactive elements marked with data-card-action
+                  const target = e.target;
+                  if (!(target instanceof Element)) return;
+                  if (target.closest('[data-card-action]')) return;
+                  const newSelectedId = selectedSceneId === scene.id ? null : scene.id;
+                  setSelectedSceneId(newSelectedId);
+                  if (newSelectedId !== null) {
+                    setSettingsExpanded(false);
+                  }
+                }}
                 data-testid={`scene-card-${scene.id}`}
               >
                 <div 
@@ -1237,6 +1632,7 @@ export default function Storyboard() {
                   ) : scene.generatedImageUrl ? (
                     <div 
                       className="w-full h-full cursor-zoom-in"
+                      data-card-action
                       onClick={() => {
                         const style = styles?.find(s => s.id === scene.styleId);
                         setPreviewImage({
@@ -1257,6 +1653,40 @@ export default function Storyboard() {
                         loading="lazy"
                         fallbackText="Failed to load"
                       />
+                      {editSessions[scene.id]?.mode === 'generating' && activeEditSceneId !== scene.id && (
+                        <div 
+                          className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center cursor-pointer"
+                          data-card-action
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveEditSceneId(scene.id);
+                          }}
+                          data-testid={`overlay-edit-generating-${scene.id}`}
+                        >
+                          <div className="flex flex-col items-center gap-2 text-foreground">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                            <span className="text-sm font-medium">Editing...</span>
+                            <span className="text-xs text-muted-foreground">Click to view</span>
+                          </div>
+                        </div>
+                      )}
+                      {editSessions[scene.id]?.mode === 'comparison' && activeEditSceneId !== scene.id && (
+                        <div 
+                          className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center cursor-pointer"
+                          data-card-action
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveEditSceneId(scene.id);
+                          }}
+                          data-testid={`overlay-edit-ready-${scene.id}`}
+                        >
+                          <div className="flex flex-col items-center gap-2 text-foreground">
+                            <Check className="w-8 h-8 text-green-500" />
+                            <span className="text-sm font-medium">Edit Ready</span>
+                            <span className="text-xs text-muted-foreground">Click to review</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
@@ -1272,10 +1702,8 @@ export default function Storyboard() {
                           variant="ghost"
                           size="icon"
                           className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteSceneMutation.mutate(scene.id);
-                          }}
+                          data-card-action
+                          onClick={() => deleteSceneMutation.mutate(scene.id)}
                           disabled={deleteSceneMutation.isPending || isGenerating(scene.id)}
                           data-testid={`button-delete-scene-${scene.id}`}
                         >
@@ -1287,7 +1715,7 @@ export default function Storyboard() {
                   )}
                 </div>
                 
-                <div className="flex items-center justify-between px-3 py-2 border-b text-sm text-muted-foreground">
+                <div className="flex items-center justify-between px-3 py-2 border-b text-sm text-muted-foreground" data-card-action>
                   <span data-testid={`text-image-status-${scene.id}`}>
                     {scene.generatedImageUrl ? "Generated Images (1)" : "No images generated yet"}
                   </span>
@@ -1307,7 +1735,7 @@ export default function Storyboard() {
                   </Tooltip>
                 </div>
                 
-                <div className="flex items-center gap-2 px-3 py-2 border-b">
+                <div className="flex items-center gap-2 px-3 py-2 border-b" data-card-action>
                   <Popover 
                     open={characterPopoverOpen === scene.id} 
                     onOpenChange={(open) => setCharacterPopoverOpen(open ? scene.id : null)}
@@ -1461,6 +1889,7 @@ export default function Storyboard() {
                     <Textarea
                       placeholder={isViewer ? "View-only mode" : "Enter scene description for image generation..."}
                       value={getSceneDescription(scene)}
+                      data-card-action
                       onChange={(e) => {
                         if (!isDesigner) return;
                         handleDescriptionChange(scene.id, e.target.value);
@@ -1477,7 +1906,7 @@ export default function Storyboard() {
                   </div>
                   
                   {isDesigner && (
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex gap-2 mt-3" data-card-action>
                       <Button
                         onClick={() => handleGenerateClick(scene)}
                         disabled={isGenerating(scene.id) || !getSceneDescription(scene).trim()}
@@ -1515,8 +1944,10 @@ export default function Storyboard() {
                   )}
                 </div>
               </Card>
+              </motion.div>
               )
             )}
+            </AnimatePresence>
           </div>
         )}
         
@@ -1909,54 +2340,257 @@ export default function Storyboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editDialog} onOpenChange={(open) => !open && setEditDialog(null)}>
-        <DialogContent>
+      <Dialog open={activeEditSceneId !== null && !showRegionSelector} onOpenChange={(open) => !open && closeEditDialog()}>
+        <DialogContent className={activeEditSession?.mode === 'comparison' ? "max-w-4xl" : "max-w-2xl"}>
           <DialogHeader>
-            <DialogTitle>Edit Image</DialogTitle>
+            <DialogTitle>
+              {activeEditSession?.mode === 'comparison' ? "Review Edit Result" : 
+               activeEditSession?.mode === 'generating' ? "Generating Edit..." : "Edit Image"}
+            </DialogTitle>
             <DialogDescription>
-              Describe the changes you want to make. The current image will be used as a reference.
+              {activeEditSession?.mode === 'comparison' 
+                ? "Compare the original with the edited result. Accept, discard, or regenerate."
+                : activeEditSession?.mode === 'generating'
+                ? "Please wait while the AI processes your edit request."
+                : "Describe the changes you want to make. Optionally select regions to focus the edit."
+              }
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            {editDialog && (
-              <div className="w-full aspect-video bg-muted rounded overflow-hidden">
-                <ImageWithFallback
-                  src={editDialog.imageUrl}
-                  alt="Current scene image"
-                  className="w-full h-full object-cover"
-                  fallbackText="Failed to load"
-                />
+            {activeEditSession?.mode === 'generating' && (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                <div className="text-center">
+                  <p className="text-lg font-medium">Processing your edit...</p>
+                  <p className="text-sm text-muted-foreground mt-1">This may take a moment</p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleBackgroundGeneration}
+                  data-testid="button-background-generate"
+                >
+                  Continue in Background
+                </Button>
               </div>
             )}
-            <div>
-              <Label htmlFor="edit-prompt" className="mb-2 block">
-                Edit Instructions
-              </Label>
-              <Textarea
-                id="edit-prompt"
-                placeholder="Describe what you want to change..."
-                value={editDialog?.editPrompt || ""}
-                onChange={(e) => setEditDialog(prev => prev ? { ...prev, editPrompt: e.target.value } : null)}
-                className="min-h-[80px] resize-none"
-                data-testid="textarea-edit-prompt"
-              />
-            </div>
+            
+            {activeEditSession?.mode === 'comparison' && activeEditSession.pendingResultUrl ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Original</Label>
+                    <div 
+                      className="relative aspect-video bg-muted rounded overflow-hidden cursor-pointer group"
+                      onClick={() => setZoomedComparisonImage('original')}
+                      data-testid="button-zoom-original"
+                    >
+                      <ImageWithFallback
+                        src={activeEditSession.originalImageUrl}
+                        alt="Original image"
+                        className="w-full h-full object-cover"
+                        fallbackText="Failed to load"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Edited Result</Label>
+                    <div 
+                      className="relative aspect-video bg-muted rounded overflow-hidden cursor-pointer group"
+                      onClick={() => setZoomedComparisonImage('edited')}
+                      data-testid="button-zoom-edited"
+                    >
+                      <ImageWithFallback
+                        src={activeEditSession.pendingResultUrl}
+                        alt="Edited result"
+                        className="w-full h-full object-cover"
+                        fallbackText="Failed to load"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded p-3">
+                  <Label className="text-sm text-muted-foreground">Edit prompt:</Label>
+                  <p className="text-sm mt-1">{activeEditSession.editPrompt}</p>
+                </div>
+              </div>
+            ) : activeEditSession?.mode === 'form' && (
+              <div className="relative w-full aspect-video bg-muted rounded overflow-hidden">
+                <ImageWithFallback
+                  src={activeEditSession.imageUrl}
+                  alt="Current scene image"
+                  className="w-full h-full object-cover pointer-events-none"
+                  fallbackText="Failed to load"
+                />
+                <div className="absolute bottom-2 right-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowRegionSelector(true)}
+                    data-testid="button-select-region"
+                  >
+                    <Target className="w-4 h-4 mr-2" />
+                    Select Regions
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {activeEditSession?.mode === 'form' && activeEditSession.regions.length > 0 && (
+              <div>
+                <Label className="mb-2 block text-sm text-muted-foreground">
+                  Click region to insert/remove [Region N] tag in prompt
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {activeEditSession.regions.map((region, index) => (
+                    <div 
+                      key={region.id} 
+                      className={`relative group cursor-pointer rounded overflow-hidden border-2 transition-all ${
+                        region.selected 
+                          ? "border-primary ring-2 ring-primary/30" 
+                          : "border-transparent hover:border-muted-foreground/50"
+                      }`}
+                      onClick={() => handleRegionClick(region.id, index)}
+                      data-testid={`region-thumbnail-${index}`}
+                    >
+                      <img 
+                        src={region.thumbnailUrl} 
+                        alt={`Region ${index + 1}`}
+                        className="w-16 h-16 object-cover"
+                      />
+                      {region.selected && (
+                        <div className="absolute top-0.5 right-0.5 bg-primary text-primary-foreground rounded-full p-0.5">
+                          <Check className="w-3 h-3" />
+                        </div>
+                      )}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Remove region ${index + 1}`}
+                        className="absolute top-0.5 left-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-destructive/80"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveRegion(region.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleRemoveRegion(region.id);
+                          }
+                        }}
+                        data-testid={`button-remove-region-${index}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 bg-background/80 text-xs text-center py-0.5">
+                        {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeEditSession?.mode === 'form' && (
+              <>
+                <div>
+                  <Label htmlFor="edit-engine" className="mb-2 block">
+                    Edit Engine
+                  </Label>
+                  <Select
+                    value={activeEditSession?.engine || "nanobanana"}
+                    onValueChange={(v) => activeEditSession && updateEditSession(activeEditSession.sceneId, { engine: v as EngineType })}
+                  >
+                    <SelectTrigger id="edit-engine" data-testid="select-edit-engine">
+                      <SelectValue placeholder="Select engine" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nanobanana" data-testid="option-edit-engine-nanobanana">NanoBanana Edit</SelectItem>
+                      <SelectItem value="seedream" data-testid="option-edit-engine-seedream">SeeDream V4</SelectItem>
+                      <SelectItem value="nanopro" data-testid="option-edit-engine-nanopro">Nano Pro (2K/4K)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="edit-prompt" className="mb-2 block">
+                    Edit Instructions
+                  </Label>
+                  <Textarea
+                    ref={editPromptRef}
+                    id="edit-prompt"
+                    placeholder="Describe what you want to change..."
+                    value={activeEditSession?.editPrompt || ""}
+                    onChange={(e) => activeEditSession && updateEditSession(activeEditSession.sceneId, { editPrompt: e.target.value })}
+                    className="min-h-[80px] resize-none"
+                    data-testid="textarea-edit-prompt"
+                  />
+                  {activeEditSession && activeEditSession.regions.filter(r => r.selected).length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {activeEditSession.regions.filter(r => r.selected).length} region(s) selected - edits will focus on these areas
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialog(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleEditSubmit}
-              disabled={!editDialog?.editPrompt.trim()}
-              data-testid="button-confirm-edit"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Generate Edit
-            </Button>
+          <DialogFooter className="gap-2">
+            {activeEditSession?.mode === 'comparison' ? (
+              <>
+                <Button variant="ghost" onClick={closeEditDialog} data-testid="button-close-edit">
+                  Close
+                </Button>
+                <Button variant="outline" onClick={handleDiscardEdit} data-testid="button-discard-edit">
+                  <X className="w-4 h-4 mr-2" />
+                  Discard
+                </Button>
+                <Button variant="outline" onClick={handleRegenerate} disabled={isGenerating(activeEditSession?.sceneId)} data-testid="button-regenerate-edit">
+                  {isGenerating(activeEditSession?.sceneId) ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Re-generate
+                </Button>
+                <Button onClick={handleAcceptEdit} data-testid="button-accept-edit">
+                  <Check className="w-4 h-4 mr-2" />
+                  Accept
+                </Button>
+              </>
+            ) : activeEditSession?.mode === 'form' ? (
+              <>
+                <Button variant="outline" onClick={closeEditDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleEditSubmit}
+                  disabled={!activeEditSession?.editPrompt.trim() || isGenerating(activeEditSession?.sceneId)}
+                  data-testid="button-confirm-edit"
+                >
+                  {isGenerating(activeEditSession?.sceneId) ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 mr-2" />
+                  )}
+                  Generate Edit
+                </Button>
+              </>
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RegionSelector
+        open={showRegionSelector}
+        imageUrl={activeEditSession?.imageUrl || ""}
+        onClose={() => setShowRegionSelector(false)}
+        onConfirm={handleRegionsConfirm}
+      />
 
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
@@ -2116,11 +2750,76 @@ export default function Storyboard() {
       </Dialog>
       
       <StageNavigation />
+
+      {/* Image Comparison Lightbox */}
+      <Dialog open={zoomedComparisonImage !== null} onOpenChange={(open) => !open && setZoomedComparisonImage(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-black/95 border-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>
+              {zoomedComparisonImage === 'original' ? 'Original Image' : 'Edited Result'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative w-full h-full flex items-center justify-center min-h-[60vh]">
+            {activeEditSession && (
+              <>
+                <img
+                  src={zoomedComparisonImage === 'original' 
+                    ? activeEditSession.originalImageUrl 
+                    : activeEditSession.pendingResultUrl || activeEditSession.imageUrl}
+                  alt={zoomedComparisonImage === 'original' ? 'Original image' : 'Edited result'}
+                  className="max-w-full max-h-[80vh] object-contain"
+                />
+                
+                {/* Navigation buttons */}
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4">
+                  <Button
+                    variant={zoomedComparisonImage === 'original' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setZoomedComparisonImage('original')}
+                    className="bg-background/80 backdrop-blur-sm"
+                    data-testid="button-lightbox-original"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Original
+                  </Button>
+                  <Button
+                    variant={zoomedComparisonImage === 'edited' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setZoomedComparisonImage('edited')}
+                    className="bg-background/80 backdrop-blur-sm"
+                    data-testid="button-lightbox-edited"
+                  >
+                    Edited
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+                
+                {/* Close button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-4 right-4 text-white hover:bg-white/20"
+                  onClick={() => setZoomedComparisonImage(null)}
+                  data-testid="button-lightbox-close"
+                >
+                  <X className="w-6 h-6" />
+                </Button>
+                
+                {/* Image label */}
+                <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded text-sm font-medium">
+                  {zoomedComparisonImage === 'original' ? 'Original' : 'Edited Result'}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      </main>
       
       {selectedSceneId && (
         <SceneInspector
-          isOpen={inspectorOpen}
-          onToggle={() => setInspectorOpen(!inspectorOpen)}
+          isOpen={true}
+          onToggle={() => setSelectedSceneId(null)}
           selectedScene={scenes?.find(s => s.id === selectedSceneId) || null}
           selectedStyleId={(() => {
             const scene = scenes?.find(s => s.id === selectedSceneId);

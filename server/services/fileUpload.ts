@@ -55,6 +55,47 @@ export async function uploadFileToKIE(
   };
 }
 
+export async function uploadBufferToKIE(
+  buffer: Buffer,
+  fileName: string,
+  uploadPath: string = "cropped-regions"
+): Promise<UploadedFile> {
+  if (!KIE_API_KEY) {
+    throw new Error("KIE_API_KEY is not set in environment");
+  }
+
+  const formData = new FormData();
+  const blob = new Blob([buffer]);
+  formData.append("file", blob, fileName);
+  formData.append("uploadPath", uploadPath);
+  formData.append("fileName", fileName);
+
+  const response = await fetch(KIE_FILE_UPLOAD_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${KIE_API_KEY}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to upload buffer to KIE: ${response.status} ${errorText}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.success || result.code !== 200) {
+    throw new Error(`KIE upload failed: ${result.msg || "Unknown error"}`);
+  }
+
+  return {
+    fileUrl: result.data?.fileUrl || result.data?.downloadUrl || "",
+    fileName: result.data?.fileName || fileName,
+    originalName: fileName,
+  };
+}
+
 export interface StyleImageMapping {
   styleId: string;
   imageUrls: string[];

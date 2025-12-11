@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -114,33 +115,22 @@ export function SceneInspector({
     ? editingDescription 
     : (selectedScene?.visualDescription || "");
 
-  if (!isOpen) {
-    return (
-      <div className="fixed right-0 top-14 bottom-20 z-40 flex flex-col items-center py-4 bg-card border-l w-12">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className="mb-4"
-          data-testid="button-expand-inspector"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        {selectedScene && (
-          <div className="flex flex-col gap-2 items-center">
-            <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center">
-              <FileText className="w-3 h-3 text-primary" />
-            </div>
-            <span className="text-xs text-muted-foreground writing-mode-vertical">Scene Selected</span>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed right-0 top-14 bottom-20 z-40 flex flex-col bg-card border-l w-80 shadow-lg">
-      <div className="flex items-center justify-between p-3 border-b">
+    <AnimatePresence mode="wait">
+      {isOpen && (
+        <motion.aside
+          initial={{ x: 320, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 320, opacity: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 400,
+            damping: 40,
+            mass: 0.8,
+          }}
+          className="h-full flex flex-col bg-card border-l w-80 shadow-lg"
+        >
+          <div className="flex items-center justify-between p-3 border-b">
         <span className="font-medium text-sm">
           {selectedScene ? `Scene Inspector` : "Select a Scene"}
         </span>
@@ -306,6 +296,8 @@ export function SceneInspector({
           </Button>
         </div>
       )}
-    </div>
+        </motion.aside>
+      )}
+    </AnimatePresence>
   );
 }

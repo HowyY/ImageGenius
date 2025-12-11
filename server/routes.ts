@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { z } from "zod";
 import { generateRequestSchema, generateResponseSchema, type StylePreset } from "@shared/schema";
 import { storage } from "./storage";
-import { uploadReferenceImages, uploadFileToKIE, type StyleImageMapping } from "./services/fileUpload";
+import { uploadReferenceImages, uploadFileToKIE, uploadBufferToKIE, type StyleImageMapping } from "./services/fileUpload";
 import { DEFAULT_TEMPLATES, getDefaultTemplate, getAllDefaultTemplateIds } from "./default-templates";
 import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
@@ -1319,7 +1319,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use the template (from request, database, or default)
       // Note: we use processedPrompt (with character placeholders replaced) instead of raw prompt
       const hasReference = hasUserReference || hasCharacterReference;
-      const finalPrompt = buildPrompt(processedPrompt, selectedStyle, hasReference, templateToUse);
+      
+      // In edit mode, use the user's prompt directly without style template
+      // The edit prompt format is already structured by the frontend
+      const finalPrompt = isEditMode 
+        ? processedPrompt 
+        : buildPrompt(processedPrompt, selectedStyle, hasReference, templateToUse);
 
       // Build image URLs array with priority order:
       // 1. Character card reference images (from placeholder parsing, highest priority)
@@ -1717,6 +1722,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: "Internal server error",
         message: "Failed to upload reference image",
+      });
+    }
+  });
+
+  app.post("/api/upload-region", async (req, res) => {
+    try {
+      const busboy = (await import("busboy")).default;
+      const bb = busboy({ headers: req.headers });
+      
+      let fileBuffer: Buffer | null = null;
+      let fileName = `region-${Date.now()}.png`;
+      
+      bb.on("file", (name, file, info) => {
+        const chunks: Buffer[] = [];
+        if (info.filename) {
+          fileName = info.filename;
+        }
+        file.on("data", (data) => {
+          chunks.push(data);
+        });
+        file.on("end", () => {
+          fileBuffer = Buffer.concat(chunks);
+        });
+      });
+      
+      bb.on("finish", async () => {
+        if (!fileBuffer) {
+          return res.status(400).json({ error: "No file found in request" });
+        }
+        
+        try {
+          const uploaded = await uploadBufferToKIE(fileBuffer, fileName, "cropped-regions");
+          
+          res.json({
+            success: true,
+            url: uploaded.fileUrl,
+            fileName: uploaded.fileName,
+          });
+        } catch (uploadError) {
+          console.error("Error uploading to KIE:", uploadError);
+          res.status(500).json({
+            error: "Internal server error",
+            message: "Failed to upload cropped region to KIE",
+          });
+        }
+      });
+      
+      bb.on("error", (error) => {
+        console.error("Busboy error:", error);
+        res.status(500).json({
+          error: "Internal server error",
+          message: "Failed to parse upload",
+        });
+      });
+      
+      req.pipe(bb);
+    } catch (error) {
+      console.error("Error uploading region:", error);
+      res.status(500).json({
+        error: "Internal server error",
+        message: "Failed to upload cropped region",
       });
     }
   });

@@ -44,6 +44,8 @@ interface SettingsBarProps {
   stylesLoading: boolean;
   disabled?: boolean;
   onOpenSetupWizard?: () => void;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 export function SettingsBar({
@@ -55,18 +57,27 @@ export function SettingsBar({
   stylesLoading,
   disabled = false,
   onOpenSetupWizard,
+  expanded,
+  onExpandedChange,
 }: SettingsBarProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [, setLocation] = useLocation();
+
+  const isControlled = expanded !== undefined;
+  const isExpanded = isControlled ? expanded : internalExpanded;
 
   const currentStyle = styles?.find((s) => s.id === selectedStyle);
   const currentEngine = ENGINE_OPTIONS.find((e) => e.value === selectedEngine);
 
   const handleOpenChange = (open: boolean) => {
     if (disabled) return;
-    setIsExpanded(open);
+    if (isControlled) {
+      onExpandedChange?.(open);
+    } else {
+      setInternalExpanded(open);
+    }
   };
 
   const handleEditStyle = () => {
