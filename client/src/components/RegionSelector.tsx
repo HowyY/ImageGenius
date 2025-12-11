@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Paintbrush, Square, Undo2, Trash2, Check, Loader2, RefreshCw } from "lucide-react";
+import { Paintbrush, Square, Undo2, Trash2, Check, Loader2, RefreshCw, CircleDot } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 
 interface Point {
@@ -26,13 +26,14 @@ interface RectRegion {
 
 export interface SelectionRegion {
   id: string;
-  type: "brush" | "rect";
+  type: "brush" | "rect" | "mask";
   brushStrokes?: BrushStroke[];
   rect?: RectRegion;
   thumbnailUrl?: string;
+  maskUrl?: string;
 }
 
-type SelectionMode = "brush" | "rect";
+type SelectionMode = "brush" | "rect" | "mask";
 
 interface RegionSelectorProps {
   imageUrl: string;
@@ -53,6 +54,7 @@ export function RegionSelector({
   const [regions, setRegions] = useState<SelectionRegion[]>(initialRegions);
   const [brushSize, setBrushSize] = useState(20);
   const [currentBrushStrokes, setCurrentBrushStrokes] = useState<BrushStroke[]>([]);
+  const [currentMaskStrokes, setCurrentMaskStrokes] = useState<BrushStroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<BrushStroke | null>(null);
   const [drawingRect, setDrawingRect] = useState<RectRegion | null>(null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function RegionSelector({
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const brushColor = "rgba(255, 100, 100, 0.7)";
+  const maskColor = "rgba(255, 255, 255, 1)";
 
   useEffect(() => {
     if (open) {
@@ -80,6 +83,7 @@ export function RegionSelector({
       setImageRetryCount(0);
       setImageSessionId(Date.now());
       setCurrentBrushStrokes([]);
+      setCurrentMaskStrokes([]);
       setSelectedRegionId(null);
       setConfirmError(null);
     }
@@ -144,19 +148,26 @@ export function RegionSelector({
         drawBrushStrokes(ctx, region.brushStrokes, canvas.width, canvas.height);
       } else if (region.type === "rect" && region.rect) {
         drawRectRegion(ctx, region.rect, canvas.width, canvas.height, region.id === selectedRegionId);
+      } else if (region.type === "mask" && region.brushStrokes) {
+        drawMaskStrokes(ctx, region.brushStrokes, canvas.width, canvas.height);
       }
     }
 
     drawBrushStrokes(ctx, currentBrushStrokes, canvas.width, canvas.height);
+    drawMaskStrokes(ctx, currentMaskStrokes, canvas.width, canvas.height);
 
     if (currentStroke) {
-      drawBrushStrokes(ctx, [currentStroke], canvas.width, canvas.height);
+      if (mode === "mask") {
+        drawMaskStrokes(ctx, [currentStroke], canvas.width, canvas.height);
+      } else {
+        drawBrushStrokes(ctx, [currentStroke], canvas.width, canvas.height);
+      }
     }
 
     if (drawingRect) {
       drawRectRegion(ctx, drawingRect, canvas.width, canvas.height, false);
     }
-  }, [regions, currentBrushStrokes, currentStroke, drawingRect, imageLoaded, imageDimensions, selectedRegionId, updateCanvasSize]);
+  }, [regions, currentBrushStrokes, currentMaskStrokes, currentStroke, drawingRect, imageLoaded, imageDimensions, selectedRegionId, updateCanvasSize, mode]);
 
   const drawBrushStrokes = (ctx: CanvasRenderingContext2D, strokes: BrushStroke[], canvasWidth: number, canvasHeight: number) => {
     ctx.lineCap = "round";
@@ -165,6 +176,23 @@ export function RegionSelector({
     for (const stroke of strokes) {
       if (stroke.points.length < 2) continue;
       ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.size;
+      ctx.beginPath();
+      ctx.moveTo(stroke.points[0].x * canvasWidth, stroke.points[0].y * canvasHeight);
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x * canvasWidth, stroke.points[i].y * canvasHeight);
+      }
+      ctx.stroke();
+    }
+  };
+
+  const drawMaskStrokes = (ctx: CanvasRenderingContext2D, strokes: BrushStroke[], canvasWidth: number, canvasHeight: number) => {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    for (const stroke of strokes) {
+      if (stroke.points.length < 2) continue;
+      ctx.strokeStyle = "rgba(100, 200, 255, 0.6)";
       ctx.lineWidth = stroke.size;
       ctx.beginPath();
       ctx.moveTo(stroke.points[0].x * canvasWidth, stroke.points[0].y * canvasHeight);
@@ -217,12 +245,12 @@ export function RegionSelector({
     
     const coords = getCanvasCoords(e);
 
-    if (mode === "brush") {
+    if (mode === "brush" || mode === "mask") {
       const canvas = canvasRef.current;
       const normalizedSize = canvas ? brushSize / canvas.width : brushSize / 500;
       setCurrentStroke({
         points: [coords],
-        color: brushColor,
+        color: mode === "mask" ? maskColor : brushColor,
         size: brushSize,
         normalizedSize,
       });
@@ -254,7 +282,7 @@ export function RegionSelector({
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const coords = getCanvasCoords(e);
 
-    if (mode === "brush" && currentStroke) {
+    if ((mode === "brush" || mode === "mask") && currentStroke) {
       setCurrentStroke(prev => prev ? {
         ...prev,
         points: [...prev.points, coords],
@@ -277,8 +305,12 @@ export function RegionSelector({
   };
 
   const handleMouseUp = () => {
-    if (mode === "brush" && currentStroke && currentStroke.points.length >= 2) {
-      setCurrentBrushStrokes(prev => [...prev, currentStroke]);
+    if (currentStroke && currentStroke.points.length >= 2) {
+      if (mode === "brush") {
+        setCurrentBrushStrokes(prev => [...prev, currentStroke]);
+      } else if (mode === "mask") {
+        setCurrentMaskStrokes(prev => [...prev, currentStroke]);
+      }
     }
     setCurrentStroke(null);
 
@@ -435,6 +467,8 @@ export function RegionSelector({
   const handleUndo = () => {
     if (mode === "brush" && currentBrushStrokes.length > 0) {
       setCurrentBrushStrokes(prev => prev.slice(0, -1));
+    } else if (mode === "mask" && currentMaskStrokes.length > 0) {
+      setCurrentMaskStrokes(prev => prev.slice(0, -1));
     } else if (regions.length > 0) {
       setRegions(prev => prev.slice(0, -1));
       setSelectedRegionId(null);
@@ -457,6 +491,17 @@ export function RegionSelector({
     };
     setRegions(prev => [...prev, newRegion]);
     setCurrentBrushStrokes([]);
+  };
+
+  const handleSaveMaskAsRegion = () => {
+    if (currentMaskStrokes.length === 0) return;
+    const newRegion: SelectionRegion = {
+      id: `mask_${Date.now()}`,
+      type: "mask",
+      brushStrokes: [...currentMaskStrokes],
+    };
+    setRegions(prev => [...prev, newRegion]);
+    setCurrentMaskStrokes([]);
   };
 
   const generateThumbnailForRegion = useCallback((region: SelectionRegion): string | undefined => {
@@ -544,6 +589,126 @@ export function RegionSelector({
     }
   }, [imageLoaded]);
 
+  const generateMaskImage = useCallback((region: SelectionRegion): string | undefined => {
+    const img = imageRef.current;
+    if (!img || !imageLoaded) return undefined;
+    if (region.type !== "mask" || !region.brushStrokes || region.brushStrokes.length === 0) return undefined;
+
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return undefined;
+
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "white";
+
+      for (const stroke of region.brushStrokes) {
+        if (stroke.points.length < 2) continue;
+        const scaledLineWidth = (stroke.normalizedSize || stroke.size / 500) * img.naturalWidth;
+        ctx.lineWidth = scaledLineWidth;
+        ctx.beginPath();
+        ctx.moveTo(
+          stroke.points[0].x * img.naturalWidth,
+          stroke.points[0].y * img.naturalHeight
+        );
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(
+            stroke.points[i].x * img.naturalWidth,
+            stroke.points[i].y * img.naturalHeight
+          );
+        }
+        ctx.stroke();
+      }
+
+      return canvas.toDataURL("image/png");
+    } catch (error) {
+      console.error("Failed to generate mask image:", error);
+      return undefined;
+    }
+  }, [imageLoaded]);
+
+  const generateThumbnailForMask = useCallback((region: SelectionRegion): string | undefined => {
+    const img = imageRef.current;
+    if (!img || !imageLoaded) return undefined;
+    if (region.type !== "mask" || !region.brushStrokes || region.brushStrokes.length === 0) return undefined;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const stroke of region.brushStrokes) {
+      const normalizedRadius = (stroke.normalizedSize || stroke.size / 500) / 2;
+      for (const point of stroke.points) {
+        minX = Math.min(minX, point.x - normalizedRadius);
+        minY = Math.min(minY, point.y - normalizedRadius);
+        maxX = Math.max(maxX, point.x + normalizedRadius);
+        maxY = Math.max(maxY, point.y + normalizedRadius);
+      }
+    }
+
+    const padding = 0.02;
+    const bounds = {
+      x: Math.max(0, Math.floor((minX - padding) * img.naturalWidth)),
+      y: Math.max(0, Math.floor((minY - padding) * img.naturalHeight)),
+      width: Math.min(img.naturalWidth, Math.ceil((maxX - minX + padding * 2) * img.naturalWidth)),
+      height: Math.min(img.naturalHeight, Math.ceil((maxY - minY + padding * 2) * img.naturalHeight)),
+    };
+
+    if (bounds.width <= 0 || bounds.height <= 0) return undefined;
+
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return undefined;
+
+      canvas.width = bounds.width;
+      canvas.height = bounds.height;
+
+      ctx.drawImage(
+        img,
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+        0,
+        0,
+        bounds.width,
+        bounds.height
+      );
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(100, 200, 255, 0.6)";
+
+      for (const stroke of region.brushStrokes) {
+        if (stroke.points.length < 2) continue;
+        const scaledLineWidth = (stroke.normalizedSize || stroke.size / 500) * img.naturalWidth;
+        ctx.lineWidth = scaledLineWidth;
+        ctx.beginPath();
+        ctx.moveTo(
+          stroke.points[0].x * img.naturalWidth - bounds.x,
+          stroke.points[0].y * img.naturalHeight - bounds.y
+        );
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(
+            stroke.points[i].x * img.naturalWidth - bounds.x,
+            stroke.points[i].y * img.naturalHeight - bounds.y
+          );
+        }
+        ctx.stroke();
+      }
+
+      return canvas.toDataURL("image/png");
+    } catch (error) {
+      console.error("Failed to generate mask thumbnail:", error);
+      return undefined;
+    }
+  }, [imageLoaded]);
+
   const handleConfirm = () => {
     setConfirmError(null);
     
@@ -555,13 +720,34 @@ export function RegionSelector({
         brushStrokes: [...currentBrushStrokes],
       });
     }
+    if (currentMaskStrokes.length > 0) {
+      finalRegions.push({
+        id: `mask_${Date.now()}`,
+        type: "mask",
+        brushStrokes: [...currentMaskStrokes],
+      });
+    }
 
-    const regionsWithThumbnails = finalRegions.map(region => ({
-      ...region,
-      thumbnailUrl: generateThumbnailForRegion(region),
-    }));
+    const regionsWithThumbnails = finalRegions.map(region => {
+      if (region.type === "mask") {
+        return {
+          ...region,
+          thumbnailUrl: generateThumbnailForMask(region),
+          maskUrl: generateMaskImage(region),
+        };
+      }
+      return {
+        ...region,
+        thumbnailUrl: generateThumbnailForRegion(region),
+      };
+    });
 
-    const validRegions = regionsWithThumbnails.filter(r => r.thumbnailUrl);
+    const validRegions = regionsWithThumbnails.filter(r => {
+      if (r.type === "mask") {
+        return r.thumbnailUrl && r.maskUrl;
+      }
+      return r.thumbnailUrl;
+    });
     const failedCount = finalRegions.length - validRegions.length;
     
     if (validRegions.length === 0 && finalRegions.length > 0) {
@@ -611,8 +797,17 @@ export function RegionSelector({
                 <Paintbrush className="w-4 h-4 mr-1" />
                 Brush
               </Button>
+              <Button
+                variant={mode === "mask" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMode("mask")}
+                data-testid="button-mode-mask"
+              >
+                <CircleDot className="w-4 h-4 mr-1" />
+                Mask
+              </Button>
               
-              {mode === "brush" && (
+              {(mode === "brush" || mode === "mask") && (
                 <div className="flex items-center gap-2 ml-2">
                   <span className="text-sm text-muted-foreground">Size:</span>
                   <Slider
@@ -640,11 +835,26 @@ export function RegionSelector({
                   Save Brush
                 </Button>
               )}
+              {mode === "mask" && currentMaskStrokes.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveMaskAsRegion}
+                  data-testid="button-save-mask"
+                >
+                  <Check className="w-4 h-4 mr-1" />
+                  Save Mask
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleUndo}
-                disabled={(mode === "brush" && currentBrushStrokes.length === 0) || (mode === "rect" && regions.length === 0)}
+                disabled={
+                  (mode === "brush" && currentBrushStrokes.length === 0 && regions.length === 0) || 
+                  (mode === "mask" && currentMaskStrokes.length === 0 && regions.length === 0) ||
+                  (mode === "rect" && regions.length === 0)
+                }
                 data-testid="button-undo"
               >
                 <Undo2 className="w-4 h-4" />
@@ -675,7 +885,7 @@ export function RegionSelector({
                 disabled={!imageLoaded}
                 data-testid="button-confirm-regions"
               >
-                Done ({regions.length + (currentBrushStrokes.length > 0 ? 1 : 0)})
+                Done ({regions.length + (currentBrushStrokes.length > 0 ? 1 : 0) + (currentMaskStrokes.length > 0 ? 1 : 0)})
               </Button>
             </div>
           </div>

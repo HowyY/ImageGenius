@@ -63,13 +63,14 @@ interface EditingState {
   sceneDescription: string;
 }
 
-type RegionType = "brush" | "rect";
+type RegionType = "brush" | "rect" | "mask";
 
 interface RegionThumbnail {
   id: string;
   thumbnailUrl: string;
   selected: boolean;
   type: RegionType;
+  maskUrl?: string;
 }
 
 type EditSessionMode = 'form' | 'generating' | 'comparison';
@@ -894,6 +895,7 @@ export default function Storyboard() {
         thumbnailUrl: r.thumbnailUrl!,
         selected: false,
         type: r.type,
+        maskUrl: r.maskUrl,
       }));
     
     updateEditSession(activeEditSession.sceneId, { regions: thumbnails });
@@ -1035,8 +1037,13 @@ export default function Storyboard() {
       
       for (const regionIndex of sortedIndices) {
         const region = allRegions[regionIndex];
-        const uploadedUrl = await uploadRegionAsBlob(region.thumbnailUrl);
-        userReferenceImages.push(uploadedUrl);
+        if (region.type === 'mask' && region.maskUrl) {
+          const uploadedUrl = await uploadRegionAsBlob(region.maskUrl);
+          userReferenceImages.push(uploadedUrl);
+        } else {
+          const uploadedUrl = await uploadRegionAsBlob(region.thumbnailUrl);
+          userReferenceImages.push(uploadedUrl);
+        }
         regionIndexToImageNum[regionIndex] = imageNum;
         imageNum++;
       }
@@ -1049,8 +1056,37 @@ export default function Storyboard() {
       
       let finalPrompt: string;
       
+      const hasMaskRegions = sortedIndices.some(idx => allRegions[idx].type === 'mask');
+      
       if (sortedIndices.length === 0) {
         finalPrompt = editPrompt;
+      } else if (hasMaskRegions) {
+        if (sortedIndices.length === 1) {
+          finalPrompt = `[image1] is the original image to edit.
+[image2] is a mask image with the same dimensions as [image1].
+White areas in [image2] indicate the regions that should be modified.
+Black areas should remain unchanged.
+${editPrompt}
+Apply the changes only to the white masked areas of [image1].`;
+        } else {
+          const maskDescriptions = sortedIndices.map((idx) => {
+            const imgNum = regionIndexToImageNum[idx];
+            const regionType = allRegions[idx].type;
+            if (regionType === 'mask') {
+              return `[image${imgNum}] is a mask where white areas indicate regions to modify`;
+            } else if (regionType === 'brush') {
+              return `[image${imgNum}] is a cropped region with red-highlighted area to edit`;
+            } else {
+              return `[image${imgNum}] is a cropped region to modify`;
+            }
+          }).join('\n');
+          
+          finalPrompt = `[image1] is the original image to edit.
+${maskDescriptions}
+${editPrompt}
+Apply changes to the indicated areas.
+Do not change anything else in [image1].`;
+        }
       } else if (sortedIndices.length === 1) {
         const regionType = allRegions[sortedIndices[0]].type;
         
@@ -1066,7 +1102,7 @@ ${editPrompt}
 Only modify the area shown in [image2].`;
         }
       } else {
-        const regionDescriptions = sortedIndices.map((idx, i) => {
+        const regionDescriptions = sortedIndices.map((idx) => {
           const imgNum = regionIndexToImageNum[idx];
           const regionType = allRegions[idx].type;
           if (regionType === 'brush') {
