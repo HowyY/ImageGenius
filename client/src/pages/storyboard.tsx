@@ -2409,18 +2409,26 @@ Do not change anything else in [image1].`;
                           <Check className="w-3 h-3" />
                         </div>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-0.5 left-0.5 w-5 h-5 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Remove region ${index + 1}`}
+                        className="absolute top-0.5 left-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-destructive/80"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleRemoveRegion(region.id);
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleRemoveRegion(region.id);
+                          }
+                        }}
                         data-testid={`button-remove-region-${index}`}
                       >
                         <X className="w-3 h-3" />
-                      </Button>
+                      </div>
                       <div className="absolute bottom-0 left-0 right-0 bg-background/80 text-xs text-center py-0.5">
                         {index + 1}
                       </div>
